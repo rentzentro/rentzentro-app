@@ -1,51 +1,63 @@
-// app/page.tsx
+'use client';
+
 import Link from 'next/link';
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
       <div className="w-full max-w-3xl space-y-10">
-        <header className="space-y-3">
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-            RentZentro
-          </h1>
-          <p className="text-slate-300 max-w-xl">
-            Simple, automatic rent payments and tenant tracking for small landlords.
-          </p>
-        </header>
-
+        {/* Hero */}
         <section className="space-y-4">
-          <h2 className="text-lg font-medium text-slate-100">Choose your portal</h2>
-          <div className="flex flex-wrap gap-4">
-            <Link
-              href="/landlord"
-              className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 transition"
-            >
-              I&apos;m a landlord
-            </Link>
+          <p className="text-xs uppercase tracking-[0.2em] text-emerald-400">
+            RentZentro
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-semibold">
+            Collect rent online — fast, automatic, secure.
+          </h1>
+          <p className="text-sm text-slate-400 max-w-xl">
+            Landlords can track properties, tenants, and rent payments in one place.
+            Tenants get a simple portal to see what&apos;s due and when. Stripe-powered
+            payments coming soon.
+          </p>
+        </section>
 
-            <Link
-              href="/tenant"
-              className="inline-flex items-center justify-center rounded-full border border-slate-600 px-6 py-2 text-sm font-medium text-slate-100 hover:bg-slate-800 transition"
-            >
-              I&apos;m a tenant
-            </Link>
+        {/* Role buttons */}
+        <section className="flex flex-wrap gap-3">
+          <Link
+            href="/landlord"
+            className="inline-flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-medium px-6 py-2"
+          >
+            I&apos;m a landlord
+          </Link>
+
+          <Link
+            href="/tenant/login"
+            className="inline-flex items-center justify-center rounded-full border border-slate-700 hover:bg-slate-900 text-sm px-6 py-2"
+          >
+            I&apos;m a tenant
+          </Link>
+        </section>
+
+        {/* Simple feature bullets */}
+        <section className="grid gap-3 text-sm text-slate-300">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+            <p className="font-medium mb-1">For landlords</p>
+            <p className="text-slate-400 text-xs">
+              Add properties, manage tenants, and see monthly rent totals at a glance.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+            <p className="font-medium mb-1">For tenants</p>
+            <p className="text-slate-400 text-xs">
+              Log in to view your unit, rent amount, and lease dates. Online pay coming soon.
+            </p>
           </div>
         </section>
 
-        <section className="border border-slate-800 rounded-2xl p-5 bg-slate-900/40 space-y-3">
-          <h3 className="text-sm font-semibold text-slate-200">
-            What you can do today
-          </h3>
-          <ul className="list-disc text-sm text-slate-300 pl-5 space-y-1">
-            <li>Landlords can add properties and track basic stats.</li>
-            <li>Tenants can soon log in to view their unit and payment details.</li>
-            <li>Supabase is wired up behind the scenes for real data.</li>
-          </ul>
-          <p className="text-xs text-slate-500 pt-2">
-            More automation (Stripe payments, per-landlord accounts, tenant portal) coming next.
-          </p>
-        </section>
+        <p className="text-[11px] text-slate-500">
+          Beta preview. Data is for demonstration only — do not use for real financial
+          activity yet.
+        </p>
       </div>
     </main>
   );
