@@ -444,7 +444,7 @@ export default function LandlordDashboardPage() {
                 {rentStatus.dueSoon.length}
               </p>
               <p className="mt-1 text-xs text-amber-300">
-                Coming due within 7 days.
+                Due within 7 days.
               </p>
             </div>
 

@@ -47,10 +47,14 @@ export default function TenantPortalPage() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const [paying, setPaying] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
   useEffect(() => {
     const loadTenant = async () => {
       setLoading(true);
       setError(null);
+      setSuccessMessage(null);
 
       // 1) Get current session
       const {
@@ -173,6 +177,99 @@ export default function TenantPortalPage() {
       ? 'bg-amber-500/10 text-amber-300 border border-amber-500/40'
       : 'bg-slate-500/10 text-slate-300 border border-slate-500/40';
 
+  // --- Payment simulation: mark rent as paid ---
+  const handlePayRent = async () => {
+    if (!tenant) {
+      setError('You must be logged in as a tenant to record a payment.');
+      return;
+    }
+    if (rentAmount == null || rentAmount <= 0) {
+      setError(
+        'No rent amount is set for your account yet. Please ask your landlord to configure your lease.'
+      );
+      return;
+    }
+
+    setPaying(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      // 1) Insert payment row
+      const now = new Date();
+      const paidOnIso = now.toISOString();
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('payments')
+        .insert({
+          tenant_id: tenant.id,
+          property_id: property?.id ?? null,
+          amount: rentAmount,
+          paid_on: paidOnIso,
+          method: 'Recorded in portal (simulated)',
+          note: 'Simulated in-app payment for testing (no real funds moved).',
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Pay rent - insert error:', insertError);
+        setError(
+          insertError.message || 'There was a problem recording your payment.'
+        );
+        setPaying(false);
+        return;
+      }
+
+      // Add to local payment history
+      if (inserted) {
+        setPayments((prev) => [inserted as PaymentRow, ...prev]);
+      }
+
+      // 2) Optionally bump next_due_date forward by ~1 month
+      if (property) {
+        let baseDate: Date;
+
+        if (property.next_due_date) {
+          baseDate = new Date(property.next_due_date);
+        } else {
+          baseDate = now;
+        }
+
+        const newDue = new Date(baseDate);
+        newDue.setMonth(newDue.getMonth() + 1);
+
+        const nextDueString = newDue.toISOString().split('T')[0];
+
+        const { error: updateError } = await supabase
+          .from('properties')
+          .update({ next_due_date: nextDueString })
+          .eq('id', property.id);
+
+        if (updateError) {
+          console.error(
+            'Pay rent - update property due date error:',
+            updateError
+          );
+        } else {
+          // Update local property state so the UI reflects the new due date
+          setProperty((prev) =>
+            prev ? { ...prev, next_due_date: nextDueString } : prev
+          );
+        }
+      }
+
+      setSuccessMessage(
+        'Payment recorded (simulation only). Your landlord will see this in their dashboard.'
+      );
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'There was a problem recording your payment.');
+    } finally {
+      setPaying(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto flex max-w-5xl flex-col px-4 pb-16 pt-6 sm:px-6 lg:px-8">
@@ -195,7 +292,7 @@ export default function TenantPortalPage() {
         </div>
 
         {/* Header */}
-        <header className="mb-6">
+        <header className="mb-4">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400">
             Tenant Portal
           </p>
@@ -208,15 +305,21 @@ export default function TenantPortalPage() {
           </p>
         </header>
 
-        {/* Loading / error / empty states */}
+        {/* Global error / success */}
+        {successMessage && (
+          <div className="mb-4 rounded-xl border border-emerald-500/60 bg-emerald-950/60 p-3 text-xs text-emerald-100">
+            {successMessage}
+          </div>
+        )}
+
         {loading && (
-          <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-300">
+          <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-300">
             Loading your account…
           </div>
         )}
 
         {!loading && error && (
-          <div className="mt-8 rounded-2xl border border-rose-800/60 bg-rose-950/60 p-6 text-sm text-rose-100">
+          <div className="mt-4 rounded-2xl border border-rose-800/60 bg-rose-950/60 p-6 text-sm text-rose-100">
             {error}
           </div>
         )}
@@ -243,11 +346,16 @@ export default function TenantPortalPage() {
                   </p>
                 )}
                 <button
-                  disabled
-                  className="mt-3 w-full rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 disabled:opacity-80"
+                  onClick={handlePayRent}
+                  disabled={paying || rentAmount == null}
+                  className="mt-3 w-full rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:opacity-60"
                 >
-                  Pay rent (coming soon)
+                  {paying ? 'Recording payment…' : 'Mark rent as paid'}
                 </button>
+                <p className="mt-2 text-[11px] text-slate-500">
+                  This is a simulation for testing and demos. No real money is
+                  moved yet.
+                </p>
               </div>
 
               {/* Status card */}
@@ -281,8 +389,8 @@ export default function TenantPortalPage() {
                   {nextDueLabel}
                 </p>
                 <p className="mt-2 text-xs text-emerald-200/80">
-                  In a future update, you&apos;ll be able to pay directly from
-                  this screen.
+                  Each time you record a payment, your next due date will move
+                  forward about one month (for testing).
                 </p>
               </div>
             </section>
@@ -346,13 +454,14 @@ export default function TenantPortalPage() {
                   Payment history
                 </h2>
                 <p className="mt-1 text-xs text-slate-400">
-                  Recent rent payments recorded by your landlord.
+                  Recent rent payments recorded by your landlord or from this
+                  portal.
                 </p>
 
                 {payments.length === 0 ? (
                   <div className="mt-4 rounded-xl border border-dashed border-slate-700/80 bg-slate-900/60 p-4 text-xs text-slate-500">
-                    No payments have been recorded yet. Once your landlord
-                    records payments, they&apos;ll show up here.
+                    No payments have been recorded yet. Once payments are
+                    recorded, they&apos;ll show up here.
                   </div>
                 ) : (
                   <ul className="mt-4 space-y-3 text-xs">
@@ -380,8 +489,8 @@ export default function TenantPortalPage() {
                 )}
 
                 <p className="mt-3 text-[11px] text-slate-500">
-                  In a future update, each online payment will appear here
-                  automatically with a confirmation.
+                  In a future update, real online card or bank payments will
+                  appear here automatically after processing.
                 </p>
               </div>
             </section>
