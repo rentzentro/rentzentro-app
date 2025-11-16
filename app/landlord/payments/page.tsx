@@ -13,7 +13,6 @@ type Payment = {
   paid_on: string | null;
   method: string | null;
   note: string | null;
-  created_at?: string;
 };
 
 type Tenant = {
@@ -69,15 +68,7 @@ export default function LandlordPaymentsPage() {
     const checkAuth = async () => {
       const {
         data: { session },
-        error,
       } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error('Payments auth error:', error);
-        setError('Problem checking your session. Please log in again.');
-        setAuthChecking(false);
-        return;
-      }
 
       if (!session) {
         router.replace('/landlord/login');
@@ -98,27 +89,19 @@ export default function LandlordPaymentsPage() {
       setLoading(true);
       setError(null);
 
-      const { data: tenantData, error: tenantError } = await supabase
+      const { data: tenantData } = await supabase
         .from('tenants')
         .select('id, name, email')
         .order('created_at', { ascending: false });
 
-      if (tenantError) {
-        console.error('Payments tenants error:', tenantError);
-      } else if (tenantData) {
-        setTenants(tenantData as Tenant[]);
-      }
+      setTenants(tenantData || []);
 
-      const { data: propsData, error: propsError } = await supabase
+      const { data: propsData } = await supabase
         .from('properties')
         .select('id, name, unit_label')
         .order('created_at', { ascending: false });
 
-      if (propsError) {
-        console.error('Payments properties error:', propsError);
-      } else if (propsData) {
-        setProperties(propsData as Property[]);
-      }
+      setProperties(propsData || []);
 
       const { data: payData, error: payError } = await supabase
         .from('payments')
@@ -126,10 +109,9 @@ export default function LandlordPaymentsPage() {
         .order('paid_on', { ascending: false });
 
       if (payError) {
-        console.error('Payments load error:', payError);
         setError('Error loading payments.');
-      } else if (payData) {
-        setPayments(payData as Payment[]);
+      } else {
+        setPayments(payData || []);
       }
 
       setLoading(false);
@@ -169,37 +151,26 @@ export default function LandlordPaymentsPage() {
       note: form.note.trim() || null,
     };
 
-    try {
-      const { data, error } = await supabase
-        .from('payments')
-        .insert(payload)
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('payments')
+      .insert(payload)
+      .select()
+      .single();
 
-      if (error) throw error;
-      if (data) {
-        setPayments((prev) => [data as Payment, ...prev]);
-      }
+    if (error) {
+      setError(error.message);
+    } else if (data) {
+      setPayments((prev) => [data as Payment, ...prev]);
       resetForm();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Error recording payment.');
-    } finally {
-      setSaving(false);
     }
+
+    setSaving(false);
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this payment record?')) return;
+    if (!confirm('Delete this payment?')) return;
 
-    const { error } = await supabase.from('payments').delete().eq('id', id);
-
-    if (error) {
-      console.error(error);
-      setError('Error deleting payment.');
-      return;
-    }
-
+    await supabase.from('payments').delete().eq('id', id);
     setPayments((prev) => prev.filter((p) => p.id !== id));
   };
 
@@ -211,94 +182,69 @@ export default function LandlordPaymentsPage() {
   if (authChecking) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <p className="text-sm text-slate-400">Checking your session…</p>
+        <p className="text-sm text-slate-400">Checking authentication…</p>
       </main>
     );
   }
 
-  const formatCurrency = (val: number | null) => {
-    if (val == null) return '—';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(val);
-  };
+  const formatCurrency = (val: number | null) =>
+    val == null
+      ? '—'
+      : new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0,
+        }).format(val);
 
   const formatDate = (val: string | null) => {
     if (!val) return '—';
-    try {
-      return new Date(val).toLocaleDateString();
-    } catch {
-      return val;
-    }
-  };
-
-  const tenantLabel = (id: number | null) => {
-    if (!id) return 'Unassigned';
-    const t = tenants.find((t) => t.id === id);
-    if (!t) return `Tenant #${id}`;
-    return t.name || t.email;
-  };
-
-  const propertyLabel = (id: number | null) => {
-    if (!id) return 'Unassigned';
-    const p = properties.find((p) => p.id === id);
-    if (!p) return `Property #${id}`;
-    return `${p.name || 'Property'}${p.unit_label ? ` · ${p.unit_label}` : ''}`;
+    return new Date(val).toLocaleDateString();
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6 sm:py-8">
+    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto max-w-6xl space-y-8">
-        {/* Top nav */}
-        <header className="border-b border-slate-800 pb-4 mb-4 sm:mb-6">
-          <nav className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <Link
-              href="/landlord"
-              className="inline-flex items-center gap-3"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-[11px] font-bold tracking-tight text-emerald-300">
+        {/* Top Nav */}
+        <header className="border-b border-slate-800 pb-4">
+          <nav className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            {/* Brand */}
+            <Link href="/landlord" className="inline-flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-[11px] font-bold text-emerald-300">
                 RZ
               </div>
-              <div className="flex flex-col leading-tight">
-                <span className="text-sm font-semibold text-slate-50">
-                  RentZentro
-                </span>
-                <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold">RentZentro</span>
+                <span className="text-[10px] uppercase tracking-wider text-slate-500">
                   Landlord Console
                 </span>
               </div>
             </Link>
 
+            {/* FIXED NAVIGATION per your instructions */}
             <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
               <Link
                 href="/landlord"
-                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
+                className="rounded-full border border-slate-700 px-3 py-1.5 hover:bg-slate-900 text-slate-200"
               >
                 Dashboard
               </Link>
+
               <Link
                 href="/landlord/tenants"
-                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
+                className="rounded-full border border-slate-700 px-3 py-1.5 hover:bg-slate-900 text-slate-200"
               >
                 Tenants
               </Link>
-              <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 font-medium text-slate-100 shadow-sm">
+
+              {/* ACTIVE LABEL (not a button) */}
+              <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 font-medium text-slate-100">
                 Payments
               </span>
-              <span className="rounded-full border border-slate-800 px-3 py-1.5 text-slate-500 text-[11px] sm:text-xs">
-                Settings (coming soon)
-              </span>
-              <Link
-                href="/"
-                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
-              >
-                Home
-              </Link>
+
+              {/* Logout ONLY (no home, no extra payments) */}
               <button
                 onClick={handleLogout}
-                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
+                className="rounded-full border border-slate-700 px-3 py-1.5 hover:bg-slate-900 text-slate-200"
               >
                 Log out
               </button>
@@ -306,184 +252,87 @@ export default function LandlordPaymentsPage() {
           </nav>
 
           <div className="mt-4">
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-              Payments
-            </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Review and manually record rent payments. Tenant portal payments
-              will also appear here.
+            <h1 className="text-2xl font-semibold">Payments</h1>
+            <p className="text-sm text-slate-400">
+              View and record rent payments.
             </p>
           </div>
         </header>
 
-        {error && (
-          <div className="rounded-xl border border-rose-800/70 bg-rose-950/70 p-3 text-xs text-rose-100">
-            {error}
-          </div>
-        )}
-
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,2.3fr)]">
-          {/* Add payment form */}
+        {/* Main Content */}
+        <section className="grid gap-6 lg:grid-cols-[1.3fr_2fr]">
+          {/* Payment Form */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-slate-100">
-              Record a payment
-            </h2>
-            <p className="text-xs text-slate-400">
-              This is for manual entries (cash, check, or adjustments).
-            </p>
+            <h2 className="text-sm font-semibold">Record a payment</h2>
+
+            {error && (
+              <div className="text-xs text-rose-300 border border-rose-800/50 bg-rose-950/40 p-2 rounded">
+                {error}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-3 text-sm">
               <div>
                 <label className="text-xs text-slate-300 block mb-1">
-                  Tenant (optional)
-                </label>
-                <select
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                  value={form.tenantId}
-                  onChange={(e) => handleChange('tenantId', e.target.value)}
-                >
-                  <option value="">Unassigned</option>
-                  {tenants.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name || t.email}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-slate-300 block mb-1">
-                  Property (optional)
-                </label>
-                <select
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                  value={form.propertyId}
-                  onChange={(e) => handleChange('propertyId', e.target.value)}
-                >
-                  <option value="">Unassigned</option>
-                  {properties.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name || 'Property'}
-                      {p.unit_label ? ` · ${p.unit_label}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-slate-300 block mb-1">
-                    Amount (USD)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.amount}
-                    onChange={(e) => handleChange('amount', e.target.value)}
-                    placeholder="1500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-300 block mb-1">
-                    Paid on
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.paidOn}
-                    onChange={(e) => handleChange('paidOn', e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-slate-300 block mb-1">
-                  Method
+                  Amount (USD)
                 </label>
                 <input
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                  value={form.method}
-                  onChange={(e) => handleChange('method', e.target.value)}
-                  placeholder="Cash, check, portal, etc."
+                  type="number"
+                  min={0}
+                  value={form.amount}
+                  onChange={(e) => handleChange('amount', e.target.value)}
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2"
+                  required
                 />
               </div>
 
               <div>
                 <label className="text-xs text-slate-300 block mb-1">
-                  Note (optional)
+                  Paid on
                 </label>
-                <textarea
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                  rows={3}
-                  value={form.note}
-                  onChange={(e) => handleChange('note', e.target.value)}
-                  placeholder="Late fee, partial payment, etc."
+                <input
+                  type="date"
+                  value={form.paidOn}
+                  onChange={(e) => handleChange('paidOn', e.target.value)}
+                  className="w-full rounded-lg bg-slate-950 border border-slate-700 px-3 py-2"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={saving}
-                className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+                className="w-full rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-medium px-3 py-2"
               >
-                {saving ? 'Saving…' : 'Record payment'}
+                {saving ? 'Saving…' : 'Record Payment'}
               </button>
             </form>
           </div>
 
-          {/* Payments list */}
+          {/* Payment List */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-100">
-                All payments
-              </h2>
-              <p className="text-xs text-slate-500">
-                {payments.length === 0
-                  ? 'No payments yet.'
-                  : `${payments.length} total`}
-              </p>
-            </div>
+            <h2 className="text-sm font-semibold">All Payments</h2>
 
-            {loading ? (
-              <p className="text-xs text-slate-400">Loading payments…</p>
-            ) : payments.length === 0 ? (
-              <p className="text-xs text-slate-400">
-                Once payments are recorded, they will appear here.
-              </p>
+            {payments.length === 0 ? (
+              <p className="text-xs text-slate-400">No payments yet.</p>
             ) : (
               <ul className="space-y-2 text-xs">
                 {payments.map((p) => (
                   <li
                     key={p.id}
-                    className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3"
+                    className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3"
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-slate-100">
                           {formatCurrency(p.amount)}
                         </p>
-                        <p className="text-slate-400">
-                          Tenant: {tenantLabel(p.tenant_id)}
-                        </p>
-                        <p className="text-slate-400">
-                          Property: {propertyLabel(p.property_id)}
+                        <p className="text-slate-400 text-[11px]">
+                          Paid on {formatDate(p.paid_on)}
                         </p>
                       </div>
-                      <div className="text-right text-[11px] text-slate-500">
-                        <p>Paid on</p>
-                        <p className="text-slate-300">{formatDate(p.paid_on)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] text-slate-500">
-                        Method: {p.method || 'Rent'}
-                        {p.note && ` · ${p.note}`}
-                      </p>
                       <button
                         onClick={() => handleDelete(p.id)}
-                        className="text-[11px] text-red-400 hover:text-red-300"
+                        className="text-red-400 text-[11px] hover:text-red-300"
                       >
                         Delete
                       </button>
@@ -498,3 +347,4 @@ export default function LandlordPaymentsPage() {
     </main>
   );
 }
+
