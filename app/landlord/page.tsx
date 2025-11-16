@@ -46,6 +46,7 @@ export default function LandlordDashboardPage() {
   const router = useRouter();
 
   const [authChecking, setAuthChecking] = useState(true);
+
   const [properties, setProperties] = useState<Property[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
 
@@ -66,7 +67,7 @@ export default function LandlordDashboardPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // AUTH CHECK
+  // -------- AUTH CHECK --------
   useEffect(() => {
     const checkAuth = async () => {
       const {
@@ -75,10 +76,12 @@ export default function LandlordDashboardPage() {
       } = await supabase.auth.getSession();
 
       if (error) {
-        console.error(error);
+        console.error('Landlord dashboard auth error:', error);
+        setError('Problem checking your session. Please log in again.');
         setAuthChecking(false);
         return;
       }
+
       if (!session) {
         router.replace('/landlord/login');
         return;
@@ -90,7 +93,7 @@ export default function LandlordDashboardPage() {
     checkAuth();
   }, [router]);
 
-  // RENT STATUS
+  // -------- HELPER: RENT STATUS BUCKETS --------
   function computeRentStatus(propertiesList: Property[]) {
     const today = new Date();
     const upcomingWindow = 7;
@@ -110,39 +113,51 @@ export default function LandlordDashboardPage() {
         (due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      if (diffDays < 0) overdue.push(p);
-      else if (diffDays <= upcomingWindow) dueSoon.push(p);
-      else notDueYet.push(p);
+      if (diffDays < 0) {
+        overdue.push(p);
+      } else if (diffDays <= upcomingWindow) {
+        dueSoon.push(p);
+      } else {
+        notDueYet.push(p);
+      }
     });
 
     return { overdue, dueSoon, notDueYet };
   }
 
-  // LOAD DATA
+  // -------- LOAD DATA --------
   useEffect(() => {
     if (authChecking) return;
 
     const loadData = async () => {
       setLoadingData(true);
+      setError(null);
 
       const { data: propsData, error: propsError } = await supabase
         .from('properties')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (!propsError && propsData) {
+      if (propsError) {
+        console.error('Error loading properties:', propsError);
+        setError('Error loading properties.');
+      } else if (propsData) {
         const props = propsData as Property[];
         setProperties(props);
         setRentStatus(computeRentStatus(props));
       }
 
-      const { data: payData } = await supabase
+      const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
         .select('*')
         .order('paid_on', { ascending: false })
         .limit(5);
 
-      if (payData) setPayments(payData as Payment[]);
+      if (paymentsError) {
+        console.error('Error loading recent payments:', paymentsError);
+      } else if (paymentsData) {
+        setPayments(paymentsData as Payment[]);
+      }
 
       setLoadingData(false);
     };
@@ -150,28 +165,33 @@ export default function LandlordDashboardPage() {
     loadData();
   }, [authChecking]);
 
-  // STATS
+  // -------- STATS --------
   const totalProperties = properties.length;
   const totalMonthlyRent = properties.reduce(
     (sum, p) => sum + (p.monthly_rent || 0),
     0
   );
-  const currentCount = properties.filter((p) => p.status === 'current').length;
-  const vacantCount = properties.filter((p) => p.status === 'vacant').length;
+  const currentCount = properties.filter(
+    (p) => (p.status || '').toLowerCase() === 'current'
+  ).length;
+  const vacantCount = properties.filter(
+    (p) => (p.status || '').toLowerCase() === 'vacant'
+  ).length;
 
   const collectedAllTime = payments.reduce(
     (sum, p) => sum + (p.amount || 0),
     0
   );
 
-  // HELPERS
-  const formatCurrency = (val: number | null) =>
-    val == null
-      ? '—'
-      : new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-        }).format(val);
+  // -------- HELPERS --------
+  const formatCurrency = (val: number | null) => {
+    if (val == null) return '—';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(val);
+  };
 
   const formatDate = (val: string | null) => {
     if (!val) return '—';
@@ -182,18 +202,23 @@ export default function LandlordDashboardPage() {
     }
   };
 
-  const handleChange = (field: keyof FormState, value: any) =>
+  const handleChange = (
+    field: keyof FormState,
+    value: string | FormState['status']
+  ) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
   };
 
-  // SAVE PROPERTY
+  // -------- SAVE PROPERTY --------
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setError(null);
 
     const payload = {
       name: form.name.trim() || null,
@@ -214,11 +239,13 @@ export default function LandlordDashboardPage() {
 
         if (error) throw error;
 
-        const updated = properties.map((p) =>
-          p.id === editingId ? (data as Property) : p
-        );
-        setProperties(updated);
-        setRentStatus(computeRentStatus(updated));
+        if (data) {
+          const updated = properties.map((p) =>
+            p.id === editingId ? (data as Property) : p
+          );
+          setProperties(updated);
+          setRentStatus(computeRentStatus(updated));
+        }
       } else {
         const { data, error } = await supabase
           .from('properties')
@@ -228,14 +255,17 @@ export default function LandlordDashboardPage() {
 
         if (error) throw error;
 
-        const updated = [data as Property, ...properties];
-        setProperties(updated);
-        setRentStatus(computeRentStatus(updated));
+        if (data) {
+          const updated = [data as Property, ...properties];
+          setProperties(updated);
+          setRentStatus(computeRentStatus(updated));
+        }
       }
+
       resetForm();
     } catch (err: any) {
       console.error(err);
-      setError(err.message);
+      setError(err.message || 'Error saving property.');
     } finally {
       setSaving(false);
     }
@@ -247,7 +277,8 @@ export default function LandlordDashboardPage() {
       name: property.name || '',
       unitLabel: property.unit_label || '',
       monthlyRent: property.monthly_rent?.toString() || '',
-      status: (property.status as any) || 'current',
+      status:
+        (property.status?.toLowerCase() as FormState['status']) || 'current',
       nextDueDate: property.next_due_date || '',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -256,13 +287,21 @@ export default function LandlordDashboardPage() {
   const handleDelete = async (id: number) => {
     if (!confirm('Delete this property?')) return;
 
-    await supabase.from('properties').delete().eq('id', id);
+    const { error } = await supabase.from('properties').delete().eq('id', id);
+
+    if (error) {
+      console.error(error);
+      setError('Error deleting property.');
+      return;
+    }
 
     const updated = properties.filter((p) => p.id !== id);
     setProperties(updated);
     setRentStatus(computeRentStatus(updated));
 
-    if (editingId === id) resetForm();
+    if (editingId === id) {
+      resetForm();
+    }
   };
 
   const handleLogout = async () => {
@@ -281,46 +320,47 @@ export default function LandlordDashboardPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6 sm:py-8">
       <div className="max-w-6xl mx-auto space-y-8">
-
-        {/* HEADER */}
+        {/* Top nav + page header */}
         <header className="border-b border-slate-800 pb-4 mb-4 sm:mb-6">
-          <nav className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-
-            <Link href="/landlord" className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-bold text-xs">
+          <nav className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            {/* Brand */}
+            <Link
+              href="/landlord"
+              className="inline-flex items-center gap-3"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-[11px] font-bold tracking-tight text-emerald-300">
                 RZ
               </div>
-              <div className="leading-tight">
-                <p className="text-sm font-semibold">RentZentro</p>
-                <p className="text-[10px] text-slate-500 tracking-wide">
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold text-slate-50">
+                  RentZentro
+                </span>
+                <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
                   Landlord Console
-                </p>
+                </span>
               </div>
             </Link>
 
-            {/* NAVIGATION WITHOUT DASHBOARD BUTTON */}
-            <div className="flex flex-wrap items-center gap-2 text-sm">
+            {/* Nav links – CLEANED: no Dashboard, no Home */}
+            <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
               <Link
                 href="/landlord/tenants"
-                className="rounded-full border border-slate-700 px-3 py-1.5 hover:bg-slate-900"
+                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
               >
                 Tenants
               </Link>
-
               <Link
                 href="/landlord/payments"
-                className="rounded-full border border-slate-700 px-3 py-1.5 hover:bg-slate-900"
+                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
               >
                 Payments
               </Link>
-
-              <span className="rounded-full border border-slate-800 px-3 py-1.5 text-slate-500 text-xs">
+              <span className="rounded-full border border-slate-800 px-3 py-1.5 text-slate-500 text-[11px] sm:text-xs">
                 Settings (coming soon)
               </span>
-
               <button
                 onClick={handleLogout}
-                className="rounded-full border border-slate-700 px-3 py-1.5 hover:bg-slate-900"
+                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
               >
                 Log out
               </button>
@@ -328,26 +368,28 @@ export default function LandlordDashboardPage() {
           </nav>
 
           <div className="mt-4">
-            <h1 className="text-2xl sm:text-3xl font-semibold">
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
               Landlord Dashboard{' '}
-              <span className="text-xs text-emerald-400">beta</span>
+              <span className="text-xs text-emerald-400 align-middle">
+                beta
+              </span>
             </h1>
-            <p className="text-sm text-slate-400 mt-1">
+            <p className="mt-1 text-sm text-slate-400">
               Track properties, tenants, rent status, and payments in one place.
             </p>
           </div>
         </header>
 
-        {/* EVERYTHING BELOW IS UNCHANGED — PROPERTIES, RENT STATUS, PAYMENTS */}
-        {/* (Full section continues exactly the same from your working file) */}
-        
-        {/* --- STATS --- */}
+        {/* Stats */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
             <p className="text-xs text-slate-400 uppercase tracking-wide">
               Properties
             </p>
             <p className="mt-2 text-2xl font-semibold">{totalProperties}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Units under your account.
+            </p>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
@@ -357,101 +399,239 @@ export default function LandlordDashboardPage() {
             <p className="mt-2 text-2xl font-semibold">
               {formatCurrency(totalMonthlyRent)}
             </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Across all current properties.
+            </p>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
             <p className="text-xs text-slate-400 uppercase tracking-wide">
               Current vs vacant
             </p>
-            <p className="mt-2 text-lg font-semibold">
+            <p className="mt-2 text-xl font-semibold">
               <span className="text-emerald-400">{currentCount} current</span>{' '}
               · <span className="text-amber-300">{vacantCount} vacant</span>
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Based on property status field.
             </p>
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
             <p className="text-xs text-slate-400 uppercase tracking-wide">
-              Collected (sample)
+              Collected (recent sample)
             </p>
             <p className="mt-2 text-2xl font-semibold">
               {formatCurrency(collectedAllTime)}
             </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Sum of amounts from the last few payments.
+            </p>
           </div>
         </section>
 
-        {/* The ENTIRE rest of your existing dashboard code follows here EXACTLY as-is */}
-        {/* (Property form, property list, rent status boxes, recent payments, etc.) */}
+        {/* Rent Status Overview */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-100 mb-1">
+            Rent status overview
+          </h2>
 
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-red-500/30 bg-red-950/30 p-4">
+              <p className="text-xs text-red-300 uppercase tracking-wide">
+                Overdue
+              </p>
+              <p className="mt-2 text-xl font-semibold text-red-200">
+                {rentStatus.overdue.length}
+              </p>
+              <p className="mt-1 text-xs text-red-300">
+                Rent late and needs attention.
+              </p>
+            </div>
 
-        {/* ——————————————————————————————————————————————— */}
-        {/* PROPERTY FORM + PROPERTY LIST */}
-        {/* ——————————————————————————————————————————————— */}
+            <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 p-4">
+              <p className="text-xs text-amber-300 uppercase tracking-wide">
+                Due soon
+              </p>
+              <p className="mt-2 text-xl font-semibold text-amber-200">
+                {rentStatus.dueSoon.length}
+              </p>
+              <p className="mt-1 text-xs text-amber-300">
+                Coming due within 7 days.
+              </p>
+            </div>
 
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-4">
+              <p className="text-xs text-emerald-300 uppercase tracking-wide">
+                Not due yet
+              </p>
+              <p className="mt-2 text-xl font-semibold text-emerald-200">
+                {rentStatus.notDueYet.length}
+              </p>
+              <p className="mt-1 text-xs text-emerald-300">
+                Everything current.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-red-300 mb-2">
+                🟥 Overdue
+              </h3>
+              {rentStatus.overdue.length === 0 ? (
+                <p className="text-xs text-red-300/70">No overdue rent.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {rentStatus.overdue.map((p) => (
+                    <li
+                      key={p.id}
+                      className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm"
+                    >
+                      <div className="font-medium text-red-100">
+                        {p.name} {p.unit_label && `– ${p.unit_label}`}
+                      </div>
+                      <div className="text-xs text-red-200">
+                        Due {new Date(p.next_due_date!).toLocaleDateString()}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-amber-300 mb-2">
+                🟧 Due soon (next 7 days)
+              </h3>
+              {rentStatus.dueSoon.length === 0 ? (
+                <p className="text-xs text-amber-300/70">
+                  Nothing is due soon.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {rentStatus.dueSoon.map((p) => (
+                    <li
+                      key={p.id}
+                      className="rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm"
+                    >
+                      <div className="font-medium text-amber-100">
+                        {p.name} {p.unit_label && `– ${p.unit_label}`}
+                      </div>
+                      <div className="text-xs text-amber-200">
+                        Due {new Date(p.next_due_date!).toLocaleDateString()}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-300 mb-2">
+                🟩 Not due yet
+              </h3>
+              {rentStatus.notDueYet.length === 0 ? (
+                <p className="text-xs text-emerald-300/70">No data yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {rentStatus.notDueYet.map((p) => (
+                    <li
+                      key={p.id}
+                      className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-3 py-2 text-sm"
+                    >
+                      <div className="font-medium text-emerald-100">
+                        {p.name} {p.unit_label && `– ${p.unit_label}`}
+                      </div>
+                      <div className="text-xs text-emerald-200">
+                        Next due{' '}
+                        {p.next_due_date
+                          ? new Date(p.next_due_date).toLocaleDateString()
+                          : '—'}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Main layout: properties + recent payments */}
         <section className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-
-          {/* LEFT SIDE — ADD/EDIT PROPERTY + LIST */}
+          {/* Properties */}
           <div className="space-y-4">
-
-            {/* ADD / EDIT PROPERTY */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-4">
-
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold text-slate-100">
                   {editingId ? `Edit property #${editingId}` : 'Add a property'}
                 </h2>
-
                 {editingId && (
                   <button
-                    className="text-xs text-slate-400 hover:text-slate-200"
+                    type="button"
                     onClick={resetForm}
+                    className="text-xs text-slate-400 hover:text-slate-200"
                   >
-                    Cancel
+                    Cancel edit
                   </button>
                 )}
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-3">
                 <div>
-                  <label className="text-xs text-slate-300">Property name</label>
+                  <label className="text-xs text-slate-300 block mb-1">
+                    Property name
+                  </label>
                   <input
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 mt-1"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
                     value={form.name}
                     onChange={(e) => handleChange('name', e.target.value)}
+                    placeholder="123 Main St"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-300">Unit / Label</label>
+                  <label className="text-xs text-slate-300 block mb-1">
+                    Unit / label
+                  </label>
                   <input
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 mt-1"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
                     value={form.unitLabel}
                     onChange={(e) => handleChange('unitLabel', e.target.value)}
+                    placeholder="Unit 1A"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-300">
-                      Monthly rent
+                    <label className="text-xs text-slate-300 block mb-1">
+                      Monthly rent (USD)
                     </label>
                     <input
                       type="number"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 mt-1"
+                      min={0}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
                       value={form.monthlyRent}
                       onChange={(e) =>
                         handleChange('monthlyRent', e.target.value)
                       }
+                      placeholder="1500"
                     />
                   </div>
 
                   <div>
-                    <label className="text-xs text-slate-300">Status</label>
+                    <label className="text-xs text-slate-300 block mb-1">
+                      Status
+                    </label>
                     <select
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 mt-1"
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
                       value={form.status}
                       onChange={(e) =>
-                        handleChange('status', e.target.value as any)
+                        handleChange(
+                          'status',
+                          e.target.value as FormState['status']
+                        )
                       }
                     >
                       <option value="current">Current</option>
@@ -462,12 +642,12 @@ export default function LandlordDashboardPage() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-slate-300">
+                  <label className="text-xs text-slate-300 block mb-1">
                     Next rent due date
                   </label>
                   <input
                     type="date"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 mt-1"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
                     value={form.nextDueDate}
                     onChange={(e) =>
                       handleChange('nextDueDate', e.target.value)
@@ -477,46 +657,92 @@ export default function LandlordDashboardPage() {
 
                 <button
                   type="submit"
-                  className="mt-2 w-full rounded-lg bg-emerald-500 py-2 font-medium text-slate-900 hover:bg-emerald-400"
+                  disabled={saving}
+                  className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
                 >
-                  {editingId ? 'Save changes' : 'Save property'}
+                  {saving
+                    ? editingId
+                      ? 'Saving changes…'
+                      : 'Saving…'
+                    : editingId
+                    ? 'Save changes'
+                    : 'Save property'}
                 </button>
               </form>
             </div>
 
-            {/* YOUR PROPERTIES */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-              <h2 className="text-sm font-semibold mb-2">Your properties</h2>
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-100">
+                  Your properties
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {totalProperties === 0
+                    ? 'No properties yet.'
+                    : `${totalProperties} total`}
+                </p>
+              </div>
 
-              {properties.length === 0 ? (
+              {loadingData ? (
                 <p className="text-xs text-slate-400">
-                  Add your first property above.
+                  Loading properties…
+                </p>
+              ) : properties.length === 0 ? (
+                <p className="text-xs text-slate-400">
+                  Add your first property using the form above.
                 </p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-3 text-sm">
                   {properties.map((p) => (
                     <li
                       key={p.id}
-                      className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-3 flex justify-between items-center"
+                      className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3"
                     >
                       <div>
-                        <p className="font-medium">{p.name}</p>
-                        <p className="text-xs text-slate-400">
-                          Rent: {formatCurrency(p.monthly_rent)} · Status:{' '}
-                          {p.status}
+                        <p className="font-medium text-slate-100">
+                          {p.name || 'Untitled property'}{' '}
+                          {p.unit_label && (
+                            <span className="text-xs text-slate-400">
+                              · {p.unit_label}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Rent:{' '}
+                          <span className="text-slate-100">
+                            {formatCurrency(p.monthly_rent)}
+                          </span>{' '}
+                          · Status:{' '}
+                          <span
+                            className={
+                              (p.status || '').toLowerCase() === 'current'
+                                ? 'text-emerald-400'
+                                : 'text-amber-300'
+                            }
+                          >
+                            {p.status || 'unknown'}
+                          </span>
+                          {p.next_due_date && (
+                            <>
+                              {' '}
+                              · Next due:{' '}
+                              <span className="text-slate-200">
+                                {formatDate(p.next_due_date)}
+                              </span>
+                            </>
+                          )}
                         </p>
                       </div>
-
-                      <div className="flex gap-3 text-xs">
+                      <div className="flex gap-2 sm:items-center">
                         <button
                           onClick={() => handleEdit(p)}
-                          className="text-emerald-300 hover:text-emerald-200"
+                          className="text-xs text-slate-200 hover:text-emerald-300"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDelete(p.id)}
-                          className="text-red-400 hover:text-red-300"
+                          className="text-xs text-red-400 hover:text-red-300"
                         >
                           Delete
                         </button>
@@ -528,12 +754,13 @@ export default function LandlordDashboardPage() {
             </div>
           </div>
 
-          {/* RIGHT SIDE — RECENT PAYMENTS */}
+          {/* Recent payments */}
           <div className="space-y-4">
-
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-              <div className="flex justify-between mb-2">
-                <h2 className="text-sm font-semibold">Recent payments</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold text-slate-100">
+                  Recent payments
+                </h2>
                 <Link
                   href="/landlord/payments"
                   className="text-xs text-emerald-300 hover:text-emerald-200"
@@ -547,25 +774,30 @@ export default function LandlordDashboardPage() {
                   No payments recorded yet.
                 </p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-2 text-sm">
                   {payments.map((p) => (
                     <li
                       key={p.id}
-                      className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 flex justify-between"
+                      className="flex items-start justify-between rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2"
                     >
                       <div>
-                        <p className="font-medium">
+                        <p className="font-medium text-slate-100">
                           {formatCurrency(p.amount)}
                         </p>
                         <p className="text-xs text-slate-400">
                           Method: {p.method || 'Rent'}
                         </p>
+                        {p.note && (
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Note: {p.note}
+                          </p>
+                        )}
                       </div>
-                      <div className="text-right text-xs text-slate-500">
-                        Paid on
-                        <div className="text-slate-300">
+                      <div className="text-xs text-slate-500 text-right">
+                        <p>Paid on</p>
+                        <p className="text-slate-300">
                           {formatDate(p.paid_on)}
-                        </div>
+                        </p>
                       </div>
                     </li>
                   ))}
@@ -575,9 +807,13 @@ export default function LandlordDashboardPage() {
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-xs text-slate-400">
               <p className="font-semibold text-slate-200 mb-1">
-                Coming soon: Online payments
+                Coming soon: direct online payments
               </p>
-              Tenants will soon be able to pay rent online using Stripe.
+              <p>
+                Stripe integration will allow tenants to pay directly from their
+                portal. Those payments will automatically appear here and update
+                rent status in real time.
+              </p>
             </div>
           </div>
         </section>
