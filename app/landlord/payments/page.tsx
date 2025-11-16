@@ -5,200 +5,216 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
-type Tenant = {
-  id: number;
-  name: string | null;
-  email: string;
-  monthly_rent: number | null;
-  property_id: number | null;
-};
-
 type Payment = {
   id: number;
-  created_at: string;
   tenant_id: number | null;
   property_id: number | null;
   amount: number | null;
   paid_on: string | null;
   method: string | null;
   note: string | null;
+  created_at?: string;
 };
 
-type PropertyMeta = {
+type Tenant = {
   id: number;
-  next_due_date: string | null;
+  name: string | null;
+  email: string;
+};
+
+type Property = {
+  id: number;
+  name: string | null;
+  unit_label: string | null;
+};
+
+type FormState = {
+  tenantId: string;
+  propertyId: string;
+  amount: string;
+  paidOn: string;
+  method: string;
+  note: string;
+};
+
+const emptyForm: FormState = {
+  tenantId: '',
+  propertyId: '',
+  amount: '',
+  paidOn: '',
+  method: 'Manual entry',
+  note: '',
 };
 
 export default function LandlordPaymentsPage() {
   const router = useRouter();
 
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [selectedTenantId, setSelectedTenantId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [paidOn, setPaidOn] = useState('');
-  const [method, setMethod] = useState('Rent');
-  const [note, setNote] = useState('');
+  const [authChecking, setAuthChecking] = useState(true);
 
-  const [loading, setLoading] = useState(true);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+
+  const [form, setForm] = useState<FormState>({
+    ...emptyForm,
+    paidOn: new Date().toISOString().split('T')[0],
+  });
+
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load tenants + payments
+  // AUTH CHECK
   useEffect(() => {
+    const checkAuth = async () => {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error('Payments auth error:', error);
+        setError('Problem checking your session. Please log in again.');
+        setAuthChecking(false);
+        return;
+      }
+
+      if (!session) {
+        router.replace('/landlord/login');
+        return;
+      }
+
+      setAuthChecking(false);
+    };
+
+    checkAuth();
+  }, [router]);
+
+  // LOAD DATA
+  useEffect(() => {
+    if (authChecking) return;
+
     const load = async () => {
       setLoading(true);
       setError(null);
 
-      const [
-        { data: tenantsData, error: tenantsError },
-        { data: paymentsData, error: paymentsError },
-      ] = await Promise.all([
-        supabase
-          .from('tenants')
-          .select('id, name, email, monthly_rent, property_id')
-          .order('name', { ascending: true }),
-        supabase
-          .from('payments')
-          .select('*')
-          .order('paid_on', { ascending: false })
-          .limit(20),
-      ]);
+      const { data: tenantData, error: tenantError } = await supabase
+        .from('tenants')
+        .select('id, name, email')
+        .order('created_at', { ascending: false });
 
-      if (tenantsError) {
-        console.error(tenantsError);
-        setError('Error loading tenants.');
-      } else {
-        setTenants(tenantsData || []);
+      if (tenantError) {
+        console.error('Payments tenants error:', tenantError);
+      } else if (tenantData) {
+        setTenants(tenantData as Tenant[]);
       }
 
-      if (paymentsError) {
-        console.error(paymentsError);
+      const { data: propsData, error: propsError } = await supabase
+        .from('properties')
+        .select('id, name, unit_label')
+        .order('created_at', { ascending: false });
+
+      if (propsError) {
+        console.error('Payments properties error:', propsError);
+      } else if (propsData) {
+        setProperties(propsData as Property[]);
+      }
+
+      const { data: payData, error: payError } = await supabase
+        .from('payments')
+        .select('*')
+        .order('paid_on', { ascending: false });
+
+      if (payError) {
+        console.error('Payments load error:', payError);
         setError('Error loading payments.');
-      } else {
-        setPayments(paymentsData || []);
+      } else if (payData) {
+        setPayments(payData as Payment[]);
       }
 
       setLoading(false);
     };
 
     load();
-  }, []);
+  }, [authChecking]);
 
-  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const handleChange = (field: keyof FormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const resetForm = () => {
+    setForm({
+      ...emptyForm,
+      paidOn: new Date().toISOString().split('T')[0],
+    });
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setSaving(true);
     setError(null);
 
-    if (!selectedTenantId) {
-      setError('Please select a tenant.');
-      return;
-    }
-    if (!amount) {
-      setError('Please enter an amount.');
+    if (!form.amount) {
+      setError('Amount is required.');
+      setSaving(false);
       return;
     }
 
-    setSaving(true);
+    const payload = {
+      tenant_id: form.tenantId ? Number(form.tenantId) : null,
+      property_id: form.propertyId ? Number(form.propertyId) : null,
+      amount: Number(form.amount),
+      paid_on: form.paidOn || null,
+      method: form.method || 'Manual entry',
+      note: form.note.trim() || null,
+    };
 
     try {
-      const tenantIdNum = Number(selectedTenantId);
-      const tenant = tenants.find((t) => t.id === tenantIdNum);
-
-      if (!tenant) {
-        setError('Could not find selected tenant.');
-        setSaving(false);
-        return;
-      }
-
-      const propertyId = tenant.property_id ?? null;
-      const paidOnStr = paidOn || todayISO();
-
-      const payload = {
-        tenant_id: tenantIdNum,
-        property_id: propertyId,
-        amount: Number(amount),
-        paid_on: paidOnStr,
-        method: method.trim() || 'Rent',
-        note: note.trim() || null,
-      };
-
-      // 1) Insert payment
-      const { error: insertError } = await supabase
+      const { data, error } = await supabase
         .from('payments')
-        .insert(payload);
+        .insert(payload)
+        .select()
+        .single();
 
-      if (insertError) {
-        console.error(insertError);
-        setError(insertError.message || 'Error recording payment.');
-        setSaving(false);
-        return;
+      if (error) throw error;
+      if (data) {
+        setPayments((prev) => [data as Payment, ...prev]);
       }
-
-      // 2) If tenant is linked to a property, auto-advance next_due_date
-      if (propertyId) {
-        // fetch current next_due_date
-        const { data: propertyRow, error: propError } = await supabase
-          .from('properties')
-          .select('id, next_due_date')
-          .eq('id', propertyId)
-          .maybeSingle();
-
-        if (propError) {
-          console.error('Error loading property for due date update:', propError);
-        } else if (propertyRow) {
-          const property = propertyRow as PropertyMeta;
-
-          if (property.next_due_date) {
-            const currentDue = new Date(property.next_due_date);
-            const paidOnDate = new Date(paidOnStr);
-
-            // Only advance if payment is on or after the current due date
-            if (!isNaN(currentDue.getTime()) && paidOnDate >= currentDue) {
-              const newDue = new Date(currentDue);
-              newDue.setMonth(newDue.getMonth() + 1);
-              const newDueStr = newDue.toISOString().slice(0, 10);
-
-              const { error: updateError } = await supabase
-                .from('properties')
-                .update({ next_due_date: newDueStr })
-                .eq('id', propertyId);
-
-              if (updateError) {
-                console.error(
-                  'Error updating next_due_date after payment:',
-                  updateError
-                );
-              }
-            }
-          }
-        }
-      }
-
-      // 3) Reload recent payments so the right-hand panel updates
-      const { data: paymentsData, error: reloadError } = await supabase
-        .from('payments')
-        .select('*')
-        .order('paid_on', { ascending: false })
-        .limit(20);
-
-      if (!reloadError && paymentsData) {
-        setPayments(paymentsData);
-      }
-
-      // 4) Reset form
-      setAmount('');
-      setPaidOn('');
-      setMethod('Rent');
-      setNote('');
+      resetForm();
     } catch (err: any) {
       console.error(err);
-      setError('Unexpected error recording payment.');
+      setError(err.message || 'Error recording payment.');
     } finally {
       setSaving(false);
     }
   };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Delete this payment record?')) return;
+
+    const { error } = await supabase.from('payments').delete().eq('id', id);
+
+    if (error) {
+      console.error(error);
+      setError('Error deleting payment.');
+      return;
+    }
+
+    setPayments((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/landlord/login');
+  };
+
+  if (authChecking) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
+        <p className="text-sm text-slate-400">Checking your session…</p>
+      </main>
+    );
+  }
 
   const formatCurrency = (val: number | null) => {
     if (val == null) return '—';
@@ -218,84 +234,137 @@ export default function LandlordPaymentsPage() {
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/landlord/login');
+  const tenantLabel = (id: number | null) => {
+    if (!id) return 'Unassigned';
+    const t = tenants.find((t) => t.id === id);
+    if (!t) return `Tenant #${id}`;
+    return t.name || t.email;
+  };
+
+  const propertyLabel = (id: number | null) => {
+    if (!id) return 'Unassigned';
+    const p = properties.find((p) => p.id === id);
+    if (!p) return `Property #${id}`;
+    return `${p.name || 'Property'}${p.unit_label ? ` · ${p.unit_label}` : ''}`;
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-8">
-      <div className="mx-auto flex max-w-5xl flex-col gap-6">
-        {/* Header */}
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold">Payments</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Record manual rent payments and auto-advance due dates.
-            </p>
-          </div>
-          <div className="flex gap-2">
+    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6 sm:py-8">
+      <div className="mx-auto max-w-6xl space-y-8">
+        {/* Top nav */}
+        <header className="border-b border-slate-800 pb-4 mb-4 sm:mb-6">
+          <nav className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <Link
               href="/landlord"
-              className="rounded-full border border-slate-700 px-4 py-2 text-xs hover:bg-slate-900"
+              className="inline-flex items-center gap-3"
             >
-              Back to dashboard
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-[11px] font-bold tracking-tight text-emerald-300">
+                RZ
+              </div>
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold text-slate-50">
+                  RentZentro
+                </span>
+                <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                  Landlord Console
+                </span>
+              </div>
             </Link>
-            <button
-              onClick={handleLogout}
-              className="rounded-full border border-slate-700 px-4 py-2 text-xs hover:bg-slate-900"
-            >
-              Log out
-            </button>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+              <Link
+                href="/landlord"
+                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/landlord/tenants"
+                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
+              >
+                Tenants
+              </Link>
+              <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 font-medium text-slate-100 shadow-sm">
+                Payments
+              </span>
+              <span className="rounded-full border border-slate-800 px-3 py-1.5 text-slate-500 text-[11px] sm:text-xs">
+                Settings (coming soon)
+              </span>
+              <Link
+                href="/"
+                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
+              >
+                Home
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
+              >
+                Log out
+              </button>
+            </div>
+          </nav>
+
+          <div className="mt-4">
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
+              Payments
+            </h1>
+            <p className="mt-1 text-sm text-slate-400">
+              Review and manually record rent payments. Tenant portal payments
+              will also appear here.
+            </p>
           </div>
         </header>
 
-        {/* Error */}
         {error && (
-          <div className="rounded-xl border border-red-500/40 bg-red-900/40 px-4 py-3 text-sm text-red-100">
+          <div className="rounded-xl border border-rose-800/70 bg-rose-950/70 p-3 text-xs text-rose-100">
             {error}
           </div>
         )}
 
-        {/* Form + list */}
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.2fr)]">
-          {/* Form */}
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-4">
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,2.3fr)]">
+          {/* Add payment form */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-4">
             <h2 className="text-sm font-semibold text-slate-100">
               Record a payment
             </h2>
             <p className="text-xs text-slate-400">
-              For now this is for manual entries (cash, check, Zelle, etc.).
-              Stripe payments will automatically appear here in the future and
-              will use the same due-date logic.
+              This is for manual entries (cash, check, or adjustments).
             </p>
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} className="space-y-3 text-sm">
               <div>
-                <label className="block text-xs text-slate-400 mb-1">
-                  Tenant
+                <label className="text-xs text-slate-300 block mb-1">
+                  Tenant (optional)
                 </label>
                 <select
-                  value={selectedTenantId}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setSelectedTenantId(val);
-
-                    if (val) {
-                      const t = tenants.find(
-                        (tt) => tt.id === Number(val)
-                      );
-                      if (t?.monthly_rent && !amount) {
-                        setAmount(String(t.monthly_rent));
-                      }
-                    }
-                  }}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                  value={form.tenantId}
+                  onChange={(e) => handleChange('tenantId', e.target.value)}
                 >
-                  <option value="">Select tenant</option>
+                  <option value="">Unassigned</option>
                   {tenants.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.name || '(no name)'} – {t.email}
+                      {t.name || t.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">
+                  Property (optional)
+                </label>
+                <select
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                  value={form.propertyId}
+                  onChange={(e) => handleChange('propertyId', e.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {properties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name || 'Property'}
+                      {p.unit_label ? ` · ${p.unit_label}` : ''}
                     </option>
                   ))}
                 </select>
@@ -303,118 +372,128 @@ export default function LandlordPaymentsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Amount
+                  <label className="text-xs text-slate-300 block mb-1">
+                    Amount (USD)
                   </label>
                   <input
                     type="number"
                     min={0}
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                    value={form.amount}
+                    onChange={(e) => handleChange('amount', e.target.value)}
                     placeholder="1500"
+                    required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
+                  <label className="text-xs text-slate-300 block mb-1">
                     Paid on
                   </label>
                   <input
                     type="date"
-                    value={paidOn}
-                    onChange={(e) => setPaidOn(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                    value={form.paidOn}
+                    onChange={(e) => handleChange('paidOn', e.target.value)}
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Method
-                  </label>
-                  <input
-                    value={method}
-                    onChange={(e) => setMethod(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-                    placeholder="Cash / Check / Zelle / etc."
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Note (optional)
-                  </label>
-                  <input
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-                    placeholder="Partial, late fee, etc."
-                  />
-                </div>
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">
+                  Method
+                </label>
+                <input
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                  value={form.method}
+                  onChange={(e) => handleChange('method', e.target.value)}
+                  placeholder="Cash, check, portal, etc."
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">
+                  Note (optional)
+                </label>
+                <textarea
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                  rows={3}
+                  value={form.note}
+                  onChange={(e) => handleChange('note', e.target.value)}
+                  placeholder="Late fee, partial payment, etc."
+                />
               </div>
 
               <button
                 type="submit"
                 disabled={saving}
-                className="mt-2 inline-flex w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+                className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
               >
-                {saving ? 'Saving payment…' : 'Save payment'}
+                {saving ? 'Saving…' : 'Record payment'}
               </button>
             </form>
-          </section>
+          </div>
 
-          {/* Recent payments */}
-          <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
-            <h2 className="text-sm font-semibold text-slate-100">
-              Recent payments
-            </h2>
-            <p className="mt-1 text-xs text-slate-400">
-              The 20 most recent payments across all tenants.
-            </p>
+          {/* Payments list */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-100">
+                All payments
+              </h2>
+              <p className="text-xs text-slate-500">
+                {payments.length === 0
+                  ? 'No payments yet.'
+                  : `${payments.length} total`}
+              </p>
+            </div>
 
             {loading ? (
-              <p className="mt-4 text-xs text-slate-400">Loading…</p>
+              <p className="text-xs text-slate-400">Loading payments…</p>
             ) : payments.length === 0 ? (
-              <p className="mt-4 text-xs text-slate-400">
-                No payments recorded yet.
+              <p className="text-xs text-slate-400">
+                Once payments are recorded, they will appear here.
               </p>
             ) : (
-              <ul className="mt-4 space-y-3 text-sm">
-                {payments.map((p) => {
-                  const tenant = tenants.find((t) => t.id === p.tenant_id);
-                  return (
-                    <li
-                      key={p.id}
-                      className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3"
-                    >
-                      <div className="space-y-1">
-                        <p className="font-medium">
-                          {tenant?.name || '(no name)'}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {tenant?.email || 'Unknown email'}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {formatDate(p.paid_on)} · {p.method || 'Rent'}
-                        </p>
-                        {p.note && (
-                          <p className="text-[11px] text-slate-500">
-                            Note: {p.note}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold">
+              <ul className="space-y-2 text-xs">
+                {payments.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-medium text-slate-100">
                           {formatCurrency(p.amount)}
                         </p>
+                        <p className="text-slate-400">
+                          Tenant: {tenantLabel(p.tenant_id)}
+                        </p>
+                        <p className="text-slate-400">
+                          Property: {propertyLabel(p.property_id)}
+                        </p>
                       </div>
-                    </li>
-                  );
-                })}
+                      <div className="text-right text-[11px] text-slate-500">
+                        <p>Paid on</p>
+                        <p className="text-slate-300">{formatDate(p.paid_on)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] text-slate-500">
+                        Method: {p.method || 'Rent'}
+                        {p.note && ` · ${p.note}`}
+                      </p>
+                      <button
+                        onClick={() => handleDelete(p.id)}
+                        className="text-[11px] text-red-400 hover:text-red-300"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
               </ul>
             )}
-          </section>
-        </div>
+          </div>
+        </section>
       </div>
     </main>
   );
