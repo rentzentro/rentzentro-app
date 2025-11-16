@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../supabaseClient';
@@ -13,6 +13,26 @@ type Property = {
   monthly_rent: number | null;
   status: string | null;
   next_due_date: string | null;
+};
+
+type Tenant = {
+  id: number;
+  created_at: string;
+  name: string | null;
+  email: string;
+  property_id: number | null;
+  monthly_rent: number | null;
+  status: string | null;
+};
+
+type Payment = {
+  id: number;
+  tenant_id: number | null;
+  property_id: number | null;
+  amount: number | null;
+  paid_on: string | null;
+  method: string | null;
+  note: string | null;
 };
 
 type FormState = {
@@ -31,24 +51,37 @@ const emptyForm: FormState = {
   nextDueDate: '',
 };
 
+type TenantRentStatus = {
+  tenantId: number;
+  name: string;
+  email: string;
+  propertyLabel: string;
+  monthlyRent: number | null;
+  nextDueDate: string | null;
+  lastPaidOn: string | null;
+  state: 'paid' | 'due_soon' | 'overdue' | 'no_schedule';
+};
+
 export default function LandlordPage() {
   const router = useRouter();
 
   const [properties, setProperties] = useState<Property[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const [authChecking, setAuthChecking] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------- AUTH + LOAD PROPERTIES ----------
+  // ---------- AUTH + LOAD DATA ----------
   useEffect(() => {
     const checkAuthAndLoad = async () => {
       setAuthChecking(true);
 
-      // 1) Check if landlord is logged in
       const {
         data: { session },
         error: sessionError,
@@ -62,28 +95,50 @@ export default function LandlordPage() {
       }
 
       if (!session) {
-        // Not logged in → go to landlord login
         router.push('/landlord/login');
         return;
       }
 
-      // 2) Load properties
-      setLoading(true);
+      setLoadingData(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from<Property>('properties')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [propsRes, tenantsRes, paymentsRes] = await Promise.all([
+        supabase
+          .from<Property>('properties')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from<Tenant>('tenants')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from<Payment>('payments')
+          .select('*')
+          .order('paid_on', { ascending: false }),
+      ]);
 
-      if (error) {
-        console.error(error);
+      if (propsRes.error) {
+        console.error(propsRes.error);
         setError('Error loading properties.');
-      } else if (data) {
-        setProperties(data);
+      } else if (propsRes.data) {
+        setProperties(propsRes.data);
       }
 
-      setLoading(false);
+      if (tenantsRes.error) {
+        console.error(tenantsRes.error);
+        setError('Error loading tenants.');
+      } else if (tenantsRes.data) {
+        setTenants(tenantsRes.data);
+      }
+
+      if (paymentsRes.error) {
+        console.error(paymentsRes.error);
+        setError('Error loading payments.');
+      } else if (paymentsRes.data) {
+        setPayments(paymentsRes.data);
+      }
+
+      setLoadingData(false);
       setAuthChecking(false);
     };
 
@@ -196,7 +251,98 @@ export default function LandlordPage() {
     router.push('/landlord/login');
   };
 
-  // While checking auth, show nothing (or a tiny message)
+  const formatCurrency = (val: number | null) => {
+    if (val == null) return '—';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    }).format(val);
+  };
+
+  const formatDate = (val: string | null) => {
+    if (!val) return '—';
+    try {
+      return new Date(val).toLocaleDateString();
+    } catch {
+      return val;
+    }
+  };
+
+  // ---------- RENT STATUS CALC ----------
+  const tenantRentStatuses: TenantRentStatus[] = useMemo(() => {
+    const today = new Date();
+
+    // Helper: get latest paid_on per tenant
+    const latestPaymentByTenant = new Map<number, Payment>();
+
+    for (const p of payments) {
+      if (!p.tenant_id || !p.paid_on) continue;
+      const existing = latestPaymentByTenant.get(p.tenant_id);
+      if (!existing) {
+        latestPaymentByTenant.set(p.tenant_id, p);
+      } else {
+        if (existing.paid_on && p.paid_on > existing.paid_on) {
+          latestPaymentByTenant.set(p.tenant_id, p);
+        }
+      }
+    }
+
+    return tenants.map((t) => {
+      const property = t.property_id
+        ? properties.find((p) => p.id === t.property_id)
+        : undefined;
+
+      const monthlyRent = t.monthly_rent ?? property?.monthly_rent ?? null;
+      const nextDueDateStr = property?.next_due_date || null;
+
+      const latestPayment = latestPaymentByTenant.get(t.id) || null;
+      const lastPaidOnStr = latestPayment?.paid_on || null;
+
+      let state: TenantRentStatus['state'] = 'no_schedule';
+
+      if (!monthlyRent || !nextDueDateStr) {
+        state = 'no_schedule';
+      } else {
+        const nextDue = new Date(nextDueDateStr);
+        const lastPaidOn = lastPaidOnStr ? new Date(lastPaidOnStr) : null;
+
+        // If last payment is on or after due date → consider paid
+        if (lastPaidOn && lastPaidOn >= nextDue) {
+          state = 'paid';
+        } else {
+          // Not paid for this due date, decide due_soon vs overdue
+          const diffMs = nextDue.getTime() - today.getTime();
+          const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+          if (diffDays < 0) {
+            state = 'overdue';
+          } else if (diffDays <= 5) {
+            state = 'due_soon';
+          } else {
+            state = 'no_schedule'; // upcoming but not urgent
+          }
+        }
+      }
+
+      const propertyLabel = property
+        ? `${property.name}${property.unit_label ? ' · ' + property.unit_label : ''}`
+        : 'No property assigned';
+
+      return {
+        tenantId: t.id,
+        name: t.name || '(no name)',
+        email: t.email,
+        propertyLabel,
+        monthlyRent,
+        nextDueDate: nextDueDateStr,
+        lastPaidOn: lastPaidOnStr,
+        state,
+      };
+    });
+  }, [tenants, properties, payments]);
+
+  // While checking auth, show a light loading screen
   if (authChecking) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
@@ -216,7 +362,7 @@ export default function LandlordPage() {
               <span className="text-xs text-emerald-400">(beta)</span>
             </h1>
             <p className="text-sm text-slate-300 mt-1">
-              Track properties and monthly rent in one place.
+              Track properties, tenants, and rent in one place.
             </p>
           </div>
 
@@ -260,7 +406,7 @@ export default function LandlordPage() {
           <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
             <p className="text-xs text-slate-400">MONTHLY RENT TOTAL</p>
             <p className="mt-2 text-2xl font-semibold">
-              ${totalMonthlyRent.toLocaleString()}
+              {formatCurrency(totalMonthlyRent)}
             </p>
             <p className="mt-1 text-xs text-slate-500">Across all properties.</p>
           </div>
@@ -283,7 +429,96 @@ export default function LandlordPage() {
           </div>
         )}
 
-        {/* Form + list */}
+        {/* Rent Status Section */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-200">
+              Rent status · amounts due
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              Based on next due dates and the most recent payment for each tenant.
+            </p>
+          </div>
+
+          {loadingData ? (
+            <p className="text-xs text-slate-400">Calculating rent status…</p>
+          ) : tenants.length === 0 ? (
+            <p className="text-xs text-slate-400">
+              No tenants yet. Add tenants first to see who owes rent.
+            </p>
+          ) : (
+            <div className="space-y-2 text-sm">
+              {tenantRentStatuses.map((t) => {
+                let badgeLabel = '';
+                let badgeClass = '';
+
+                switch (t.state) {
+                  case 'paid':
+                    badgeLabel = 'Paid';
+                    badgeClass =
+                      'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40';
+                    break;
+                  case 'due_soon':
+                    badgeLabel = 'Due soon';
+                    badgeClass =
+                      'bg-amber-500/10 text-amber-300 border border-amber-500/40';
+                    break;
+                  case 'overdue':
+                    badgeLabel = 'Overdue';
+                    badgeClass =
+                      'bg-rose-500/10 text-rose-300 border border-rose-500/40';
+                    break;
+                  default:
+                    badgeLabel = 'Upcoming';
+                    badgeClass =
+                      'bg-slate-500/10 text-slate-300 border border-slate-500/40';
+                }
+
+                return (
+                  <div
+                    key={t.tenantId}
+                    className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="space-y-1">
+                      <p className="font-medium text-slate-100">{t.name}</p>
+                      <p className="text-xs text-slate-400">{t.email}</p>
+                      <p className="text-xs text-slate-400">
+                        {t.propertyLabel}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-start gap-1 text-xs sm:items-end">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${badgeClass}`}
+                        >
+                          {badgeLabel}
+                        </span>
+                        <span className="text-slate-300">
+                          {formatCurrency(t.monthlyRent)}
+                        </span>
+                      </div>
+                      <p className="text-slate-500">
+                        Next due:{' '}
+                        <span className="text-slate-300">
+                          {t.nextDueDate ? formatDate(t.nextDueDate) : '—'}
+                        </span>
+                      </p>
+                      <p className="text-slate-500">
+                        Last payment:{' '}
+                        <span className="text-slate-300">
+                          {t.lastPaidOn ? formatDate(t.lastPaidOn) : '—'}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Form + properties list */}
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.1fr)] items-start">
           {/* Form */}
           <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
@@ -386,7 +621,7 @@ export default function LandlordPage() {
               Your properties
             </h2>
 
-            {loading ? (
+            {loadingData ? (
               <p className="text-xs text-slate-400">Loading properties…</p>
             ) : properties.length === 0 ? (
               <p className="text-xs text-slate-400">
@@ -400,20 +635,18 @@ export default function LandlordPage() {
                     className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-3"
                   >
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-slate-100">
-                          {p.name}{' '}
-                          {p.unit_label && (
-                            <span className="text-xs text-slate-400">
-                              · {p.unit_label}
-                            </span>
-                          )}
-                        </p>
-                      </div>
+                      <p className="font-medium text-slate-100">
+                        {p.name}{' '}
+                        {p.unit_label && (
+                          <span className="text-xs text-slate-400">
+                            · {p.unit_label}
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-slate-400">
                         Rent:{' '}
                         {p.monthly_rent
-                          ? `$${p.monthly_rent.toLocaleString()}`
+                          ? formatCurrency(p.monthly_rent)
                           : '—'}
                       </p>
                       <p className="text-xs text-slate-400">
