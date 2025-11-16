@@ -21,11 +21,21 @@ type TenantRow = {
 type PropertyRow = {
   id: number;
   created_at: string;
-  name: string | null; // property name / address
+  name: string | null;
   unit_label: string | null;
   monthly_rent: number | null;
   status: string | null;
   next_due_date: string | null;
+};
+
+type PaymentRow = {
+  id: number;
+  tenant_id: number | null;
+  property_id: number | null;
+  amount: number | null;
+  paid_on: string | null;
+  method: string | null;
+  note: string | null;
 };
 
 export default function TenantPortalPage() {
@@ -34,15 +44,15 @@ export default function TenantPortalPage() {
   const [loading, setLoading] = useState(true);
   const [tenant, setTenant] = useState<TenantRow | null>(null);
   const [property, setProperty] = useState<PropertyRow | null>(null);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------- AUTH + LOAD TENANT ----------
   useEffect(() => {
     const loadTenant = async () => {
       setLoading(true);
       setError(null);
 
-      // 1. Get current session
+      // 1. Get session
       const {
         data: { session },
         error: sessionError,
@@ -56,7 +66,6 @@ export default function TenantPortalPage() {
       }
 
       if (!session?.user) {
-        // Not logged in → go to tenant login
         router.push('/tenant/login');
         return;
       }
@@ -68,7 +77,7 @@ export default function TenantPortalPage() {
         return;
       }
 
-      // 2. Find matching tenant row by email
+      // 2. Fetch tenant record
       const { data: tenantRow, error: tenantError } = await supabase
         .from('tenants')
         .select('*')
@@ -76,7 +85,7 @@ export default function TenantPortalPage() {
         .maybeSingle();
 
       if (tenantError) {
-        console.error('Tenant portal – tenant query error:', tenantError);
+        console.error('Tenant portal – tenant error:', tenantError);
         setError('There was a problem loading your tenant account.');
         setLoading(false);
         return;
@@ -90,21 +99,35 @@ export default function TenantPortalPage() {
         return;
       }
 
-      setTenant(tenantRow as TenantRow);
+      const typedTenant = tenantRow as TenantRow;
+      setTenant(typedTenant);
 
-      // 3. Optionally load property details
-      if (tenantRow.property_id) {
+      // 3. Property
+      if (typedTenant.property_id) {
         const { data: propertyRow, error: propertyError } = await supabase
           .from('properties')
           .select('*')
-          .eq('id', tenantRow.property_id)
+          .eq('id', typedTenant.property_id)
           .maybeSingle();
 
         if (propertyError) {
-          console.error('Tenant portal – property query error:', propertyError);
-        } else {
+          console.error('Tenant portal – property error:', propertyError);
+        } else if (propertyRow) {
           setProperty(propertyRow as PropertyRow);
         }
+      }
+
+      // 4. Payments for this tenant
+      const { data: paymentRows, error: paymentError } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('tenant_id', typedTenant.id)
+        .order('paid_on', { ascending: false });
+
+      if (paymentError) {
+        console.error('Tenant portal – payments error:', paymentError);
+      } else if (paymentRows) {
+        setPayments(paymentRows as PaymentRow[]);
       }
 
       setLoading(false);
@@ -112,8 +135,6 @@ export default function TenantPortalPage() {
 
     loadTenant();
   }, [router]);
-
-  // ---------- HELPERS ----------
 
   const formatCurrency = (value: number | null | undefined) => {
     if (value == null) return '—';
@@ -149,8 +170,6 @@ export default function TenantPortalPage() {
     router.push('/tenant/login');
   };
 
-  // ---------- UI ----------
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto flex max-w-5xl flex-col px-4 pb-16 pt-6 sm:px-6 lg:px-8">
@@ -185,7 +204,7 @@ export default function TenantPortalPage() {
           </p>
         </header>
 
-        {/* Loading / Error / Empty states */}
+        {/* States */}
         {loading && (
           <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-300">
             Loading your account…
@@ -253,7 +272,7 @@ export default function TenantPortalPage() {
               </div>
             </section>
 
-            {/* Two-column layout */}
+            {/* Two columns: lease + payments */}
             <section className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)]">
               {/* Lease details */}
               <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
@@ -305,22 +324,49 @@ export default function TenantPortalPage() {
                 </div>
               </div>
 
-              {/* Payment history placeholder */}
+              {/* Payment history */}
               <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
                 <h2 className="text-sm font-semibold text-slate-100">
                   Payment history
                 </h2>
                 <p className="mt-1 text-xs text-slate-400">
-                  A record of recent payments will appear here once this feature is live.
+                  Recent payments recorded by your landlord.
                 </p>
 
-                <div className="mt-4 rounded-xl border border-dashed border-slate-700/80 bg-slate-900/60 p-4 text-xs text-slate-500">
-                  ✅ Your account is connected.  
-                  <span className="block">
-                    In a future update, you&apos;ll see each rent payment, amount, and
-                    date here — plus downloadable receipts.
-                  </span>
-                </div>
+                {payments.length === 0 ? (
+                  <div className="mt-4 rounded-xl border border-dashed border-slate-700/80 bg-slate-900/60 p-4 text-xs text-slate-500">
+                    No payments have been recorded yet. Once your landlord records
+                    payments, they&apos;ll appear here.
+                  </div>
+                ) : (
+                  <ul className="mt-4 space-y-3 text-xs">
+                    {payments.map((p) => (
+                      <li
+                        key={p.id}
+                        className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-3"
+                      >
+                        <div>
+                          <p className="text-slate-100">
+                            {formatCurrency(p.amount)}
+                          </p>
+                          <p className="text-slate-400">
+                            {formatDate(p.paid_on)} · {p.method || 'Rent'}
+                          </p>
+                          {p.note && (
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              Note: {p.note}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <p className="mt-3 text-[11px] text-slate-500">
+                  In a future update, you&apos;ll be able to pay directly from this
+                  portal, and each payment will show here automatically.
+                </p>
               </div>
             </section>
           </>

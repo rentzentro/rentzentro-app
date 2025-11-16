@@ -21,7 +21,6 @@ type Payment = {
   paid_on: string | null;
   method: string | null;
   note: string | null;
-  tenant?: Tenant;
 };
 
 export default function LandlordPaymentsPage() {
@@ -39,7 +38,7 @@ export default function LandlordPaymentsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load tenants + recent payments
+  // Load tenants + payments
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -98,7 +97,7 @@ export default function LandlordPaymentsPage() {
 
     const payload = {
       tenant_id: tenantIdNum,
-      property_id: null, // we could wire this later if you tie tenants to properties
+      property_id: null, // optional: wire to a property later
       amount: Number(amount),
       paid_on: paidOn || new Date().toISOString().slice(0, 10),
       method: method.trim() || 'Rent',
@@ -114,7 +113,7 @@ export default function LandlordPaymentsPage() {
       return;
     }
 
-    // Reload payments list
+    // Reload recent payments
     const { data: paymentsData, error: reloadError } = await supabase
       .from('payments')
       .select('*')
@@ -153,7 +152,7 @@ export default function LandlordPaymentsPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/');
+    router.push('/landlord/login');
   };
 
   return (
@@ -198,8 +197,8 @@ export default function LandlordPaymentsPage() {
               Record a payment
             </h2>
             <p className="text-xs text-slate-400">
-              This is for manual entry (cash, check, Zelle, etc.). Stripe payments will
-              automatically appear here in the future.
+              For now this is for manual entries (cash, check, Zelle, etc.).
+              Stripe payments will automatically appear here in the future.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -213,7 +212,7 @@ export default function LandlordPaymentsPage() {
                     const val = e.target.value;
                     setSelectedTenantId(val);
 
-                    // auto-fill amount with tenant monthly rent if empty
+                    // auto-fill amount with tenant monthly rent if set
                     if (val) {
                       const t = tenants.find((tt) => tt.id === Number(val));
                       if (t?.monthly_rent && !amount) {
@@ -279,7 +278,7 @@ export default function LandlordPaymentsPage() {
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
-                    placeholder="e.g. Partial payment, late fee, etc."
+                    placeholder="Partial, late fee, etc."
                   />
                 </div>
               </div>
@@ -300,7 +299,7 @@ export default function LandlordPaymentsPage() {
               Recent payments
             </h2>
             <p className="mt-1 text-xs text-slate-400">
-              The 20 most recent payments, across all tenants.
+              The 20 most recent payments across all tenants.
             </p>
 
             {loading ? (
