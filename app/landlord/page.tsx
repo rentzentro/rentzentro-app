@@ -2,6 +2,7 @@
 
 import { useEffect, useState, FormEvent } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../supabaseClient';
 
 type Property = {
@@ -31,16 +32,42 @@ const emptyForm: FormState = {
 };
 
 export default function LandlordPage() {
+  const router = useRouter();
+
   const [properties, setProperties] = useState<Property[]>([]);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  const [authChecking, setAuthChecking] = useState(true);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load properties on mount
+  // ---------- AUTH + LOAD PROPERTIES ----------
   useEffect(() => {
-    const load = async () => {
+    const checkAuthAndLoad = async () => {
+      setAuthChecking(true);
+
+      // 1) Check if landlord is logged in
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error('Landlord dashboard – session error:', sessionError);
+        setError('Problem checking your login. Please try again.');
+        setAuthChecking(false);
+        return;
+      }
+
+      if (!session) {
+        // Not logged in → go to landlord login
+        router.push('/landlord/login');
+        return;
+      }
+
+      // 2) Load properties
       setLoading(true);
       setError(null);
 
@@ -57,12 +84,13 @@ export default function LandlordPage() {
       }
 
       setLoading(false);
+      setAuthChecking(false);
     };
 
-    load();
-  }, []);
+    checkAuthAndLoad();
+  }, [router]);
 
-  // Stats
+  // ---------- STATS ----------
   const totalProperties = properties.length;
   const totalMonthlyRent = properties.reduce(
     (sum, p) => sum + (p.monthly_rent || 0),
@@ -163,6 +191,20 @@ export default function LandlordPage() {
     }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/landlord/login');
+  };
+
+  // While checking auth, show nothing (or a tiny message)
+  if (authChecking) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
+        <p className="text-sm text-slate-400">Checking your session…</p>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-8">
       <div className="max-w-5xl mx-auto space-y-8">
@@ -197,6 +239,12 @@ export default function LandlordPage() {
             >
               Back to home
             </Link>
+            <button
+              onClick={handleLogout}
+              className="rounded-full border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
+            >
+              Log out
+            </button>
           </div>
         </header>
 
