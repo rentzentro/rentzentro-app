@@ -37,7 +37,7 @@ export default function TenantLoginPage() {
         return;
       }
 
-      // Success – go to tenant portal
+      // Success
       router.push('/tenant/portal');
     } catch (err: any) {
       console.error('Unexpected tenant login error:', err);
@@ -49,7 +49,8 @@ export default function TenantLoginPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
       <div className="w-full max-w-md space-y-8">
-        {/* Back link */}
+
+        {/* Back to home */}
         <div>
           <Link
             href="/"
@@ -67,11 +68,10 @@ export default function TenantLoginPage() {
           <h1 className="text-2xl font-semibold">Sign in to your account</h1>
           <p className="text-xs text-slate-400">
             Use the email and password you created for your RentZentro tenant account.
-            Your email must match the one your landlord added for you.
           </p>
         </div>
 
-        {/* Error */}
+        {/* Error message */}
         {error && (
           <div className="rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs text-red-200">
             {error}
@@ -111,16 +111,18 @@ export default function TenantLoginPage() {
             disabled={loading}
             className="w-full rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-60 disabled:cursor-not-allowed text-slate-950 text-sm font-medium py-2 mt-2"
           >
-            {loading ? 'Signing you in…' : 'Sign in'}
+            {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
 
+        {/* Create account link */}
         <p className="text-[11px] text-slate-500">
           New here?{' '}
           <Link href="/tenant/signup" className="text-sky-400 hover:text-sky-300">
             Create a tenant account
           </Link>
         </p>
+
       </div>
     </main>
   );

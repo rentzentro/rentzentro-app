@@ -50,12 +50,10 @@ export default function TenantSignupPage() {
         return;
       }
 
-      // Success
       setInfo(
         'Account created. Use this email to log in. If your landlord has not added you yet, ask them to add your email in RentZentro.'
       );
 
-      // Optionally redirect to login after a short delay
       setTimeout(() => {
         router.push('/tenant/login');
       }, 1500);
@@ -86,8 +84,8 @@ export default function TenantSignupPage() {
           </p>
           <h1 className="text-2xl font-semibold">Create your tenant account</h1>
           <p className="text-xs text-slate-400">
-            Use the same email your landlord entered for you in RentZentro.
-            This lets the system connect your login to your rental details.
+            Use the same email your landlord entered for you in RentZentro so your
+            login can be linked to your rental.
           </p>
         </div>
 
