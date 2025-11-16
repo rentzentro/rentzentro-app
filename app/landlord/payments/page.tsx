@@ -10,6 +10,7 @@ type Tenant = {
   name: string | null;
   email: string;
   monthly_rent: number | null;
+  property_id: number | null;
 };
 
 type Payment = {
@@ -21,6 +22,11 @@ type Payment = {
   paid_on: string | null;
   method: string | null;
   note: string | null;
+};
+
+type PropertyMeta = {
+  id: number;
+  next_due_date: string | null;
 };
 
 export default function LandlordPaymentsPage() {
@@ -44,18 +50,20 @@ export default function LandlordPaymentsPage() {
       setLoading(true);
       setError(null);
 
-      const [{ data: tenantsData, error: tenantsError }, { data: paymentsData, error: paymentsError }] =
-        await Promise.all([
-          supabase
-            .from('tenants')
-            .select('id, name, email, monthly_rent')
-            .order('name', { ascending: true }),
-          supabase
-            .from('payments')
-            .select('*')
-            .order('paid_on', { ascending: false })
-            .limit(20),
-        ]);
+      const [
+        { data: tenantsData, error: tenantsError },
+        { data: paymentsData, error: paymentsError },
+      ] = await Promise.all([
+        supabase
+          .from('tenants')
+          .select('id, name, email, monthly_rent, property_id')
+          .order('name', { ascending: true }),
+        supabase
+          .from('payments')
+          .select('*')
+          .order('paid_on', { ascending: false })
+          .limit(20),
+      ]);
 
       if (tenantsError) {
         console.error(tenantsError);
@@ -77,6 +85,8 @@ export default function LandlordPaymentsPage() {
     load();
   }, []);
 
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -92,44 +102,102 @@ export default function LandlordPaymentsPage() {
 
     setSaving(true);
 
-    const tenantIdNum = Number(selectedTenantId);
-    const tenant = tenants.find((t) => t.id === tenantIdNum);
+    try {
+      const tenantIdNum = Number(selectedTenantId);
+      const tenant = tenants.find((t) => t.id === tenantIdNum);
 
-    const payload = {
-      tenant_id: tenantIdNum,
-      property_id: null, // optional: wire to a property later
-      amount: Number(amount),
-      paid_on: paidOn || new Date().toISOString().slice(0, 10),
-      method: method.trim() || 'Rent',
-      note: note.trim() || null,
-    };
+      if (!tenant) {
+        setError('Could not find selected tenant.');
+        setSaving(false);
+        return;
+      }
 
-    const { error: insertError } = await supabase.from('payments').insert(payload);
+      const propertyId = tenant.property_id ?? null;
+      const paidOnStr = paidOn || todayISO();
 
-    if (insertError) {
-      console.error(insertError);
-      setError(insertError.message || 'Error recording payment.');
+      const payload = {
+        tenant_id: tenantIdNum,
+        property_id: propertyId,
+        amount: Number(amount),
+        paid_on: paidOnStr,
+        method: method.trim() || 'Rent',
+        note: note.trim() || null,
+      };
+
+      // 1) Insert payment
+      const { error: insertError } = await supabase
+        .from('payments')
+        .insert(payload);
+
+      if (insertError) {
+        console.error(insertError);
+        setError(insertError.message || 'Error recording payment.');
+        setSaving(false);
+        return;
+      }
+
+      // 2) If tenant is linked to a property, auto-advance next_due_date
+      if (propertyId) {
+        // fetch current next_due_date
+        const { data: propertyRow, error: propError } = await supabase
+          .from('properties')
+          .select('id, next_due_date')
+          .eq('id', propertyId)
+          .maybeSingle();
+
+        if (propError) {
+          console.error('Error loading property for due date update:', propError);
+        } else if (propertyRow) {
+          const property = propertyRow as PropertyMeta;
+
+          if (property.next_due_date) {
+            const currentDue = new Date(property.next_due_date);
+            const paidOnDate = new Date(paidOnStr);
+
+            // Only advance if payment is on or after the current due date
+            if (!isNaN(currentDue.getTime()) && paidOnDate >= currentDue) {
+              const newDue = new Date(currentDue);
+              newDue.setMonth(newDue.getMonth() + 1);
+              const newDueStr = newDue.toISOString().slice(0, 10);
+
+              const { error: updateError } = await supabase
+                .from('properties')
+                .update({ next_due_date: newDueStr })
+                .eq('id', propertyId);
+
+              if (updateError) {
+                console.error(
+                  'Error updating next_due_date after payment:',
+                  updateError
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // 3) Reload recent payments so the right-hand panel updates
+      const { data: paymentsData, error: reloadError } = await supabase
+        .from('payments')
+        .select('*')
+        .order('paid_on', { ascending: false })
+        .limit(20);
+
+      if (!reloadError && paymentsData) {
+        setPayments(paymentsData);
+      }
+
+      // 4) Reset form
+      setAmount('');
+      setPaidOn('');
+      setMethod('Rent');
+      setNote('');
+    } catch (err: any) {
+      console.error(err);
+      setError('Unexpected error recording payment.');
+    } finally {
       setSaving(false);
-      return;
     }
-
-    // Reload recent payments
-    const { data: paymentsData, error: reloadError } = await supabase
-      .from('payments')
-      .select('*')
-      .order('paid_on', { ascending: false })
-      .limit(20);
-
-    if (!reloadError && paymentsData) {
-      setPayments(paymentsData);
-    }
-
-    // Reset form
-    setSaving(false);
-    setAmount('');
-    setPaidOn('');
-    setMethod('Rent');
-    setNote('');
   };
 
   const formatCurrency = (val: number | null) => {
@@ -163,7 +231,7 @@ export default function LandlordPaymentsPage() {
           <div>
             <h1 className="text-2xl font-semibold">Payments</h1>
             <p className="mt-1 text-sm text-slate-400">
-              Record manual rent payments and review recent history.
+              Record manual rent payments and auto-advance due dates.
             </p>
           </div>
           <div className="flex gap-2">
@@ -198,7 +266,8 @@ export default function LandlordPaymentsPage() {
             </h2>
             <p className="text-xs text-slate-400">
               For now this is for manual entries (cash, check, Zelle, etc.).
-              Stripe payments will automatically appear here in the future.
+              Stripe payments will automatically appear here in the future and
+              will use the same due-date logic.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -212,9 +281,10 @@ export default function LandlordPaymentsPage() {
                     const val = e.target.value;
                     setSelectedTenantId(val);
 
-                    // auto-fill amount with tenant monthly rent if set
                     if (val) {
-                      const t = tenants.find((tt) => tt.id === Number(val));
+                      const t = tenants.find(
+                        (tt) => tt.id === Number(val)
+                      );
                       if (t?.monthly_rent && !amount) {
                         setAmount(String(t.monthly_rent));
                       }
