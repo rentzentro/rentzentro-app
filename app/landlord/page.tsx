@@ -1,4 +1,3 @@
-// app/landlord/page.tsx
 'use client';
 
 import { useEffect, useState, FormEvent } from 'react';
@@ -63,7 +62,7 @@ export default function LandlordPage() {
     load();
   }, []);
 
-  // Derived stats
+  // Stats
   const totalProperties = properties.length;
   const totalMonthlyRent = properties.reduce(
     (sum, p) => sum + (p.monthly_rent || 0),
@@ -171,19 +170,26 @@ export default function LandlordPage() {
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-semibold">
-              Landlord Dashboard <span className="text-xs text-emerald-400">(beta)</span>
+              Landlord Dashboard{' '}
+              <span className="text-xs text-emerald-400">(beta)</span>
             </h1>
             <p className="text-sm text-slate-300 mt-1">
               Track properties and monthly rent in one place.
             </p>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Link
               href="/landlord/tenants"
               className="rounded-full border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
             >
               Manage tenants
+            </Link>
+            <Link
+              href="/landlord/payments"
+              className="rounded-full border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
+            >
+              Payments
             </Link>
             <Link
               href="/"
@@ -271,7 +277,9 @@ export default function LandlordPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-slate-300">Monthly rent (USD)</label>
+                <label className="text-xs text-slate-300">
+                  Monthly rent (USD)
+                </label>
                 <input
                   type="number"
                   min={0}
@@ -297,7 +305,9 @@ export default function LandlordPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-slate-300">Next rent due date</label>
+                <label className="text-xs text-slate-300">
+                  Next rent due date
+                </label>
                 <input
                   type="date"
                   className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
