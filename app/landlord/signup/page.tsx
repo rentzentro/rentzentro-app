@@ -5,37 +5,51 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
-export default function LandlordLoginPage() {
+export default function LandlordSignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setMessage(null);
+
+    if (password !== confirm) {
+      setError("Passwords don't match.");
+      return;
+    }
+
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
 
     if (error) {
       console.error(error);
-      setError(error.message ?? 'Unable to log in.');
+      setError(error.message ?? 'Unable to create account.');
       setLoading(false);
       return;
     }
 
-    // Logged in successfully – go to landlord dashboard
+    // If email confirmation is off, session may be created immediately
     if (data.session) {
-      router.push('/landlord');
+      setMessage('Account created! Redirecting to your dashboard…');
+      setTimeout(() => router.push('/landlord'), 1000);
     } else {
-      setError('Login succeeded but no session was created.');
-      setLoading(false);
+      // If email confirmations are on in Supabase
+      setMessage(
+        'Account created. Check your email to confirm your address, then come back and log in.'
+      );
     }
+
+    setLoading(false);
   };
 
   return (
@@ -43,22 +57,28 @@ export default function LandlordLoginPage() {
       <div className="w-full max-w-md space-y-6">
         {/* Back link */}
         <Link
-          href="/"
+          href="/landlord/login"
           className="inline-flex items-center text-xs text-slate-400 hover:text-slate-200"
         >
-          ← Back to home
+          ← Back to landlord login
         </Link>
 
         {/* Card */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-lg shadow-slate-950/40">
-          <h1 className="text-xl font-semibold">Landlord login</h1>
+          <h1 className="text-xl font-semibold">Create landlord account</h1>
           <p className="mt-1 text-xs text-slate-400">
-            Sign in to manage your properties, tenants, and payments.
+            Use this account to manage properties, tenants, and rent payments.
           </p>
 
           {error && (
             <div className="mt-4 rounded-lg border border-red-500/60 bg-red-950/60 px-3 py-2 text-xs text-red-100">
               {error}
+            </div>
+          )}
+
+          {message && (
+            <div className="mt-4 rounded-lg border border-emerald-500/60 bg-emerald-950/60 px-3 py-2 text-xs text-emerald-100">
+              {message}
             </div>
           )}
 
@@ -87,7 +107,21 @@ export default function LandlordLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                placeholder="••••••••"
+                placeholder="Create a password"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">
+                Confirm password
+              </label>
+              <input
+                type="password"
+                required
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                placeholder="Repeat your password"
               />
             </div>
 
@@ -96,25 +130,20 @@ export default function LandlordLoginPage() {
               disabled={loading}
               className="mt-2 w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
             >
-              {loading ? 'Logging in…' : "I'm a landlord – log me in"}
+              {loading ? 'Creating account…' : 'Create landlord account'}
             </button>
           </form>
 
-          {/* Signup link */}
           <p className="mt-4 text-xs text-slate-400 text-center">
-            Don&apos;t have a landlord account yet?{' '}
+            Already have a landlord account?{' '}
             <Link
-              href="/landlord/signup"
+              href="/landlord/login"
               className="text-emerald-300 hover:text-emerald-200 font-medium"
             >
-              Create account
+              Log in
             </Link>
           </p>
         </div>
-
-        <p className="text-[10px] text-slate-500 text-center">
-          Landlord accounts are separate from tenant logins.
-        </p>
       </div>
     </main>
   );
