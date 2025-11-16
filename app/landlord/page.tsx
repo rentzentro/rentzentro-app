@@ -104,7 +104,6 @@ export default function LandlordDashboardPage() {
 
     propertiesList.forEach((p) => {
       if (!p.next_due_date) {
-        // If no due date set, treat as "not due yet" (or unknown)
         notDueYet.push(p);
         return;
       }
@@ -149,7 +148,7 @@ export default function LandlordDashboardPage() {
         setRentStatus(computeRentStatus(props));
       }
 
-      // Load recent payments (same table/columns as /landlord/payments, but limited)
+      // Load recent payments (ordered by PAID date)
       const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
         .select('*')
@@ -444,7 +443,7 @@ export default function LandlordDashboardPage() {
                 {rentStatus.dueSoon.length}
               </p>
               <p className="mt-1 text-xs text-amber-300">
-                Due within 7 days.
+                Coming due within 7 days.
               </p>
             </div>
 
@@ -778,9 +777,13 @@ export default function LandlordDashboardPage() {
                           {formatCurrency(p.amount)}
                         </p>
                         <p className="text-xs text-slate-400">
-                          {p.method || 'Rent'} ·{' '}
-                          {p.note ? `Note: ${p.note}` : 'No note'}
+                          Method: {p.method || 'Rent'}
                         </p>
+                        {p.note && (
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Note: {p.note}
+                          </p>
+                        )}
                       </div>
                       <div className="text-xs text-slate-500 text-right">
                         <p>Paid on</p>
