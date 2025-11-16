@@ -52,7 +52,7 @@ export default function TenantPortalPage() {
       setLoading(true);
       setError(null);
 
-      // 1. Get session
+      // 1) Get current session
       const {
         data: { session },
         error: sessionError,
@@ -77,7 +77,7 @@ export default function TenantPortalPage() {
         return;
       }
 
-      // 2. Fetch tenant record
+      // 2) Look up tenant record by email
       const { data: tenantRow, error: tenantError } = await supabase
         .from('tenants')
         .select('*')
@@ -102,7 +102,7 @@ export default function TenantPortalPage() {
       const typedTenant = tenantRow as TenantRow;
       setTenant(typedTenant);
 
-      // 3. Property
+      // 3) Load property (if linked)
       if (typedTenant.property_id) {
         const { data: propertyRow, error: propertyError } = await supabase
           .from('properties')
@@ -117,7 +117,7 @@ export default function TenantPortalPage() {
         }
       }
 
-      // 4. Payments for this tenant
+      // 4) Load payment history for this tenant
       const { data: paymentRows, error: paymentError } = await supabase
         .from('payments')
         .select('*')
@@ -154,9 +154,17 @@ export default function TenantPortalPage() {
     }
   };
 
-  const nextDue = property?.next_due_date
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/tenant/login');
+  };
+
+  const rentAmount =
+    tenant?.monthly_rent ?? property?.monthly_rent ?? null;
+
+  const nextDueLabel = property?.next_due_date
     ? formatDate(property.next_due_date)
-    : 'See lease for details';
+    : 'See lease or ask landlord';
 
   const statusBadgeColor =
     tenant?.status?.toLowerCase() === 'current'
@@ -164,11 +172,6 @@ export default function TenantPortalPage() {
       : tenant?.status?.toLowerCase() === 'late'
       ? 'bg-amber-500/10 text-amber-300 border border-amber-500/40'
       : 'bg-slate-500/10 text-slate-300 border border-slate-500/40';
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/tenant/login');
-  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
@@ -200,11 +203,12 @@ export default function TenantPortalPage() {
             {tenant ? `Welcome, ${tenant.name || 'tenant'}` : 'Your rent hub'}
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-slate-400">
-            View your rent, lease details, and payment status in one simple dashboard.
+            View your rent, lease details, and payment status in one simple
+            dashboard.
           </p>
         </header>
 
-        {/* States */}
+        {/* Loading / error / empty states */}
         {loading && (
           <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-300">
             Loading your account…
@@ -221,14 +225,13 @@ export default function TenantPortalPage() {
           <>
             {/* Summary cards */}
             <section className="mb-8 grid gap-4 md:grid-cols-3">
+              {/* Rent card */}
               <div className="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-4 shadow-sm shadow-slate-900/40">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
                   Monthly rent
                 </p>
                 <p className="mt-3 text-2xl font-semibold text-slate-50">
-                  {formatCurrency(
-                    tenant.monthly_rent ?? property?.monthly_rent ?? null
-                  )}
+                  {formatCurrency(rentAmount)}
                 </p>
                 {property?.name && (
                   <p className="mt-2 text-xs text-slate-500">
@@ -239,8 +242,15 @@ export default function TenantPortalPage() {
                     </span>
                   </p>
                 )}
+                <button
+                  disabled
+                  className="mt-3 w-full rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 disabled:opacity-80"
+                >
+                  Pay rent (coming soon)
+                </button>
               </div>
 
+              {/* Status card */}
               <div className="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-4 shadow-sm shadow-slate-900/40">
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
                   Status
@@ -253,34 +263,40 @@ export default function TenantPortalPage() {
                   </span>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  Keep your payments up to date to maintain a good standing with your
-                  landlord.
+                  Keep your payments up to date to maintain a good standing with
+                  your landlord.
+                </p>
+                <p className="mt-3 text-[11px] text-slate-500">
+                  Any questions about your balance or status? Contact your
+                  landlord directly.
                 </p>
               </div>
 
+              {/* Next due card */}
               <div className="rounded-2xl border border-slate-800 bg-gradient-to-br from-emerald-900/40 to-slate-950/80 p-4 shadow-sm shadow-emerald-900/40">
                 <p className="text-xs font-medium uppercase tracking-wide text-emerald-300">
                   Next rent due
                 </p>
                 <p className="mt-3 text-xl font-semibold text-emerald-100">
-                  {nextDue}
+                  {nextDueLabel}
                 </p>
                 <p className="mt-2 text-xs text-emerald-200/80">
-                  In a future update, you&apos;ll be able to pay directly from this
-                  screen.
+                  In a future update, you&apos;ll be able to pay directly from
+                  this screen.
                 </p>
               </div>
             </section>
 
-            {/* Two columns: lease + payments */}
-            <section className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)]">
-              {/* Lease details */}
+            {/* Two-column layout: lease details + payment history */}
+            <section className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)]">
+              {/* Lease + contact info */}
               <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
                 <h2 className="text-sm font-semibold text-slate-100">
-                  Lease details
+                  Lease & contact info
                 </h2>
                 <p className="mt-1 text-xs text-slate-400">
-                  Review your lease dates and contact info on file.
+                  Review your lease dates and the contact details RentZentro has
+                  on file.
                 </p>
 
                 <dl className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
@@ -319,8 +335,8 @@ export default function TenantPortalPage() {
                 </dl>
 
                 <div className="mt-4 rounded-xl border border-slate-700/60 bg-slate-900/60 p-3 text-xs text-slate-400">
-                  If anything here looks incorrect, please contact your landlord directly
-                  so they can update your information.
+                  If anything here looks incorrect, please contact your landlord
+                  directly so they can update your information.
                 </div>
               </div>
 
@@ -330,13 +346,13 @@ export default function TenantPortalPage() {
                   Payment history
                 </h2>
                 <p className="mt-1 text-xs text-slate-400">
-                  Recent payments recorded by your landlord.
+                  Recent rent payments recorded by your landlord.
                 </p>
 
                 {payments.length === 0 ? (
                   <div className="mt-4 rounded-xl border border-dashed border-slate-700/80 bg-slate-900/60 p-4 text-xs text-slate-500">
-                    No payments have been recorded yet. Once your landlord records
-                    payments, they&apos;ll appear here.
+                    No payments have been recorded yet. Once your landlord
+                    records payments, they&apos;ll show up here.
                   </div>
                 ) : (
                   <ul className="mt-4 space-y-3 text-xs">
@@ -364,8 +380,8 @@ export default function TenantPortalPage() {
                 )}
 
                 <p className="mt-3 text-[11px] text-slate-500">
-                  In a future update, you&apos;ll be able to pay directly from this
-                  portal, and each payment will show here automatically.
+                  In a future update, each online payment will appear here
+                  automatically with a confirmation.
                 </p>
               </div>
             </section>

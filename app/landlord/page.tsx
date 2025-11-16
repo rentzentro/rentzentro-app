@@ -50,6 +50,16 @@ export default function LandlordDashboardPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
 
+  const [rentStatus, setRentStatus] = useState<{
+    overdue: Property[];
+    dueSoon: Property[];
+    notDueYet: Property[];
+  }>({
+    overdue: [],
+    dueSoon: [],
+    notDueYet: [],
+  });
+
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -83,6 +93,39 @@ export default function LandlordDashboardPage() {
     checkAuth();
   }, [router]);
 
+  // -------- HELPER: RENT STATUS BUCKETS --------
+  function computeRentStatus(propertiesList: Property[]) {
+    const today = new Date();
+    const upcomingWindow = 7; // days until "due soon"
+
+    const overdue: Property[] = [];
+    const dueSoon: Property[] = [];
+    const notDueYet: Property[] = [];
+
+    propertiesList.forEach((p) => {
+      if (!p.next_due_date) {
+        // If no due date set, treat as "not due yet" (or unknown)
+        notDueYet.push(p);
+        return;
+      }
+
+      const due = new Date(p.next_due_date);
+      const diffDays = Math.floor(
+        (due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (diffDays < 0) {
+        overdue.push(p);
+      } else if (diffDays <= upcomingWindow) {
+        dueSoon.push(p);
+      } else {
+        notDueYet.push(p);
+      }
+    });
+
+    return { overdue, dueSoon, notDueYet };
+  }
+
   // -------- LOAD DATA (properties + recent payments) --------
   useEffect(() => {
     if (authChecking) return;
@@ -101,10 +144,12 @@ export default function LandlordDashboardPage() {
         console.error('Error loading properties:', propsError);
         setError('Error loading properties.');
       } else if (propsData) {
-        setProperties(propsData as Property[]);
+        const props = propsData as Property[];
+        setProperties(props);
+        setRentStatus(computeRentStatus(props));
       }
 
-      // Load recent payments (same table/columns as Payments page, but limited)
+      // Load recent payments (same table/columns as /landlord/payments, but limited)
       const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
         .select('*')
@@ -198,9 +243,11 @@ export default function LandlordDashboardPage() {
         if (error) throw error;
 
         if (data) {
-          setProperties((prev) =>
-            prev.map((p) => (p.id === editingId ? (data as Property) : p))
+          const updated = properties.map((p) =>
+            p.id === editingId ? (data as Property) : p
           );
+          setProperties(updated);
+          setRentStatus(computeRentStatus(updated));
         }
       } else {
         const { data, error } = await supabase
@@ -212,7 +259,9 @@ export default function LandlordDashboardPage() {
         if (error) throw error;
 
         if (data) {
-          setProperties((prev) => [data as Property, ...prev]);
+          const updated = [data as Property, ...properties];
+          setProperties(updated);
+          setRentStatus(computeRentStatus(updated));
         }
       }
 
@@ -249,7 +298,9 @@ export default function LandlordDashboardPage() {
       return;
     }
 
-    setProperties((prev) => prev.filter((p) => p.id !== id));
+    const updated = properties.filter((p) => p.id !== id);
+    setProperties(updated);
+    setRentStatus(computeRentStatus(updated));
 
     if (editingId === id) {
       resetForm();
@@ -283,7 +334,7 @@ export default function LandlordDashboardPage() {
               </span>
             </h1>
             <p className="mt-1 text-sm text-slate-400">
-              Track properties, tenants, and rent payments in one place.
+              Track properties, tenants, rent status, and payments in one place.
             </p>
           </div>
 
@@ -365,12 +416,137 @@ export default function LandlordDashboardPage() {
           </div>
         </section>
 
-        {/* Error */}
-        {error && (
-          <div className="rounded-xl border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-100">
-            {error}
+        {/* Rent Status Overview */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-100 mb-1">
+            Rent status overview
+          </h2>
+
+          {/* Summary numbers */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-red-500/30 bg-red-950/30 p-4">
+              <p className="text-xs text-red-300 uppercase tracking-wide">
+                Overdue
+              </p>
+              <p className="mt-2 text-xl font-semibold text-red-200">
+                {rentStatus.overdue.length}
+              </p>
+              <p className="mt-1 text-xs text-red-300">
+                Rent late and needs attention.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 p-4">
+              <p className="text-xs text-amber-300 uppercase tracking-wide">
+                Due soon
+              </p>
+              <p className="mt-2 text-xl font-semibold text-amber-200">
+                {rentStatus.dueSoon.length}
+              </p>
+              <p className="mt-1 text-xs text-amber-300">
+                Coming due within 7 days.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-4">
+              <p className="text-xs text-emerald-300 uppercase tracking-wide">
+                Not due yet
+              </p>
+              <p className="mt-2 text-xl font-semibold text-emerald-200">
+                {rentStatus.notDueYet.length}
+              </p>
+              <p className="mt-1 text-xs text-emerald-300">
+                Everything current.
+              </p>
+            </div>
           </div>
-        )}
+
+          {/* Detailed lists */}
+          <div className="space-y-6">
+            {/* Overdue */}
+            <div>
+              <h3 className="text-sm font-semibold text-red-300 mb-2">
+                🟥 Overdue
+              </h3>
+              {rentStatus.overdue.length === 0 ? (
+                <p className="text-xs text-red-300/70">No overdue rent.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {rentStatus.overdue.map((p) => (
+                    <li
+                      key={p.id}
+                      className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm"
+                    >
+                      <div className="font-medium text-red-100">
+                        {p.name} {p.unit_label && `– ${p.unit_label}`}
+                      </div>
+                      <div className="text-xs text-red-200">
+                        Due {new Date(p.next_due_date!).toLocaleDateString()}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Due soon */}
+            <div>
+              <h3 className="text-sm font-semibold text-amber-300 mb-2">
+                🟧 Due soon (next 7 days)
+              </h3>
+              {rentStatus.dueSoon.length === 0 ? (
+                <p className="text-xs text-amber-300/70">
+                  Nothing is due soon.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {rentStatus.dueSoon.map((p) => (
+                    <li
+                      key={p.id}
+                      className="rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm"
+                    >
+                      <div className="font-medium text-amber-100">
+                        {p.name} {p.unit_label && `– ${p.unit_label}`}
+                      </div>
+                      <div className="text-xs text-amber-200">
+                        Due {new Date(p.next_due_date!).toLocaleDateString()}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Not due yet */}
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-300 mb-2">
+                🟩 Not due yet
+              </h3>
+              {rentStatus.notDueYet.length === 0 ? (
+                <p className="text-xs text-emerald-300/70">No data yet.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {rentStatus.notDueYet.map((p) => (
+                    <li
+                      key={p.id}
+                      className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-3 py-2 text-sm"
+                    >
+                      <div className="font-medium text-emerald-100">
+                        {p.name} {p.unit_label && `– ${p.unit_label}`}
+                      </div>
+                      <div className="text-xs text-emerald-200">
+                        Next due{' '}
+                        {p.next_due_date
+                          ? new Date(p.next_due_date).toLocaleDateString()
+                          : '—'}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
 
         {/* Main layout: properties + recent payments */}
         <section className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
