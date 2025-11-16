@@ -274,7 +274,7 @@ export default function LandlordPaymentsPage() {
               </div>
             </Link>
 
-            {/* Nav – Dashboard, Tenants, Payments label, Logout */}
+            {/* Nav – Dashboard, Tenants, Logout (no Payments pill here) */}
             <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
               <Link
                 href="/landlord"
@@ -289,11 +289,6 @@ export default function LandlordPaymentsPage() {
               >
                 Tenants
               </Link>
-
-              {/* Active page label (not clickable) */}
-              <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 font-medium text-slate-100">
-                Payments
-              </span>
 
               <button
                 onClick={handleLogout}
