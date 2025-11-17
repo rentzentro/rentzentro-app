@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { supabase } from '../supabaseClient';
 
-type Property = {
+// ---------- Types ----------
+
+type PropertyRow = {
   id: number;
-  created_at: string;
   name: string | null;
   unit_label: string | null;
   monthly_rent: number | null;
@@ -15,7 +15,17 @@ type Property = {
   next_due_date: string | null;
 };
 
-type Payment = {
+type TenantRow = {
+  id: number;
+  name: string | null;
+  email: string;
+  phone: string | null;
+  property_id: number | null;
+  monthly_rent: number | null;
+  status: string | null;
+};
+
+type PaymentRow = {
   id: number;
   tenant_id: number | null;
   property_id: number | null;
@@ -23,801 +33,499 @@ type Payment = {
   paid_on: string | null;
   method: string | null;
   note: string | null;
-  created_at?: string;
 };
 
-type FormState = {
-  name: string;
-  unitLabel: string;
-  monthlyRent: string;
-  status: 'current' | 'vacant' | 'notice';
-  nextDueDate: string;
+// ---------- Helpers ----------
+
+const formatCurrency = (v: number | null | undefined) =>
+  v == null || isNaN(v)
+    ? '-'
+    : v.toLocaleString('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 2,
+      });
+
+const formatDate = (iso: string | null | undefined) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 };
 
-const emptyForm: FormState = {
-  name: '',
-  unitLabel: '',
-  monthlyRent: '',
-  status: 'current',
-  nextDueDate: '',
+const parseDueDate = (iso: string | null | undefined) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  // strip time for date-only comparisons
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 };
+
+// ---------- Component ----------
 
 export default function LandlordDashboardPage() {
-  const router = useRouter();
-
-  const [authChecking, setAuthChecking] = useState(true);
-
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-
-  const [rentStatus, setRentStatus] = useState<{
-    overdue: Property[];
-    dueSoon: Property[];
-    notDueYet: Property[];
-  }>({
-    overdue: [],
-    dueSoon: [],
-    notDueYet: [],
-  });
-
-  const [form, setForm] = useState<FormState>(emptyForm);
-  const [editingId, setEditingId] = useState<number | null>(null);
-
-  const [loadingData, setLoadingData] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [properties, setProperties] = useState<PropertyRow[]>([]);
+  const [tenants, setTenants] = useState<TenantRow[]>([]);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // -------- AUTH CHECK --------
+  // ---------- Load data ----------
+
   useEffect(() => {
-    const checkAuth = async () => {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error('Landlord dashboard auth error:', error);
-        setError('Problem checking your session. Please log in again.');
-        setAuthChecking(false);
-        return;
-      }
-
-      if (!session) {
-        router.replace('/landlord/login');
-        return;
-      }
-
-      setAuthChecking(false);
-    };
-
-    checkAuth();
-  }, [router]);
-
-  // -------- HELPER: RENT STATUS BUCKETS --------
-  function computeRentStatus(propertiesList: Property[]) {
-    const today = new Date();
-    const upcomingWindow = 7;
-
-    const overdue: Property[] = [];
-    const dueSoon: Property[] = [];
-    const notDueYet: Property[] = [];
-
-    propertiesList.forEach((p) => {
-      if (!p.next_due_date) {
-        notDueYet.push(p);
-        return;
-      }
-
-      const due = new Date(p.next_due_date);
-      const diffDays = Math.floor(
-        (due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      if (diffDays < 0) {
-        overdue.push(p);
-      } else if (diffDays <= upcomingWindow) {
-        dueSoon.push(p);
-      } else {
-        notDueYet.push(p);
-      }
-    });
-
-    return { overdue, dueSoon, notDueYet };
-  }
-
-  // -------- LOAD DATA --------
-  useEffect(() => {
-    if (authChecking) return;
-
-    const loadData = async () => {
-      setLoadingData(true);
+    const load = async () => {
+      setLoading(true);
       setError(null);
 
-      const { data: propsData, error: propsError } = await supabase
-        .from('properties')
-        .select('*')
-        .order('created_at', { ascending: false });
+      try {
+        const [propRes, tenantRes, paymentRes] = await Promise.all([
+          supabase.from('properties').select('*').order('created_at', {
+            ascending: false,
+          }),
+          supabase.from('tenants').select('*').order('created_at', {
+            ascending: false,
+          }),
+          supabase
+            .from('payments')
+            .select('*')
+            .order('paid_on', { ascending: false })
+            .limit(10),
+        ]);
 
-      if (propsError) {
-        console.error('Error loading properties:', propsError);
-        setError('Error loading properties.');
-      } else if (propsData) {
-        const props = propsData as Property[];
-        setProperties(props);
-        setRentStatus(computeRentStatus(props));
+        if (propRes.error) throw propRes.error;
+        if (tenantRes.error) throw tenantRes.error;
+        if (paymentRes.error) throw paymentRes.error;
+
+        setProperties((propRes.data || []) as PropertyRow[]);
+        setTenants((tenantRes.data || []) as TenantRow[]);
+        setPayments((paymentRes.data || []) as PaymentRow[]);
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || 'Failed to load landlord dashboard data.');
+      } finally {
+        setLoading(false);
       }
-
-      const { data: paymentsData, error: paymentsError } = await supabase
-        .from('payments')
-        .select('*')
-        .order('paid_on', { ascending: false })
-        .limit(5);
-
-      if (paymentsError) {
-        console.error('Error loading recent payments:', paymentsError);
-      } else if (paymentsData) {
-        setPayments(paymentsData as Payment[]);
-      }
-
-      setLoadingData(false);
     };
 
-    loadData();
-  }, [authChecking]);
+    load();
+  }, []);
 
-  // -------- STATS --------
+  // ---------- Derived metrics ----------
+
   const totalProperties = properties.length;
-  const totalMonthlyRent = properties.reduce(
-    (sum, p) => sum + (p.monthly_rent || 0),
-    0
-  );
-  const currentCount = properties.filter(
-    (p) => (p.status || '').toLowerCase() === 'current'
-  ).length;
-  const vacantCount = properties.filter(
-    (p) => (p.status || '').toLowerCase() === 'vacant'
+
+  const activeTenants = tenants.filter(
+    (t) => t.status?.toLowerCase() === 'current'
   ).length;
 
-  const collectedAllTime = payments.reduce(
-    (sum, p) => sum + (p.amount || 0),
-    0
+  const monthlyRentRoll = properties
+    .filter((p) => p.status?.toLowerCase() === 'current')
+    .reduce((sum, p) => sum + (p.monthly_rent || 0), 0);
+
+  // Date-based rent status: Overdue / Upcoming 7 days / Not due yet
+  const today = new Date();
+  const todayDateOnly = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+  const sevenDaysFromNow = new Date(
+    todayDateOnly.getFullYear(),
+    todayDateOnly.getMonth(),
+    todayDateOnly.getDate() + 7
   );
 
-  // -------- HELPERS --------
-  const formatCurrency = (val: number | null) => {
-    if (val == null) return '—';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(val);
-  };
+  const overdue = properties.filter((p) => {
+    const due = parseDueDate(p.next_due_date);
+    if (!due) return false;
+    return due < todayDateOnly;
+  });
 
-  const formatDate = (val: string | null) => {
-    if (!val) return '—';
-    try {
-      return new Date(val).toLocaleDateString();
-    } catch {
-      return val;
-    }
-  };
+  const upcoming7 = properties.filter((p) => {
+    const due = parseDueDate(p.next_due_date);
+    if (!due) return false;
+    return due >= todayDateOnly && due <= sevenDaysFromNow;
+  });
 
-  const handleChange = (
-    field: keyof FormState,
-    value: string | FormState['status']
-  ) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
+  const notDueYet = properties.filter((p) => {
+    const due = parseDueDate(p.next_due_date);
+    // If no due date, treat as "not due yet" so you can see it's missing
+    if (!due) return true;
+    return due > sevenDaysFromNow;
+  });
 
-  const resetForm = () => {
-    setForm(emptyForm);
-    setEditingId(null);
-  };
+  // quick lookup for payments listing
+  const propertyById = new Map<number, PropertyRow>();
+  properties.forEach((p) => propertyById.set(p.id, p));
 
-  // -------- SAVE PROPERTY --------
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
+  const tenantById = new Map<number, TenantRow>();
+  tenants.forEach((t) => tenantById.set(t.id, t));
 
-    const payload = {
-      name: form.name.trim() || null,
-      unit_label: form.unitLabel.trim() || null,
-      monthly_rent: form.monthlyRent ? Number(form.monthlyRent) : null,
-      status: form.status,
-      next_due_date: form.nextDueDate || null,
-    };
+  // ---------- UI ----------
 
-    try {
-      if (editingId) {
-        const { data, error } = await supabase
-          .from('properties')
-          .update(payload)
-          .eq('id', editingId)
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        if (data) {
-          const updated = properties.map((p) =>
-            p.id === editingId ? (data as Property) : p
-          );
-          setProperties(updated);
-          setRentStatus(computeRentStatus(updated));
-        }
-      } else {
-        const { data, error } = await supabase
-          .from('properties')
-          .insert(payload)
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        if (data) {
-          const updated = [data as Property, ...properties];
-          setProperties(updated);
-          setRentStatus(computeRentStatus(updated));
-        }
-      }
-
-      resetForm();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Error saving property.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleEdit = (property: Property) => {
-    setEditingId(property.id);
-    setForm({
-      name: property.name || '',
-      unitLabel: property.unit_label || '',
-      monthlyRent: property.monthly_rent?.toString() || '',
-      status:
-        (property.status?.toLowerCase() as FormState['status']) || 'current',
-      nextDueDate: property.next_due_date || '',
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this property?')) return;
-
-    const { error } = await supabase.from('properties').delete().eq('id', id);
-
-    if (error) {
-      console.error(error);
-      setError('Error deleting property.');
-      return;
-    }
-
-    const updated = properties.filter((p) => p.id !== id);
-    setProperties(updated);
-    setRentStatus(computeRentStatus(updated));
-
-    if (editingId === id) {
-      resetForm();
-    }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/landlord/login');
-  };
-
-  if (authChecking) {
+  if (loading) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <p className="text-sm text-slate-400">Checking your session…</p>
-      </main>
+      <div className="min-h-screen bg-slate-950 text-slate-50 p-6">
+        <p>Loading landlord dashboard…</p>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6 sm:py-8">
-      <div className="max-w-6xl mx-auto space-y-8">
-        {/* Top nav + page header */}
-        <header className="border-b border-slate-800 pb-4 mb-4 sm:mb-6">
-          <nav className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            {/* Brand */}
-            <Link
-              href="/landlord"
-              className="inline-flex items-center gap-3"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-[11px] font-bold tracking-tight text-emerald-300">
-                RZ
-              </div>
-              <div className="flex flex-col leading-tight">
-                <span className="text-sm font-semibold text-slate-50">
-                  RentZentro
-                </span>
-                <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                  Landlord Console
-                </span>
-              </div>
-            </Link>
-
-            {/* Nav links – CLEANED: no Dashboard, no Home */}
-            <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-              <Link
-                href="/landlord/tenants"
-                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
-              >
-                Tenants
+    <div className="min-h-screen bg-slate-950 text-slate-50">
+      <div className="mx-auto max-w-5xl px-4 py-8">
+        {/* Header / breadcrumb */}
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <div className="text-xs text-slate-500 flex gap-2">
+              <Link href="/landlord" className="hover:text-emerald-400">
+                Landlord
               </Link>
-              <Link
-                href="/landlord/payments"
-                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
-              >
-                Payments
-              </Link>
-              <span className="rounded-full border border-slate-800 px-3 py-1.5 text-slate-500 text-[11px] sm:text-xs">
-                Settings (coming soon)
-              </span>
-              <button
-                onClick={handleLogout}
-                className="rounded-full border border-slate-700 px-3 py-1.5 text-slate-200 hover:bg-slate-900"
-              >
-                Log out
-              </button>
+              <span>/</span>
+              <span className="text-slate-300">Dashboard</span>
             </div>
-          </nav>
-
-          <div className="mt-4">
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-              Landlord Dashboard{' '}
-              <span className="text-xs text-emerald-400 align-middle">
-                beta
-              </span>
+            <h1 className="text-xl font-semibold mt-1 text-slate-50">
+              Landlord dashboard
             </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Track properties, tenants, rent status, and payments in one place.
+            <p className="text-[13px] text-slate-400">
+              Overview of your units, rent status, and recent payments.
             </p>
           </div>
-        </header>
 
-        {/* Stats */}
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">
+          <div className="flex gap-2">
+            <Link
+              href="/landlord/properties"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+            >
+              Manage properties
+            </Link>
+            <Link
+              href="/landlord/tenants"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+            >
+              Manage tenants
+            </Link>
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="mb-4 text-sm p-3 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-100">
+            {error}
+          </div>
+        )}
+
+        {/* Summary cards */}
+        <div className="grid gap-4 md:grid-cols-3 mb-6">
+          <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
+            <p className="text-xs text-slate-500 uppercase tracking-wide">
               Properties
             </p>
-            <p className="mt-2 text-2xl font-semibold">{totalProperties}</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Units under your account.
+            <p className="mt-2 text-2xl font-semibold text-slate-50">
+              {totalProperties}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              Total units you&apos;re tracking in RentZentro.
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">
-              Monthly rent total
+          <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
+            <p className="text-xs text-slate-500 uppercase tracking-wide">
+              Active tenants
             </p>
-            <p className="mt-2 text-2xl font-semibold">
-              {formatCurrency(totalMonthlyRent)}
+            <p className="mt-2 text-2xl font-semibold text-slate-50">
+              {activeTenants}
             </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Across all current properties.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">
-              Current vs vacant
-            </p>
-            <p className="mt-2 text-xl font-semibold">
-              <span className="text-emerald-400">{currentCount} current</span>{' '}
-              · <span className="text-amber-300">{vacantCount} vacant</span>
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Based on property status field.
+            <p className="mt-1 text-xs text-slate-400">
+              Tenants with current leases.
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">
-              Collected (recent sample)
+          <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
+            <p className="text-xs text-slate-500 uppercase tracking-wide">
+              Monthly rent roll
             </p>
-            <p className="mt-2 text-2xl font-semibold">
-              {formatCurrency(collectedAllTime)}
+            <p className="mt-2 text-2xl font-semibold text-emerald-400">
+              {formatCurrency(monthlyRentRoll)}
             </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Sum of amounts from the last few payments.
+            <p className="mt-1 text-xs text-slate-400">
+              Rent for all current units this month.
             </p>
           </div>
-        </section>
+        </div>
 
-        {/* Rent Status Overview */}
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-slate-100 mb-1">
-            Rent status overview
-          </h2>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-red-500/30 bg-red-950/30 p-4">
-              <p className="text-xs text-red-300 uppercase tracking-wide">
-                Overdue
-              </p>
-              <p className="mt-2 text-xl font-semibold text-red-200">
-                {rentStatus.overdue.length}
-              </p>
-              <p className="mt-1 text-xs text-red-300">
-                Rent late and needs attention.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 p-4">
-              <p className="text-xs text-amber-300 uppercase tracking-wide">
-                Due soon
-              </p>
-              <p className="mt-2 text-xl font-semibold text-amber-200">
-                {rentStatus.dueSoon.length}
-              </p>
-              <p className="mt-1 text-xs text-amber-300">
-                Coming due within 7 days.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-4">
-              <p className="text-xs text-emerald-300 uppercase tracking-wide">
-                Not due yet
-              </p>
-              <p className="mt-2 text-xl font-semibold text-emerald-200">
-                {rentStatus.notDueYet.length}
-              </p>
-              <p className="mt-1 text-xs text-emerald-300">
-                Everything current.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-6">
+        {/* Rent status: overdue / upcoming / not due yet */}
+        <section className="mb-6 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="text-sm font-semibold text-red-300 mb-2">
-                🟥 Overdue
-              </h3>
-              {rentStatus.overdue.length === 0 ? (
-                <p className="text-xs text-red-300/70">No overdue rent.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {rentStatus.overdue.map((p) => (
-                    <li
-                      key={p.id}
-                      className="rounded-lg border border-red-500/30 bg-red-950/40 px-3 py-2 text-sm"
-                    >
-                      <div className="font-medium text-red-100">
-                        {p.name} {p.unit_label && `– ${p.unit_label}`}
-                      </div>
-                      <div className="text-xs text-red-200">
-                        Due {new Date(p.next_due_date!).toLocaleDateString()}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div>
-              <h3 className="text-sm font-semibold text-amber-300 mb-2">
-                🟧 Due soon (next 7 days)
-              </h3>
-              {rentStatus.dueSoon.length === 0 ? (
-                <p className="text-xs text-amber-300/70">
-                  Nothing is due soon.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {rentStatus.dueSoon.map((p) => (
-                    <li
-                      key={p.id}
-                      className="rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2 text-sm"
-                    >
-                      <div className="font-medium text-amber-100">
-                        {p.name} {p.unit_label && `– ${p.unit_label}`}
-                      </div>
-                      <div className="text-xs text-amber-200">
-                        Due {new Date(p.next_due_date!).toLocaleDateString()}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div>
-              <h3 className="text-sm font-semibold text-emerald-300 mb-2">
-                🟩 Not due yet
-              </h3>
-              {rentStatus.notDueYet.length === 0 ? (
-                <p className="text-xs text-emerald-300/70">No data yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {rentStatus.notDueYet.map((p) => (
-                    <li
-                      key={p.id}
-                      className="rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-3 py-2 text-sm"
-                    >
-                      <div className="font-medium text-emerald-100">
-                        {p.name} {p.unit_label && `– ${p.unit_label}`}
-                      </div>
-                      <div className="text-xs text-emerald-200">
-                        Next due{' '}
-                        {p.next_due_date
-                          ? new Date(p.next_due_date).toLocaleDateString()
-                          : '—'}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Main layout: properties + recent payments */}
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          {/* Properties */}
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-4">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-slate-100">
-                  {editingId ? `Edit property #${editingId}` : 'Add a property'}
-                </h2>
-                {editingId && (
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="text-xs text-slate-400 hover:text-slate-200"
-                  >
-                    Cancel edit
-                  </button>
-                )}
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <div>
-                  <label className="text-xs text-slate-300 block mb-1">
-                    Property name
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.name}
-                    onChange={(e) => handleChange('name', e.target.value)}
-                    placeholder="123 Main St"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-slate-300 block mb-1">
-                    Unit / label
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.unitLabel}
-                    onChange={(e) => handleChange('unitLabel', e.target.value)}
-                    placeholder="Unit 1A"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-slate-300 block mb-1">
-                      Monthly rent (USD)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                      value={form.monthlyRent}
-                      onChange={(e) =>
-                        handleChange('monthlyRent', e.target.value)
-                      }
-                      placeholder="1500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-slate-300 block mb-1">
-                      Status
-                    </label>
-                    <select
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                      value={form.status}
-                      onChange={(e) =>
-                        handleChange(
-                          'status',
-                          e.target.value as FormState['status']
-                        )
-                      }
-                    >
-                      <option value="current">Current</option>
-                      <option value="vacant">Vacant</option>
-                      <option value="notice">Notice</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-slate-300 block mb-1">
-                    Next rent due date
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.nextDueDate}
-                    onChange={(e) =>
-                      handleChange('nextDueDate', e.target.value)
-                    }
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
-                >
-                  {saving
-                    ? editingId
-                      ? 'Saving changes…'
-                      : 'Saving…'
-                    : editingId
-                    ? 'Save changes'
-                    : 'Save property'}
-                </button>
-              </form>
-            </div>
-
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-100">
-                  Your properties
-                </h2>
-                <p className="text-xs text-slate-500">
-                  {totalProperties === 0
-                    ? 'No properties yet.'
-                    : `${totalProperties} total`}
-                </p>
-              </div>
-
-              {loadingData ? (
-                <p className="text-xs text-slate-400">
-                  Loading properties…
-                </p>
-              ) : properties.length === 0 ? (
-                <p className="text-xs text-slate-400">
-                  Add your first property using the form above.
-                </p>
-              ) : (
-                <ul className="space-y-3 text-sm">
-                  {properties.map((p) => (
-                    <li
-                      key={p.id}
-                      className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3"
-                    >
-                      <div>
-                        <p className="font-medium text-slate-100">
-                          {p.name || 'Untitled property'}{' '}
-                          {p.unit_label && (
-                            <span className="text-xs text-slate-400">
-                              · {p.unit_label}
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-1">
-                          Rent:{' '}
-                          <span className="text-slate-100">
-                            {formatCurrency(p.monthly_rent)}
-                          </span>{' '}
-                          · Status:{' '}
-                          <span
-                            className={
-                              (p.status || '').toLowerCase() === 'current'
-                                ? 'text-emerald-400'
-                                : 'text-amber-300'
-                            }
-                          >
-                            {p.status || 'unknown'}
-                          </span>
-                          {p.next_due_date && (
-                            <>
-                              {' '}
-                              · Next due:{' '}
-                              <span className="text-slate-200">
-                                {formatDate(p.next_due_date)}
-                              </span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex gap-2 sm:items-center">
-                        <button
-                          onClick={() => handleEdit(p)}
-                          className="text-xs text-slate-200 hover:text-emerald-300"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(p.id)}
-                          className="text-xs text-red-400 hover:text-red-300"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <p className="text-xs text-slate-500 uppercase tracking-wide">
+                Rent status
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-50">
+                Overdue, upcoming, and future rent
+              </p>
             </div>
           </div>
 
-          {/* Recent payments */}
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+          <div className="grid gap-4 md:grid-cols-3 text-xs">
+            {/* Overdue */}
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-3">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="text-sm font-semibold text-slate-100">
-                  Recent payments
-                </h2>
-                <Link
-                  href="/landlord/payments"
-                  className="text-xs text-emerald-300 hover:text-emerald-200"
-                >
-                  View all
-                </Link>
+                <p className="font-semibold text-rose-200">Overdue</p>
+                <span className="text-[11px] text-rose-200/80">
+                  {overdue.length}
+                </span>
               </div>
-
-              {payments.length === 0 ? (
-                <p className="text-xs text-slate-400">
-                  No payments recorded yet.
+              {overdue.length === 0 ? (
+                <p className="text-[11px] text-rose-100/70">
+                  No units overdue right now.
                 </p>
               ) : (
-                <ul className="space-y-2 text-sm">
-                  {payments.map((p) => (
-                    <li
+                <div className="space-y-2">
+                  {overdue.map((p) => (
+                    <div
                       key={p.id}
-                      className="flex items-start justify-between rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2"
+                      className="rounded-xl bg-rose-950/40 border border-rose-500/40 px-2 py-1.5"
+                    >
+                      <p className="text-[11px] text-rose-50 font-medium">
+                        {p.name || 'Property'}{' '}
+                        {p.unit_label ? `· ${p.unit_label}` : ''}
+                      </p>
+                      <p className="text-[11px] text-rose-100/80">
+                        Due {formatDate(p.next_due_date)} •{' '}
+                        {formatCurrency(p.monthly_rent)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Upcoming 7 days */}
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-semibold text-amber-200">
+                  Upcoming 7 days
+                </p>
+                <span className="text-[11px] text-amber-200/80">
+                  {upcoming7.length}
+                </span>
+              </div>
+              {upcoming7.length === 0 ? (
+                <p className="text-[11px] text-amber-100/80">
+                  No rent coming due in the next week.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {upcoming7.map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-xl bg-amber-950/40 border border-amber-500/40 px-2 py-1.5"
+                    >
+                      <p className="text-[11px] text-amber-50 font-medium">
+                        {p.name || 'Property'}{' '}
+                        {p.unit_label ? `· ${p.unit_label}` : ''}
+                      </p>
+                      <p className="text-[11px] text-amber-100/90">
+                        Due {formatDate(p.next_due_date)} •{' '}
+                        {formatCurrency(p.monthly_rent)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Not due yet */}
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-semibold text-emerald-200">
+                  Not due yet
+                </p>
+                <span className="text-[11px] text-emerald-200/80">
+                  {notDueYet.length}
+                </span>
+              </div>
+              {notDueYet.length === 0 ? (
+                <p className="text-[11px] text-emerald-100/80">
+                  No units in &quot;not due yet&quot; status.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {notDueYet.map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-xl bg-emerald-950/40 border border-emerald-500/40 px-2 py-1.5"
+                    >
+                      <p className="text-[11px] text-emerald-50 font-medium">
+                        {p.name || 'Property'}{' '}
+                        {p.unit_label ? `· ${p.unit_label}` : ''}
+                      </p>
+                      <p className="text-[11px] text-emerald-100/90">
+                        {p.next_due_date
+                          ? `Due ${formatDate(p.next_due_date)}`
+                          : 'No due date set'}
+                        {' • '}
+                        {formatCurrency(p.monthly_rent)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Properties + Recent payments */}
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.3fr)]">
+          {/* Left: Properties */}
+          <section className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wide">
+                  Properties
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-50">
+                  Units & rent
+                </p>
+              </div>
+              <Link
+                href="/landlord/properties"
+                className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              >
+                View all
+              </Link>
+            </div>
+
+            {properties.length === 0 ? (
+              <p className="mt-4 text-xs text-slate-500">
+                No properties yet. Add your first unit from the properties
+                screen.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {properties.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between px-3 py-2 rounded-xl border border-slate-800 bg-slate-900/70 text-xs"
+                  >
+                    <div>
+                      <p className="font-medium text-slate-100">
+                        {p.name || 'Untitled property'}
+                        {p.unit_label ? ` · ${p.unit_label}` : ''}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Rent:{' '}
+                        <span className="text-slate-200">
+                          {formatCurrency(p.monthly_rent)}
+                        </span>
+                        {' • '}
+                        Status:{' '}
+                        <span className="text-slate-200">
+                          {p.status || 'Unknown'}
+                        </span>
+                      </p>
+                      {p.next_due_date && (
+                        <p className="text-[11px] text-slate-500">
+                          Next due: {formatDate(p.next_due_date)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Right: Recent payments */}
+          <section className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wide">
+                  Recent payments
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-50">
+                  Latest rent activity
+                </p>
+              </div>
+              <Link
+                href="/landlord/payments"
+                className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              >
+                View all
+              </Link>
+            </div>
+
+            {payments.length === 0 ? (
+              <p className="mt-4 text-xs text-slate-500">
+                No payments recorded yet.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {payments.map((p) => {
+                  const t = p.tenant_id ? tenantById.get(p.tenant_id) : null;
+                  const prop = p.property_id
+                    ? propertyById.get(p.property_id)
+                    : null;
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between px-3 py-2 rounded-xl border border-slate-800 bg-slate-900/70 text-xs"
                     >
                       <div>
                         <p className="font-medium text-slate-100">
                           {formatCurrency(p.amount)}
                         </p>
-                        <p className="text-xs text-slate-400">
-                          Method: {p.method || 'Rent'}
+                        <p className="text-[11px] text-slate-400">
+                          {formatDate(p.paid_on)}
+                          {t && (
+                            <>
+                              {' • '}
+                              <span>{t.name || t.email}</span>
+                            </>
+                          )}
+                          {prop && (
+                            <>
+                              {' • '}
+                              <span>
+                                {prop.name}
+                                {prop.unit_label
+                                  ? ` · ${prop.unit_label}`
+                                  : ''}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[11px] text-slate-400">
+                          {p.method || 'Method not specified'}
                         </p>
                         {p.note && (
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            Note: {p.note}
+                          <p className="mt-0.5 max-w-[180px] truncate text-[11px] text-slate-500">
+                            {p.note}
                           </p>
                         )}
                       </div>
-                      <div className="text-xs text-slate-500 text-right">
-                        <p>Paid on</p>
-                        <p className="text-slate-300">
-                          {formatDate(p.paid_on)}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-xs text-slate-400">
-              <p className="font-semibold text-slate-200 mb-1">
-                Coming soon: direct online payments
-              </p>
-              <p>
-                Stripe integration will allow tenants to pay directly from their
-                portal. Those payments will automatically appear here and update
-                rent status in real time.
-              </p>
-            </div>
-          </div>
-        </section>
+            <p className="mt-3 text-[11px] text-slate-500">
+              Once Stripe webhooks are connected, card payments from tenants
+              will appear here automatically.
+            </p>
+          </section>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
+
