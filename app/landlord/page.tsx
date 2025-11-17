@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../supabaseClient';
 
 // ---------- Types ----------
@@ -61,13 +62,14 @@ const parseDueDate = (iso: string | null | undefined) => {
   if (!iso) return null;
   const d = new Date(iso);
   if (isNaN(d.getTime())) return null;
-  // strip time for date-only comparisons
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 };
 
 // ---------- Component ----------
 
 export default function LandlordDashboardPage() {
+  const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
@@ -114,7 +116,7 @@ export default function LandlordDashboardPage() {
     load();
   }, []);
 
-  // ---------- Derived metrics ----------
+  // ---------- Metrics ----------
 
   const totalProperties = properties.length;
 
@@ -126,7 +128,6 @@ export default function LandlordDashboardPage() {
     .filter((p) => p.status?.toLowerCase() === 'current')
     .reduce((sum, p) => sum + (p.monthly_rent || 0), 0);
 
-  // Date-based rent status: Overdue / Upcoming 7 days / Not due yet
   const today = new Date();
   const todayDateOnly = new Date(
     today.getFullYear(),
@@ -153,17 +154,22 @@ export default function LandlordDashboardPage() {
 
   const notDueYet = properties.filter((p) => {
     const due = parseDueDate(p.next_due_date);
-    // If no due date, treat as "not due yet" so you can see it's missing
     if (!due) return true;
     return due > sevenDaysFromNow;
   });
 
-  // quick lookup for payments listing
   const propertyById = new Map<number, PropertyRow>();
   properties.forEach((p) => propertyById.set(p.id, p));
 
   const tenantById = new Map<number, TenantRow>();
   tenants.forEach((t) => tenantById.set(t.id, t));
+
+  // ---------- Actions ----------
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/landlord/login');
+  };
 
   // ---------- UI ----------
 
@@ -196,19 +202,23 @@ export default function LandlordDashboardPage() {
             </p>
           </div>
 
-          <div className="flex gap-2">
-            <Link
-              href="/landlord/properties"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+          <div className="flex items-center gap-2">
+            {/* Settings (coming soon) */}
+            <button
+              type="button"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
             >
-              Manage properties
-            </Link>
-            <Link
-              href="/landlord/tenants"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              Settings (coming soon)
+            </button>
+
+            {/* Sign out */}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
             >
-              Manage tenants
-            </Link>
+              Log out
+            </button>
           </div>
         </div>
 
@@ -268,6 +278,21 @@ export default function LandlordDashboardPage() {
               <p className="mt-1 text-sm font-medium text-slate-50">
                 Overdue, upcoming, and future rent
               </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Link
+                href="/landlord/properties"
+                className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              >
+                Manage properties
+              </Link>
+              <Link
+                href="/landlord/tenants"
+                className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              >
+                Manage tenants
+              </Link>
             </div>
           </div>
 
@@ -528,4 +553,3 @@ export default function LandlordDashboardPage() {
     </div>
   );
 }
-

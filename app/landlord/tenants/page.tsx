@@ -1,14 +1,12 @@
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
-import Link from 'next/link';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
-type Tenant = {
+type TenantRow = {
   id: number;
-  created_at: string;
-  name: string;
+  name: string | null;
   email: string;
   phone: string | null;
   property_id: number | null;
@@ -16,339 +14,537 @@ type Tenant = {
   status: string | null;
   lease_start: string | null;
   lease_end: string | null;
+  created_at?: string;
+};
+
+type PropertyRow = {
+  id: number;
+  name: string | null;
+  unit_label: string | null;
+  monthly_rent: number | null;
+};
+
+type FormState = {
+  name: string;
+  email: string;
+  phone: string;
+  propertyId: string;
+  monthlyRent: string;
+  status: 'current' | 'late' | 'notice' | 'inactive';
+  leaseStart: string;
+  leaseEnd: string;
+};
+
+const emptyForm: FormState = {
+  name: '',
+  email: '',
+  phone: '',
+  propertyId: '',
+  monthlyRent: '',
+  status: 'current',
+  leaseStart: '',
+  leaseEnd: '',
+};
+
+const formatCurrency = (v: number | null | undefined) =>
+  v == null || isNaN(v)
+    ? '-'
+    : v.toLocaleString('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 2,
+      });
+
+const formatDate = (iso: string | null | undefined) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 };
 
 export default function LandlordTenantsPage() {
   const router = useRouter();
 
-  // form state
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [propertyId, setPropertyId] = useState('');
-  const [monthlyRent, setMonthlyRent] = useState('');
-  const [status, setStatus] = useState<'Current' | 'Past' | 'Prospect'>('Current');
-  const [leaseStart, setLeaseStart] = useState('');
-  const [leaseEnd, setLeaseEnd] = useState('');
-
-  // data / UI state
-  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tenants, setTenants] = useState<TenantRow[]>([]);
+  const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
+  const [form, setForm] = useState<FormState>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  // -------- LOAD TENANTS --------
-  useEffect(() => {
-    const loadTenants = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('tenants')
-        .select('*')
-        .order('created_at', { ascending: false });
+  const formRef = useRef<HTMLDivElement | null>(null);
 
-      if (error) {
-        console.error(error);
-        setError(error.message);
-      } else {
-        setTenants(data || []);
-        setError(null);
+  // ---------- Load tenants + properties ----------
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const [tenantRes, propRes] = await Promise.all([
+          supabase
+            .from('tenants')
+            .select('*')
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('properties')
+            .select('id, name, unit_label, monthly_rent')
+            .order('id'),
+        ]);
+
+        if (tenantRes.error) throw tenantRes.error;
+        if (propRes.error) throw propRes.error;
+
+        setTenants((tenantRes.data || []) as TenantRow[]);
+        setProperties((propRes.data || []) as PropertyRow[]);
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || 'Failed to load tenants.');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
-    loadTenants();
+    load();
   }, []);
 
-  // -------- FORM SUBMIT --------
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-
-    const payload = {
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      phone: phone.trim() || null,
-      property_id: propertyId ? Number(propertyId) : null,
-      monthly_rent: monthlyRent ? Number(monthlyRent) : null,
-      status,
-      lease_start: leaseStart || null,
-      lease_end: leaseEnd || null,
-    };
-
-    let supabaseError = null;
-
-    if (editingId) {
-      const { error } = await supabase
-        .from('tenants')
-        .update(payload)
-        .eq('id', editingId);
-
-      supabaseError = error;
-    } else {
-      const { error } = await supabase.from('tenants').insert(payload);
-      supabaseError = error;
-    }
-
-    if (supabaseError) {
-      console.error(supabaseError);
-      setError(supabaseError.message);
-      setSaving(false);
-      return;
-    }
-
-    // reload list
-    const { data: refreshed } = await supabase
-      .from('tenants')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    setTenants(refreshed || []);
-    setSaving(false);
-    resetForm();
-  };
-
+  // ---------- Helpers ----------
   const resetForm = () => {
-    setName('');
-    setEmail('');
-    setPhone('');
-    setPropertyId('');
-    setMonthlyRent('');
-    setStatus('Current');
-    setLeaseStart('');
-    setLeaseEnd('');
+    setForm(emptyForm);
     setEditingId(null);
   };
 
-  const handleEditClick = (tenant: Tenant) => {
-    setEditingId(tenant.id);
-    setName(tenant.name || '');
-    setEmail(tenant.email || '');
-    setPhone(tenant.phone || '');
-    setPropertyId(tenant.property_id ? String(tenant.property_id) : '');
-    setMonthlyRent(tenant.monthly_rent ? String(tenant.monthly_rent) : '');
-    setStatus((tenant.status as any) || 'Current');
-    setLeaseStart(tenant.lease_start || '');
-    setLeaseEnd(tenant.lease_end || '');
+  const scrollToForm = () => {
+    if (formRef.current) {
+      formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this tenant?')) return;
+  const handleFieldChange = (field: keyof FormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
-    const { error } = await supabase.from('tenants').delete().eq('id', id);
-    if (error) {
-      console.error(error);
-      setError(error.message);
+  // ---------- Add new (left "+ Add tenant" button) ----------
+  const handleAddNewClick = () => {
+    resetForm();
+    setSuccess(null);
+    setError(null);
+    scrollToForm();
+  };
+
+  // ---------- Save (create/update) ----------
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (!form.name.trim() || !form.email.trim()) {
+      setError('Name and email are required.');
       return;
     }
 
-    setTenants((prev) => prev.filter((t) => t.id !== id));
-    if (editingId === id) resetForm();
+    setSaving(true);
+
+    const property_id =
+      form.propertyId.trim() === '' ? null : Number(form.propertyId);
+    const monthly_rent =
+      form.monthlyRent.trim() === '' ? null : Number(form.monthlyRent);
+
+    try {
+      if (editingId) {
+        const { data, error: updateError } = await supabase
+          .from('tenants')
+          .update({
+            name: form.name.trim(),
+            email: form.email.trim().toLowerCase(),
+            phone: form.phone.trim() || null,
+            property_id,
+            monthly_rent,
+            status: form.status,
+            lease_start: form.leaseStart || null,
+            lease_end: form.leaseEnd || null,
+          })
+          .eq('id', editingId)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        setTenants((prev) =>
+          prev.map((t) => (t.id === editingId ? (data as TenantRow) : t))
+        );
+        setSuccess('Tenant updated.');
+      } else {
+        const { data, error: insertError } = await supabase
+          .from('tenants')
+          .insert({
+            name: form.name.trim(),
+            email: form.email.trim().toLowerCase(),
+            phone: form.phone.trim() || null,
+            property_id,
+            monthly_rent,
+            status: form.status,
+            lease_start: form.leaseStart || null,
+            lease_end: form.leaseEnd || null,
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        setTenants((prev) => [data as TenantRow, ...prev]);
+        setSuccess('Tenant created.');
+      }
+
+      resetForm();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to save tenant.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
+  // ---------- Edit existing (card "Edit" button) ----------
+  const handleEdit = (tenant: TenantRow) => {
+    setEditingId(tenant.id);
+    setForm({
+      name: tenant.name || '',
+      email: tenant.email || '',
+      phone: tenant.phone || '',
+      propertyId: tenant.property_id ? String(tenant.property_id) : '',
+      monthlyRent: tenant.monthly_rent ? String(tenant.monthly_rent) : '',
+      status: (tenant.status as FormState['status']) || 'current',
+      leaseStart: tenant.lease_start ? tenant.lease_start.slice(0, 10) : '',
+      leaseEnd: tenant.lease_end ? tenant.lease_end.slice(0, 10) : '',
+    });
+    setSuccess(null);
+    setError(null);
+    scrollToForm();
   };
+
+  // ---------- UI ----------
+  const currentTenants = tenants; // could filter for status === current if you want
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-8">
-      <div className="max-w-5xl mx-auto space-y-6">
-        <header className="flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-slate-950 text-slate-50">
+      <div className="mx-auto max-w-5xl px-4 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold">Tenant Management</h1>
-            <p className="text-slate-400 text-sm">
-              Add tenants, link them to properties, and track lease details.
+            <div className="text-xs text-slate-500 flex gap-2">
+              <button
+                type="button"
+                onClick={() => router.push('/landlord')}
+                className="hover:text-emerald-400"
+              >
+                Landlord
+              </button>
+              <span>/</span>
+              <span className="text-slate-300">Tenants</span>
+            </div>
+            <h1 className="text-xl font-semibold mt-1">Tenants</h1>
+            <p className="text-[13px] text-slate-400">
+              Manage who lives in each unit, their contact details, and rent.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link
-              href="/landlord"
-              className="rounded-full border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
-            >
-              Back to dashboard
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="rounded-full border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
-            >
-              Log out
-            </button>
+
+          <button
+            type="button"
+            onClick={() => router.push('/landlord')}
+            className="text-xs px-4 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+          >
+            Back to dashboard
+          </button>
+        </div>
+
+        {(error || success) && (
+          <div className="mb-4 space-y-2 text-sm">
+            {error && (
+              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-100">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-100">
+                {success}
+              </div>
+            )}
           </div>
-        </header>
+        )}
 
-        {/* FORM */}
-        <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 space-y-4">
-          <h2 className="font-medium">
-            {editingId ? `Edit tenant #${editingId}` : 'Add a tenant'}
-          </h2>
-
-          {error && (
-            <div className="rounded-xl bg-red-900/40 border border-red-500/60 px-4 py-3 text-sm text-red-100">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-1">
-              <label className="block text-xs text-slate-400 mb-1">Tenant name</label>
-              <input
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="md:col-span-1">
-              <label className="block text-xs text-slate-400 mb-1">Email</label>
-              <input
-                type="email"
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="md:col-span-1">
-              <label className="block text-xs text-slate-400 mb-1">Phone</label>
-              <input
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
-
-            <div className="md:col-span-1">
-              <label className="block text-xs text-slate-400 mb-1">Property ID (optional)</label>
-              <input
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm"
-                value={propertyId}
-                onChange={(e) => setPropertyId(e.target.value)}
-                placeholder="e.g. 1"
-              />
-            </div>
-
-            <div className="md:col-span-1">
-              <label className="block text-xs text-slate-400 mb-1">Monthly rent (USD)</label>
-              <input
-                type="number"
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm"
-                value={monthlyRent}
-                onChange={(e) => setMonthlyRent(e.target.value)}
-              />
-            </div>
-
-            <div className="md:col-span-1">
-              <label className="block text-xs text-slate-400 mb-1">Status</label>
-              <select
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
-              >
-                <option value="Current">Current</option>
-                <option value="Past">Past</option>
-                <option value="Prospect">Prospect</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Lease start <span className="text-slate-500">(optional)</span>
-              </label>
-              <input
-                type="date"
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm"
-                value={leaseStart}
-                onChange={(e) => setLeaseStart(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">
-                Lease end <span className="text-slate-500">(optional)</span>
-              </label>
-              <input
-                type="date"
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-sm"
-                value={leaseEnd}
-                onChange={(e) => setLeaseEnd(e.target.value)}
-              />
-            </div>
-
-            <div className="md:col-span-2 flex gap-3">
+        {/* Two-column layout: list left, form right */}
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)]">
+          {/* LEFT: Current tenants list */}
+          <section className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wide">
+                  Current tenants
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-50">
+                  {currentTenants.length} record
+                  {currentTenants.length === 1 ? '' : 's'}
+                </p>
+              </div>
               <button
-                type="submit"
-                disabled={saving}
-                className="rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-sm font-medium px-4 py-2 disabled:opacity-60"
+                type="button"
+                onClick={handleAddNewClick}
+                className="text-xs px-3 py-1.5 rounded-full bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400"
               >
-                {saving
-                  ? editingId
-                    ? 'Saving changes...'
-                    : 'Saving...'
-                  : editingId
-                  ? 'Save changes'
-                  : 'Save tenant'}
+                + Add tenant
               </button>
-
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="text-xs text-slate-400 hover:text-slate-200"
-                >
-                  Cancel edit
-                </button>
-              )}
             </div>
-          </form>
-        </section>
 
-        {/* LIST */}
-        <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6">
-          <h2 className="font-medium mb-4">Your tenants</h2>
-          {loading ? (
-            <p className="text-sm text-slate-400">Loading tenants...</p>
-          ) : tenants.length === 0 ? (
-            <p className="text-sm text-slate-400">No tenants yet. Add your first one above.</p>
-          ) : (
-            <div className="space-y-3">
-              {tenants.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex flex-col md:flex-row md:items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{t.name}</p>
-                    <p className="text-xs text-slate-400">{t.email}</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {t.status || 'Status unknown'} • Rent:{' '}
-                      {t.monthly_rent ? `$${t.monthly_rent}` : 'N/A'}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 text-xs">
-                    <button
-                      onClick={() => handleEditClick(t)}
-                      className="rounded-full border border-slate-700 px-3 py-1 hover:bg-slate-800"
+            {loading ? (
+              <p className="text-xs text-slate-500 mt-2">Loading tenants…</p>
+            ) : currentTenants.length === 0 ? (
+              <p className="text-xs text-slate-500 mt-2">
+                No tenants yet. Use &quot;Add tenant&quot; to create your first
+                record.
+              </p>
+            ) : (
+              <div className="space-y-2 mt-3">
+                {currentTenants.map((t) => {
+                  const property = t.property_id
+                    ? properties.find((p) => p.id === t.property_id)
+                    : null;
+
+                  const status = t.status?.toLowerCase() || 'current';
+                  const badgeClasses =
+                    status === 'current'
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                      : status === 'late'
+                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                      : 'bg-slate-500/15 text-slate-300 border-slate-500/40';
+
+                  const effectiveRent =
+                    t.monthly_rent ??
+                    (property ? property.monthly_rent : null);
+
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex items-center justify-between px-4 py-3 rounded-2xl bg-slate-950 border border-slate-800 text-xs"
                     >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(t.id)}
-                      className="rounded-full border border-red-600/70 px-3 py-1 text-red-200 hover:bg-red-900/40"
-                    >
-                      Delete
-                    </button>
-                  </div>
+                      <div>
+                        <p className="font-semibold text-slate-50">
+                          {t.name || t.email}
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          {t.email}
+                          {t.phone ? ` • ${t.phone}` : ''}
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          {property ? (
+                            <>
+                              {property.name}
+                              {property.unit_label
+                                ? ` · ${property.unit_label}`
+                                : ''}
+                            </>
+                          ) : (
+                            'No unit assigned'
+                          )}{' '}
+                          • Rent:{' '}
+                          <span className="text-slate-100">
+                            {formatCurrency(effectiveRent)}
+                          </span>
+                        </p>
+                        {(t.lease_start || t.lease_end) && (
+                          <p className="text-[11px] text-slate-500">
+                            Lease: {t.lease_start ? formatDate(t.lease_start) : '?'}{' '}
+                            – {t.lease_end ? formatDate(t.lease_end) : '?'}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col items-end gap-2">
+                        <span
+                          className={`px-3 py-0.5 rounded-full border text-[11px] ${badgeClasses}`}
+                        >
+                          {t.status || 'current'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(t)}
+                          className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* RIGHT: Add / edit tenant form */}
+          <section
+            ref={formRef}
+            className="p-4 rounded-2xl bg-slate-900 border border-slate-800"
+          >
+            <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">
+              {editingId ? 'Edit tenant' : 'Add tenant'}
+            </p>
+            <h2 className="text-sm font-medium text-slate-50 mb-3">
+              {editingId
+                ? 'Update tenant details'
+                : 'Create a new tenant record'}
+            </h2>
+
+            <form className="space-y-3" onSubmit={handleSubmit}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Full name</label>
+                  <input
+                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                    value={form.name}
+                    onChange={(e) => handleFieldChange('name', e.target.value)}
+                    placeholder="Jane Tenant"
+                  />
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Email (login)</label>
+                  <input
+                    type="email"
+                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                    value={form.email}
+                    onChange={(e) => handleFieldChange('email', e.target.value)}
+                    placeholder="tenant@example.com"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Phone</label>
+                  <input
+                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                    value={form.phone}
+                    onChange={(e) => handleFieldChange('phone', e.target.value)}
+                    placeholder="(401) 555-1234"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Status</label>
+                  <select
+                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                    value={form.status}
+                    onChange={(e) =>
+                      handleFieldChange(
+                        'status',
+                        e.target.value as FormState['status']
+                      )
+                    }
+                  >
+                    <option value="current">Current</option>
+                    <option value="late">Late</option>
+                    <option value="notice">Notice given</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">
+                    Property / Unit
+                  </label>
+                  <select
+                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                    value={form.propertyId}
+                    onChange={(e) =>
+                      handleFieldChange('propertyId', e.target.value)
+                    }
+                  >
+                    <option value="">Unassigned</option>
+                    {properties.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name || 'Property'}
+                        {p.unit_label ? ` · ${p.unit_label}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">
+                    Monthly rent (optional override)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                    value={form.monthlyRent}
+                    onChange={(e) =>
+                      handleFieldChange('monthlyRent', e.target.value)
+                    }
+                    placeholder="e.g. 1500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Lease start</label>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                    value={form.leaseStart}
+                    onChange={(e) =>
+                      handleFieldChange('leaseStart', e.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">Lease end</label>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
+                    value={form.leaseEnd}
+                    onChange={(e) =>
+                      handleFieldChange('leaseEnd', e.target.value)
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-semibold hover:bg-emerald-400 disabled:opacity-60"
+                >
+                  {saving
+                    ? 'Saving…'
+                    : editingId
+                    ? 'Save changes'
+                    : 'Create tenant'}
+                </button>
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={handleAddNewClick}
+                    className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-900 text-xs hover:bg-slate-800"
+                  >
+                    Cancel edit
+                  </button>
+                )}
+              </div>
+            </form>
+          </section>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
