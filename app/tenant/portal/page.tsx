@@ -317,6 +317,11 @@ export default function TenantPortalPage() {
                 >
                   {paying ? 'Redirecting…' : 'Pay rent securely with card'}
                 </button>
+                <p className="mt-2 text-[11px] text-slate-400">
+  Card payments are processed by Stripe. Your landlord uses RentZentro,
+  which charges a <span className="text-slate-200 font-medium">2.5% platform fee</span>{' '}
+  to the landlord for each successful card payment.
+</p>
 
                 <button
                   disabled={paying || !rentAmount}

@@ -1,110 +1,112 @@
-// app/api/stripe/webhook/route.ts
-// We disable TS checking here because this is low-level integration code.
-// It still compiles and runs fine in Next.js.
-// @ts-nocheck
-
+import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../../../supabaseClient';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs'; // ensure Node.js runtime for Stripe
 
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!stripeSecret) {
-  console.warn('⚠️ STRIPE_SECRET_KEY is not set');
+  console.error('❌ Missing STRIPE_SECRET_KEY environment variable.');
 }
+
 if (!webhookSecret) {
-  console.warn('⚠️ STRIPE_WEBHOOK_SECRET is not set');
-}
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn('⚠️ Supabase service env vars are not fully set');
+  console.error('❌ Missing STRIPE_WEBHOOK_SECRET environment variable.');
 }
 
-const stripe = stripeSecret ? new Stripe(stripeSecret) : null;
+const stripe = stripeSecret
+  ? new Stripe(stripeSecret, {
+      apiVersion: '2023-10-16',
+    })
+  : (null as unknown as Stripe);
 
-const supabaseAdmin =
-  supabaseUrl && supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey)
-    : null;
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   if (!stripe || !webhookSecret) {
-    return new Response('Stripe not configured', { status: 500 });
+    console.error('❌ Stripe not configured correctly on the server.');
+    return new NextResponse('Stripe not configured', { status: 500 });
   }
 
+  // Stripe needs the RAW body text for signature verification
+  const body = await req.text();
   const sig = req.headers.get('stripe-signature');
-  if (!sig) {
-    return new Response('Missing Stripe signature', { status: 400 });
-  }
 
-  const rawBody = await req.text();
+  let event: Stripe.Event;
 
-  let event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+    if (!sig) {
+      throw new Error('Missing stripe-signature header');
+    }
+
+    event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err: any) {
     console.error('❌ Webhook signature verification failed:', err.message);
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+    return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as any;
+  console.log('🔔 Stripe webhook received:', event.type);
 
-    const tenantIdStr = session.metadata?.tenantId || '';
-    const propertyIdStr = session.metadata?.propertyId || '';
-    const description = session.metadata?.description || 'Stripe rent payment';
-    const rentAmountStr = session.metadata?.rentAmount || '';
-    const amountFromMetadata = Number(rentAmountStr);
-    const amountFromStripe = session.amount_total
-      ? session.amount_total / 100
-      : NaN;
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
 
-    const amountToUse =
-      !isNaN(amountFromMetadata) && amountFromMetadata > 0
-        ? amountFromMetadata
-        : !isNaN(amountFromStripe)
-        ? amountFromStripe
-        : null;
+        // We expect metadata to identify tenant + property
+        const metadata = session.metadata || {};
+        console.log('📎 Session metadata:', metadata);
 
-    const tenantId = tenantIdStr ? Number(tenantIdStr) : null;
-    const propertyId = propertyIdStr ? Number(propertyIdStr) : null;
+        const tenantIdRaw =
+          metadata.tenant_id || metadata.tenantId || metadata.tenant;
+        const propertyIdRaw =
+          metadata.property_id || metadata.propertyId || metadata.property;
 
-    console.log('✅ checkout.session.completed for tenant/property', {
-      tenantId,
-      propertyId,
-      amountToUse,
-    });
+        const amountTotal = session.amount_total; // in cents
 
-    if (!supabaseAdmin) {
-      console.error('Supabase admin client is not configured.');
-      return new Response('Supabase not configured', { status: 500 });
-    }
+        if (!tenantIdRaw || !propertyIdRaw || !amountTotal) {
+          console.warn(
+            '⚠️ Missing tenant/property/amount in session metadata. Skipping payment insert.'
+          );
+          break;
+        }
 
-    if (!amountToUse) {
-      console.error('No valid amount found in webhook event.');
-    } else {
-      const { error } = await supabaseAdmin.from('payments').insert({
-        tenant_id: tenantId,
-        property_id: propertyId,
-        amount: amountToUse,
-        paid_on: new Date().toISOString(),
-        method: 'Stripe card (Checkout)',
-        note: description || 'Stripe Checkout payment (webhook).',
-      });
+        const tenantId = Number(tenantIdRaw);
+        const propertyId = Number(propertyIdRaw);
+        const amount = amountTotal / 100; // convert cents → dollars
+        const paidOn = new Date().toISOString();
 
-      if (error) {
-        console.error('❌ Error inserting payment via webhook:', error);
-      } else {
-        console.log('✅ Payment inserted via webhook');
+        console.log('💾 Inserting payment into Supabase:', {
+          tenant_id: tenantId,
+          property_id: propertyId,
+          amount,
+          paid_on: paidOn,
+        });
+
+        const { error } = await supabase.from('payments').insert({
+          tenant_id: tenantId,
+          property_id: propertyId,
+          amount,
+          paid_on: paidOn,
+          method: 'card',
+          note: 'Stripe Checkout payment',
+        });
+
+        if (error) {
+          console.error('❌ Supabase insert error:', error);
+          return new NextResponse('Supabase insert error', { status: 500 });
+        }
+
+        console.log('✅ Payment recorded in Supabase for tenant', tenantId);
+
+        break;
       }
+
+      default:
+        console.log(`ℹ️ Unhandled event type: ${event.type}`);
     }
 
-    // (Optional later) update properties.next_due_date based on propertyId
+    return new NextResponse('OK', { status: 200 });
+  } catch (err: any) {
+    console.error('❌ Webhook handler error:', err);
+    return new NextResponse('Webhook handler error', { status: 500 });
   }
-
-  return new Response('OK', { status: 200 });
 }

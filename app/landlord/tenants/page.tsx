@@ -131,11 +131,10 @@ export default function LandlordTenantsPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  // ---------- Add new (left "+ Add tenant" button) ----------
-  const handleAddNewClick = () => {
+  const handleCancelEdit = () => {
     resetForm();
-    setSuccess(null);
     setError(null);
+    setSuccess(null);
     scrollToForm();
   };
 
@@ -212,7 +211,7 @@ export default function LandlordTenantsPage() {
     }
   };
 
-  // ---------- Edit existing (card "Edit" button) ----------
+  // ---------- Edit ----------
   const handleEdit = (tenant: TenantRow) => {
     setEditingId(tenant.id);
     setForm({
@@ -225,14 +224,41 @@ export default function LandlordTenantsPage() {
       leaseStart: tenant.lease_start ? tenant.lease_start.slice(0, 10) : '',
       leaseEnd: tenant.lease_end ? tenant.lease_end.slice(0, 10) : '',
     });
-    setSuccess(null);
     setError(null);
+    setSuccess(null);
     scrollToForm();
   };
 
-  // ---------- UI ----------
-  const currentTenants = tenants; // could filter for status === current if you want
+  // ---------- Delete ----------
+  const handleDelete = async (tenant: TenantRow) => {
+    const ok = window.confirm(
+      `Delete tenant "${tenant.name || tenant.email}"? This cannot be undone.`
+    );
+    if (!ok) return;
 
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('tenants')
+        .delete()
+        .eq('id', tenant.id);
+
+      if (deleteError) throw deleteError;
+
+      setTenants((prev) => prev.filter((t) => t.id !== tenant.id));
+      setSuccess('Tenant deleted.');
+      if (editingId === tenant.id) resetForm();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to delete tenant.');
+    }
+  };
+
+  const currentTenants = tenants;
+
+  // ---------- UI ----------
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -280,9 +306,9 @@ export default function LandlordTenantsPage() {
           </div>
         )}
 
-        {/* Two-column layout: list left, form right */}
+        {/* Two-column layout */}
         <div className="grid gap-4 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)]">
-          {/* LEFT: Current tenants list */}
+          {/* LEFT: list */}
           <section className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -294,20 +320,13 @@ export default function LandlordTenantsPage() {
                   {currentTenants.length === 1 ? '' : 's'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleAddNewClick}
-                className="text-xs px-3 py-1.5 rounded-full bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400"
-              >
-                + Add tenant
-              </button>
             </div>
 
             {loading ? (
               <p className="text-xs text-slate-500 mt-2">Loading tenants…</p>
             ) : currentTenants.length === 0 ? (
               <p className="text-xs text-slate-500 mt-2">
-                No tenants yet. Use &quot;Add tenant&quot; to create your first
+                No tenants yet. Use the form on the right to create your first
                 record.
               </p>
             ) : (
@@ -360,7 +379,8 @@ export default function LandlordTenantsPage() {
                         </p>
                         {(t.lease_start || t.lease_end) && (
                           <p className="text-[11px] text-slate-500">
-                            Lease: {t.lease_start ? formatDate(t.lease_start) : '?'}{' '}
+                            Lease:{' '}
+                            {t.lease_start ? formatDate(t.lease_start) : '?'}{' '}
                             – {t.lease_end ? formatDate(t.lease_end) : '?'}
                           </p>
                         )}
@@ -372,13 +392,22 @@ export default function LandlordTenantsPage() {
                         >
                           {t.status || 'current'}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(t)}
-                          className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
-                        >
-                          Edit
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(t)}
+                            className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(t)}
+                            className="text-[11px] px-3 py-1 rounded-full border border-rose-500/60 text-rose-200 bg-rose-950/40 hover:bg-rose-950/70"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -387,7 +416,7 @@ export default function LandlordTenantsPage() {
             )}
           </section>
 
-          {/* RIGHT: Add / edit tenant form */}
+          {/* RIGHT: form */}
           <section
             ref={formRef}
             className="p-4 rounded-2xl bg-slate-900 border border-slate-800"
@@ -534,7 +563,7 @@ export default function LandlordTenantsPage() {
                 {editingId && (
                   <button
                     type="button"
-                    onClick={handleAddNewClick}
+                    onClick={handleCancelEdit}
                     className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-900 text-xs hover:bg-slate-800"
                   >
                     Cancel edit

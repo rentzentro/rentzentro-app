@@ -222,6 +222,24 @@ export default function LandlordDashboardPage() {
           </div>
         </div>
 
+        {/* 🔔 Pricing banner (2.5% fee) */}
+        <div className="mb-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-xs text-emerald-100">
+          <p className="font-medium">
+            Current RentZentro pricing:{' '}
+            <span className="font-semibold">
+              2.5% platform fee per successful card payment.
+            </span>
+          </p>
+          <p className="mt-1 text-[11px] text-emerald-200/80">
+            The platform fee is charged to the landlord and is in addition to
+            Stripe&apos;s processing fees. See our{' '}
+            <Link href="/terms" className="underline">
+              Terms of Service
+            </Link>{' '}
+            for details.
+          </p>
+        </div>
+
         {/* Error */}
         {error && (
           <div className="mb-4 text-sm p-3 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-100">

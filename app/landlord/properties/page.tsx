@@ -106,8 +106,7 @@ export default function LandlordPropertiesPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  // ---------- Add new (top-right button) ----------
-  const handleAddNewClick = () => {
+  const handleCancelEdit = () => {
     resetForm();
     setError(null);
     setSuccess(null);
@@ -179,7 +178,7 @@ export default function LandlordPropertiesPage() {
     }
   };
 
-  // ---------- Edit existing ----------
+  // ---------- Edit ----------
   const handleEdit = (property: PropertyRow) => {
     setEditingId(property.id);
     setForm({
@@ -196,7 +195,7 @@ export default function LandlordPropertiesPage() {
     scrollToForm();
   };
 
-  // ---------- Delete property ----------
+  // ---------- Delete ----------
   const handleDelete = async (property: PropertyRow) => {
     const ok = window.confirm(
       `Delete property "${property.name || 'Property'}${
@@ -215,7 +214,6 @@ export default function LandlordPropertiesPage() {
         .eq('id', property.id);
 
       if (deleteError) {
-        // Helpful message if there are foreign key constraints
         if (
           typeof deleteError.message === 'string' &&
           deleteError.message.toLowerCase().includes('foreign key')
@@ -285,9 +283,9 @@ export default function LandlordPropertiesPage() {
           </div>
         )}
 
-        {/* Two-column layout: list left, form right */}
+        {/* Two-column layout */}
         <div className="grid gap-4 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)]">
-          {/* LEFT: Properties list */}
+          {/* LEFT: list */}
           <section className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
             <div className="flex items-center justify-between mb-3">
               <div>
@@ -299,13 +297,6 @@ export default function LandlordPropertiesPage() {
                   {properties.length === 1 ? '' : 's'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={handleAddNewClick}
-                className="text-xs px-3 py-1.5 rounded-full bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400"
-              >
-                + Add unit
-              </button>
             </div>
 
             {loading ? (
@@ -314,8 +305,8 @@ export default function LandlordPropertiesPage() {
               </p>
             ) : properties.length === 0 ? (
               <p className="text-xs text-slate-500 mt-2">
-                No properties yet. Use &quot;Add unit&quot; to create your first
-                one.
+                No properties yet. Use the form on the right to create your
+                first one.
               </p>
             ) : (
               <div className="space-y-2 mt-3">
@@ -383,7 +374,7 @@ export default function LandlordPropertiesPage() {
             )}
           </section>
 
-          {/* RIGHT: Add / edit property form */}
+          {/* RIGHT: form */}
           <section
             ref={formRef}
             className="p-4 rounded-2xl bg-slate-900 border border-slate-800"
@@ -493,7 +484,7 @@ export default function LandlordPropertiesPage() {
                 {editingId && (
                   <button
                     type="button"
-                    onClick={handleAddNewClick}
+                    onClick={handleCancelEdit}
                     className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-900 text-xs hover:bg-slate-800"
                   >
                     Cancel edit
