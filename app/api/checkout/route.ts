@@ -1,67 +1,75 @@
-import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { NextResponse } from 'next/server';
 
+// Make sure STRIPE_SECRET_KEY is set in .env
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
 if (!stripeSecretKey) {
-  console.warn('⚠️ STRIPE_SECRET_KEY is not set – Stripe is not fully configured.');
+  console.warn('STRIPE_SECRET_KEY is not set in environment variables.');
 }
 
 const stripe = stripeSecretKey
   ? new Stripe(stripeSecretKey, {
-      apiVersion: '2022-11-15',
+      apiVersion: '2024-06-20', // or the latest supported version
     })
   : null;
 
 export async function POST(req: Request) {
   try {
-    if (!stripe) {
+    if (!stripe || !stripeSecretKey) {
       return NextResponse.json(
-        { error: 'Stripe is not configured yet. Add STRIPE_SECRET_KEY in .env.local.' },
+        { error: 'Stripe is not configured on the server.' },
         { status: 500 }
       );
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
 
-    const amount = Number(body.amount);
+    const amount = Number(body.amount) || 50; // fallback $50
     const description =
-      body.description || 'Rent payment via RentZentro (test)';
+      body.description || 'RentZentro test rent payment';
 
-    if (!amount || amount <= 0) {
-      return NextResponse.json(
-        { error: 'Invalid payment amount.' },
-        { status: 400 }
-      );
-    }
-
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    // Figure out where to send the user after checkout
+    const origin =
+      req.headers.get('origin') ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      'http://localhost:3000';
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: [
         {
+          quantity: 1,
           price_data: {
             currency: 'usd',
-            unit_amount: Math.round(amount * 100), // dollars → cents
+            unit_amount: amount * 100, // Stripe uses cents
             product_data: {
               name: description,
             },
           },
-          quantity: 1,
         },
       ],
-      success_url: `${baseUrl}/tenant/payment-success`,
-      cancel_url: `${baseUrl}/tenant/payment-cancelled`,
+      success_url: `${origin}/tenant/stripe-test?success=1`,
+      cancel_url: `${origin}/tenant/stripe-test?canceled=1`,
     });
+
+    if (!session.url) {
+      return NextResponse.json(
+        { error: 'Stripe did not return a checkout URL.' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ url: session.url });
   } catch (err: any) {
-    console.error('Stripe checkout error:', err);
+    console.error('Error creating Stripe Checkout session:', err);
     return NextResponse.json(
-      { error: 'Unable to start checkout.' },
+      {
+        error:
+          err?.message ||
+          'Failed to create Stripe Checkout session.',
+      },
       { status: 500 }
     );
   }
