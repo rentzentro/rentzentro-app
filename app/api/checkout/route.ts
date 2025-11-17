@@ -1,74 +1,96 @@
-import Stripe from 'stripe';
 import { NextResponse } from 'next/server';
+import Stripe from 'stripe';
 
-// Make sure STRIPE_SECRET_KEY is set in .env
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-
-if (!stripeSecretKey) {
-  console.warn('STRIPE_SECRET_KEY is not set in environment variables.');
-}
-
-const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, {
-      apiVersion: '2024-06-20', // or the latest supported version
-    })
-  : null;
-
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    if (!stripe || !stripeSecretKey) {
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+
+    if (!stripeKey) {
+      console.error('❌ STRIPE_SECRET_KEY is missing.');
       return NextResponse.json(
-        { error: 'Stripe is not configured on the server.' },
+        { error: 'Payment system is not configured. Please contact support.' },
         { status: 500 }
       );
     }
 
-    const body = await req.json().catch(() => ({}));
+    const stripe = new Stripe(stripeKey, {
+      apiVersion: '2024-06-20',
+    });
 
-    const amount = Number(body.amount) || 50; // fallback $50
-    const description =
-      body.description || 'RentZentro test rent payment';
+    const body = await request.json().catch(() => ({}));
 
-    // Figure out where to send the user after checkout
+    const amount = Number(body.amount);
+    const description = body.description || 'Rent payment';
+    const tenantId = body.tenantId ? String(body.tenantId) : '';
+    const propertyId = body.propertyId ? String(body.propertyId) : '';
+
+    if (!amount || amount <= 0 || Number.isNaN(amount)) {
+      console.error('❌ Invalid or missing amount:', amount);
+      return NextResponse.json(
+        {
+          error:
+            'Invalid amount provided. Rent may not be set for your account yet.',
+        },
+        { status: 400 }
+      );
+    }
+
     const origin =
-      req.headers.get('origin') ||
       process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.SITE_URL ||
+      request.headers.get('origin') ||
       'http://localhost:3000';
 
+    // Stripe uses "amount in cents"
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
+      billing_address_collection: 'auto',
+
       line_items: [
         {
           quantity: 1,
           price_data: {
             currency: 'usd',
-            unit_amount: amount * 100, // Stripe uses cents
+            unit_amount: Math.round(amount * 100),
             product_data: {
               name: description,
             },
           },
         },
       ],
-      success_url: `${origin}/tenant/stripe-test?success=1`,
-      cancel_url: `${origin}/tenant/stripe-test?canceled=1`,
+
+      success_url: `${origin}/tenant/payment-success`,
+      cancel_url: `${origin}/tenant/payment-cancelled`,
+
+      metadata: {
+        tenantId,
+        propertyId,
+        description,
+        rentAmount: String(amount),
+      },
     });
 
-    if (!session.url) {
+    if (!session?.url) {
+      console.error('❌ Stripe session missing URL:', session);
       return NextResponse.json(
-        { error: 'Stripe did not return a checkout URL.' },
+        {
+          error:
+            'Unable to start secure payment session. Please contact your landlord.',
+        },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ url: session.url });
   } catch (err: any) {
-    console.error('Error creating Stripe Checkout session:', err);
+    console.error('❌ Stripe Checkout Error:', err);
+
     return NextResponse.json(
       {
         error:
           err?.message ||
-          'Failed to create Stripe Checkout session.',
+          'Unexpected error starting payment. Please try again later.',
       },
       { status: 500 }
     );
