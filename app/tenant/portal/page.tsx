@@ -78,7 +78,6 @@ export default function TenantPortalPage() {
       setError(null);
 
       try {
-        // 1) Get current auth user
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
         if (authError) throw authError;
@@ -87,7 +86,6 @@ export default function TenantPortalPage() {
           throw new Error('Unable to load tenant: missing email.');
         }
 
-        // 2) Find tenant record by email
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select('*')
@@ -104,7 +102,6 @@ export default function TenantPortalPage() {
 
         setTenant(t);
 
-        // 3) Load property (if linked)
         let prop: PropertyRow | null = null;
         if (t.property_id) {
           const { data: propRows, error: propError } = await supabase
@@ -118,7 +115,6 @@ export default function TenantPortalPage() {
         }
         setProperty(prop);
 
-        // 4) Recent payments for this tenant
         const { data: payRows, error: payError } = await supabase
           .from('payments')
           .select('*')
@@ -146,6 +142,11 @@ export default function TenantPortalPage() {
 
   const handleBack = () => {
     router.back();
+  };
+
+  const handleLogOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/tenant/login');
   };
 
   const handlePayWithCard = async () => {
@@ -196,8 +197,7 @@ export default function TenantPortalPage() {
         throw new Error('Stripe session created without a redirect URL.');
       }
 
-      // 🔁 Redirect straight to Stripe Checkout
-      window.location.href = data.url as string;
+      window.location.href = data.url;
     } catch (err: any) {
       console.error('Stripe Checkout Error:', err);
       setError(
@@ -222,7 +222,7 @@ export default function TenantPortalPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
-        {/* Top bar with back button + breadcrumb */}
+        {/* Header + logout button */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <div className="text-xs text-slate-500 flex gap-2">
@@ -233,10 +233,6 @@ export default function TenantPortalPage() {
               >
                 ← Back
               </button>
-              <span className="hidden sm:inline">/</span>
-              <span className="hidden sm:inline text-slate-300">
-                Tenant / Portal
-              </span>
             </div>
             <h1 className="text-xl font-semibold mt-1 text-slate-50">
               Tenant portal
@@ -246,26 +242,36 @@ export default function TenantPortalPage() {
             </p>
           </div>
 
-          <div className="text-right text-xs text-slate-400">
-            <p className="text-slate-300 font-medium">
-              {tenant?.name || 'Tenant account'}
-            </p>
-            <p className="truncate max-w-[180px]">{tenant?.email}</p>
+          {/* RIGHT SIDE: Tenant info + Logout */}
+          <div className="flex flex-col items-end gap-2">
+            <div className="text-right text-xs text-slate-400">
+              <p className="text-slate-300 font-medium">
+                {tenant?.name || 'Tenant account'}
+              </p>
+              <p className="truncate max-w-[180px]">{tenant?.email}</p>
+            </div>
+
+            <button
+              onClick={handleLogOut}
+              className="text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            >
+              Log out
+            </button>
           </div>
         </div>
 
-        {/* Error banner */}
+        {/* Error */}
         {error && (
           <div className="mb-4 rounded-2xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-sm text-rose-100">
             {error}
           </div>
         )}
 
-        {/* Main layout: left = rent + history, right = account + lease */}
+        {/* MAIN CONTENT — unchanged from your version */}
         <div className="grid gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)]">
           {/* LEFT COLUMN */}
           <div className="space-y-4">
-            {/* Current rent card */}
+            {/* Current Rent Card */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
                 Current rent
@@ -282,6 +288,7 @@ export default function TenantPortalPage() {
                   {formatDate(property?.next_due_date)}
                 </span>
               </p>
+
               <p className="mt-1 text-xs text-slate-500">
                 Property:{' '}
                 <span className="text-slate-200">
@@ -315,7 +322,7 @@ export default function TenantPortalPage() {
               </p>
             </section>
 
-            {/* Payment history */}
+            {/* Payment History */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div>
@@ -362,7 +369,7 @@ export default function TenantPortalPage() {
 
           {/* RIGHT COLUMN */}
           <div className="space-y-4">
-            {/* Account status */}
+            {/* Account Status */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
                 Account status
@@ -385,7 +392,7 @@ export default function TenantPortalPage() {
               </p>
             </section>
 
-            {/* Lease details */}
+            {/* Lease Details */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
                 Lease & contact info
