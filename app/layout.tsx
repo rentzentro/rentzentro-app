@@ -7,11 +7,11 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: "RentZentro – Rent payments. Centralized.",
   description:
-    "A modern platform for landlords to track units, tenants, rent, and accept online payments through Stripe.",
+    "A modern platform for landlords to track units, tenants, rent—and accept online payments through Stripe. Simple enough for one unit, powerful enough for portfolios.",
   icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/apple-touch-icon.png",
+    icon: "/favicon.png",                 // Browser tab icon
+    shortcut: "/favicon.png",             // Backup icon
+    apple: "/apple-touch-icon.png",       // iPhone/iPad home screen icon
   },
 };
 
