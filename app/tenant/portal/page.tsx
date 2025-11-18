@@ -37,6 +37,14 @@ type PaymentRow = {
   note: string | null;
 };
 
+type DocumentRow = {
+  id: number;
+  created_at: string;
+  title: string;
+  file_url: string;
+  property_id: number | null;
+};
+
 // ---------- Helpers ----------
 
 const formatCurrency = (v: number | null | undefined) =>
@@ -67,6 +75,7 @@ export default function TenantPortalPage() {
   const [tenant, setTenant] = useState<TenantRow | null>(null);
   const [property, setProperty] = useState<PropertyRow | null>(null);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
 
@@ -78,6 +87,7 @@ export default function TenantPortalPage() {
       setError(null);
 
       try {
+        // Get current auth user
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
         if (authError) throw authError;
@@ -86,6 +96,7 @@ export default function TenantPortalPage() {
           throw new Error('Unable to load tenant: missing email.');
         }
 
+        // Find tenant by email
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select('*')
@@ -102,6 +113,7 @@ export default function TenantPortalPage() {
 
         setTenant(t);
 
+        // Load property (if any)
         let prop: PropertyRow | null = null;
         if (t.property_id) {
           const { data: propRows, error: propError } = await supabase
@@ -115,6 +127,7 @@ export default function TenantPortalPage() {
         }
         setProperty(prop);
 
+        // Load payments
         const { data: payRows, error: payError } = await supabase
           .from('payments')
           .select('*')
@@ -124,6 +137,20 @@ export default function TenantPortalPage() {
 
         if (payError) throw payError;
         setPayments((payRows || []) as PaymentRow[]);
+
+        // Load documents linked to this property (lease/docs)
+        if (t.property_id) {
+          const { data: docRows, error: docError } = await supabase
+            .from('documents')
+            .select('id, created_at, title, file_url, property_id')
+            .eq('property_id', t.property_id)
+            .order('created_at', { ascending: false });
+
+          if (docError) throw docError;
+          setDocuments((docRows || []) as DocumentRow[]);
+        } else {
+          setDocuments([]);
+        }
       } catch (err: any) {
         console.error(err);
         setError(
@@ -238,7 +265,7 @@ export default function TenantPortalPage() {
               Tenant portal
             </h1>
             <p className="text-[13px] text-slate-400">
-              View your rent details, lease info, and payment history.
+              View your rent details, lease info, documents, and payment history.
             </p>
           </div>
 
@@ -267,7 +294,7 @@ export default function TenantPortalPage() {
           </div>
         )}
 
-        {/* MAIN CONTENT — unchanged from your version */}
+        {/* MAIN CONTENT */}
         <div className="grid gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)]">
           {/* LEFT COLUMN */}
           <div className="space-y-4">
@@ -369,7 +396,7 @@ export default function TenantPortalPage() {
 
           {/* RIGHT COLUMN */}
           <div className="space-y-4">
-            {/* Account Status */}
+            {/* Account Status / Lease info */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
                 Account status
@@ -386,22 +413,7 @@ export default function TenantPortalPage() {
                   : tenant?.status || 'Status not set'}
               </div>
 
-              <p className="mt-3 text-[11px] text-slate-500">
-                Any questions about your balance or status? Contact your
-                landlord directly.
-              </p>
-            </section>
-
-            {/* Lease Details */}
-            <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Lease & contact info
-              </p>
-              <p className="mt-1 text-sm font-medium text-slate-50">
-                Lease details
-              </p>
-
-              <dl className="mt-3 space-y-2 text-xs">
+              <dl className="mt-4 space-y-2 text-xs">
                 <div className="flex justify-between gap-4">
                   <dt className="text-slate-500">Lease start</dt>
                   <dd className="text-slate-200">
@@ -425,6 +437,55 @@ export default function TenantPortalPage() {
               <p className="mt-3 text-[11px] text-slate-500">
                 For changes to your lease, rent amount, or due date, please
                 reach out to your landlord or property manager.
+              </p>
+            </section>
+
+            {/* Lease & documents */}
+            <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">
+                Lease & documents
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-50">
+                Files shared for your unit
+              </p>
+
+              {documents.length === 0 ? (
+                <p className="mt-3 text-xs text-slate-500">
+                  Your landlord hasn&apos;t shared any documents for this unit
+                  yet. If you&apos;re expecting a copy of your lease or other
+                  paperwork, please contact them directly.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-2 text-xs">
+                  {documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-100 truncate">
+                          {doc.title}
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          Uploaded {formatDate(doc.created_at)}
+                        </p>
+                      </div>
+                      <a
+                        href={doc.file_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                      >
+                        Open
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="mt-3 text-[11px] text-slate-500">
+                Documents here are read-only. For questions about any lease
+                terms, reach out to your landlord.
               </p>
             </section>
           </div>
