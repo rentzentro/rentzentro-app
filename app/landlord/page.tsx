@@ -203,6 +203,14 @@ export default function LandlordDashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* NEW: Payouts via Stripe */}
+            <Link
+              href="/landlord/payouts"
+              className="text-xs px-3 py-2 rounded-full border border-emerald-500/70 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+            >
+              Payouts via Stripe
+            </Link>
+
             {/* Settings (coming soon) */}
             <button
               type="button"
