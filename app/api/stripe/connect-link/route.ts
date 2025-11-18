@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     if (!stripe) {
       return NextResponse.json(
         { error: 'Stripe is not configured. Check STRIPE_SECRET_KEY.' },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
           error:
             'Supabase admin client not configured. Check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.',
         },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
           error: `Could not load landlord with id=${DEFAULT_LANDLORD_ID} from Supabase.`,
           detail: landlordError.message ?? landlordError.code,
         },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       console.error('❌ No landlord row returned');
       return NextResponse.json(
         { error: 'Landlord record not found in database.' },
-        { status: 500 },
+        { status: 500 }
       );
     }
 
@@ -99,10 +99,11 @@ export async function POST(req: NextRequest) {
         console.error('❌ Stripe account creation failed:', err);
         return NextResponse.json(
           {
-            error: 'Stripe failed to create a Connect account. Check Stripe dashboard for details.',
-            detail: err.message ?? 'Unknown Stripe error creating account.',
+            error:
+              'Stripe failed to create a Connect account. Check Stripe dashboard for details.',
+            detail: err?.message ?? 'Unknown Stripe error creating account.',
           },
-          { status: 500 },
+          { status: 500 }
         );
       }
 
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest) {
               'Created Stripe account but failed to store stripe_account_id in Supabase.',
             detail: updateError.message ?? updateError.code,
           },
-          { status: 500 },
+          { status: 500 }
         );
       }
 
@@ -151,17 +152,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'Stripe failed to create an onboarding link. This is often due to the sandbox URL. It will work on a real domain (Vercel).',
-          detail: err.message ?? 'Unknown Stripe error creating account link.',
+            'Stripe failed to create an onboarding link. This is often due to the sandbox URL and should work on a real domain (Vercel).',
+          detail: err?.message ?? 'Unknown Stripe error creating account link.',
         },
-        { status: 500 },
+        { status: 500 }
       );
     }
   } catch (err: any) {
     console.error('❌ Unexpected error in connect-link route:', err);
     return NextResponse.json(
-      { error: 'Unexpected error in Stripe Connect route.' },
-      { status: 500 },
+      {
+        error: 'Unexpected error in Stripe Connect route.',
+        detail: err?.message ?? String(err),
+      },
+      { status: 500 }
     );
   }
 }
