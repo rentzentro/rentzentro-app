@@ -1,426 +1,413 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
-// ---------- Types ----------
-type TenantRow = {
+type Tenant = {
   id: number;
   name: string | null;
-  email: string;
-  phone: string | null;
+  email: string | null;
+  phone?: string | null;
+  status?: string | null;
   property_id: number | null;
-  monthly_rent: number | null;
-  status: string | null;
-  lease_start: string | null;
-  lease_end: string | null;
+  lease_start?: string | null;
+  lease_end?: string | null;
 };
 
-type PropertyRow = {
+type Property = {
   id: number;
   name: string | null;
   unit_label: string | null;
   monthly_rent: number | null;
-  next_due_date: string | null;
+  next_due_date?: string | null;
 };
 
-type PaymentRow = {
+type Payment = {
   id: number;
-  tenant_id: number | null;
-  property_id: number | null;
   amount: number | null;
   paid_on: string | null;
   method: string | null;
   note: string | null;
 };
 
-// ---------- Helpers ----------
-const formatCurrency = (v: number | null | undefined) =>
-  v == null || isNaN(v)
-    ? '-'
-    : v.toLocaleString('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        maximumFractionDigits: 2,
-      });
-
-const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
-
-// ---------- Component ----------
 export default function TenantPortalPage() {
-  const router = useRouter();
-
+  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [property, setProperty] = useState<Property | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tenant, setTenant] = useState<TenantRow | null>(null);
-  const [property, setProperty] = useState<PropertyRow | null>(null);
-  const [payments, setPayments] = useState<PaymentRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // ---------- Load tenant, property, payments ----------
   useEffect(() => {
-    const load = async () => {
+    const loadData = async () => {
       setLoading(true);
+      setError(null);
 
+      // 1) Load the FIRST tenant in the table (your test tenant)
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.user) {
-        router.push('/tenant/login');
-        return;
-      }
-
-      const email = session.user.email?.toLowerCase().trim();
-      if (!email) {
-        setError('No email found on this account.');
-        setLoading(false);
-        return;
-      }
-
-      const { data: tRow } = await supabase
+        data: tenantRows,
+        error: tenantError,
+      } = await supabase
         .from('tenants')
-        .select('*')
-        .eq('email', email)
-        .maybeSingle();
+        .select(
+          'id, name, email, phone, status, property_id, lease_start, lease_end'
+        )
+        .order('id', { ascending: true })
+        .limit(1);
 
-      if (!tRow) {
-        setError('No tenant record found.');
+      if (tenantError || !tenantRows || tenantRows.length === 0) {
+        console.error('Error loading tenant:', tenantError);
+        setError('Unable to load tenant information (no tenant records found).');
         setLoading(false);
         return;
       }
 
-      const t = tRow as TenantRow;
-      setTenant(t);
+      const tenantRow = tenantRows[0];
+      setTenant(tenantRow);
 
-      if (t.property_id) {
-        const { data: pRow } = await supabase
+      // 2) Property for that tenant
+      if (tenantRow.property_id) {
+        const { data: propRow, error: propError } = await supabase
           .from('properties')
-          .select('*')
-          .eq('id', t.property_id)
-          .maybeSingle();
+          .select('id, name, unit_label, monthly_rent, next_due_date')
+          .eq('id', tenantRow.property_id)
+          .single();
 
-        if (pRow) setProperty(pRow as PropertyRow);
+        if (propError) {
+          console.error('Error loading property:', propError);
+        } else {
+          setProperty(propRow);
+        }
       }
 
-      const { data: payRows } = await supabase
+      // 3) Payment history for that tenant
+      const {
+        data: paymentRows,
+        error: paymentsError,
+      } = await supabase
         .from('payments')
-        .select('*')
-        .eq('tenant_id', t.id)
-        .order('paid_on', { ascending: false });
+        .select('id, amount, paid_on, method, note')
+        .eq('tenant_id', tenantRow.id)
+        .order('paid_on', { ascending: false })
+        .limit(20);
 
-      if (payRows) setPayments(payRows as PaymentRow[]);
+      if (paymentsError) {
+        console.error('Error loading payments:', paymentsError);
+      } else {
+        setPayments(paymentRows || []);
+      }
 
       setLoading(false);
     };
 
-    load();
-  }, [router]);
+    loadData();
+  }, []);
 
-  const rentAmount =
-    tenant?.monthly_rent ?? property?.monthly_rent ?? null;
+  const formatDate = (iso: string | null | undefined) => {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString();
+    } catch {
+      return iso;
+    }
+  };
 
-  const nextDueLabel = property?.next_due_date
-    ? formatDate(property.next_due_date)
-    : 'See lease or ask landlord';
+  const formatDateTime = (iso: string | null) => {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleString();
+    } catch {
+      return iso;
+    }
+  };
 
-  const statusBadge =
-    tenant?.status?.toLowerCase() === 'current'
-      ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40'
-      : tenant?.status?.toLowerCase() === 'late'
-      ? 'bg-amber-500/15 text-amber-300 border border-amber-500/40'
-      : 'bg-slate-500/15 text-slate-300 border border-slate-500/40';
+  const formatAmount = (amount: number | null | undefined) => {
+    if (amount == null) return '—';
+    return `$${amount.toFixed(2)}`;
+  };
 
-  // ---------- Stripe Checkout ----------
+  const getDueStatus = (nextDueDate?: string | null) => {
+    if (!nextDueDate) {
+      return {
+        label: 'No due date on file',
+        className: 'bg-slate-800 text-slate-200',
+      };
+    }
+
+    const now = new Date();
+    const due = new Date(nextDueDate);
+    const diffMs = due.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+      return {
+        label: 'Overdue',
+        className:
+          'bg-rose-500/15 text-rose-300 border border-rose-500/40',
+      };
+    }
+
+    if (diffDays === 0) {
+      return {
+        label: 'Due today',
+        className:
+          'bg-amber-500/15 text-amber-300 border border-amber-500/40',
+      };
+    }
+
+    if (diffDays <= 7) {
+      return {
+        label: `Due in ${diffDays} day${diffDays === 1 ? '' : 's'}`,
+        className:
+          'bg-amber-500/10 text-amber-200 border border-amber-500/30',
+      };
+    }
+
+    return {
+      label: 'Not due yet',
+      className:
+        'bg-emerald-500/10 text-emerald-200 border border-emerald-500/30',
+    };
+  };
+
   const handlePayWithCard = async () => {
-    if (!tenant) {
-      setError('You must be logged in as a tenant to start a payment.');
-      return;
-    }
-
-    if (!rentAmount || rentAmount <= 0) {
-      setError('Rent amount not configured yet. Ask your landlord.');
-      return;
-    }
-
     setPaying(true);
     setError(null);
-    setSuccessMessage(null);
-
-    const origin = window.location.origin;
-
-    const successUrl = `${origin}/tenant/payment-success`;
-    const cancelUrl = `${origin}/tenant/payment-cancelled`;
-
-    const description =
-      property && property.name
-        ? `Rent payment for ${property.name}${
-            property.unit_label ? ' · ' + property.unit_label : ''
-          }`
-        : 'Rent payment';
 
     try {
+      if (!tenant || !property || !property.monthly_rent) {
+        setError('Missing rent or property information.');
+        setPaying(false);
+        return;
+      }
+
+      const amount = property.monthly_rent;
+      const description =
+        (property.name || 'Rent') +
+        (property.unit_label ? ` - Unit ${property.unit_label}` : '');
+
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: rentAmount,
-          successUrl,
-          cancelUrl,
-          tenantId: tenant.id,
-          propertyId: property?.id ?? null,
+          amount,
           description,
+          tenantId: tenant.id,
+          propertyId: property.id,
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || 'Could not start payment.');
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create checkout session.');
       }
 
-      window.location.href = data.url as string;
+      if (data.url) {
+        window.location.href = data.url as string;
+      } else {
+        setError('No checkout URL returned from server.');
+        setPaying(false);
+      }
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Unexpected error starting payment.');
+      console.error('Error starting payment:', err);
+      setError(err.message || 'Something went wrong starting payment.');
       setPaying(false);
     }
   };
 
-  // ---------- Manual mark paid ----------
-  const handleMarkPaid = async () => {
-    if (!tenant) return;
-    if (!rentAmount || rentAmount <= 0) {
-      setError('Rent amount not configured.');
-      return;
-    }
-
-    setPaying(true);
-    setError(null);
-    setSuccessMessage(null);
-
-    try {
-      const now = new Date().toISOString();
-
-      const { data: inserted } = await supabase
-        .from('payments')
-        .insert({
-          tenant_id: tenant.id,
-          property_id: property?.id ?? null,
-          amount: rentAmount,
-          paid_on: now,
-          method: 'Recorded manually',
-          note: 'Manual payment by tenant.',
-        })
-        .select()
-        .single();
-
-      if (inserted) setPayments((prev) => [inserted as PaymentRow, ...prev]);
-
-      setSuccessMessage('Payment recorded manually.');
-    } finally {
-      setPaying(false);
-    }
-  };
-
-  // ---------- Sign out ----------
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/tenant/login');
-  };
-
-  // ---------- UI ----------
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-50 p-6">
-        Loading tenant portal…
-      </div>
-    );
-  }
-
-  if (!tenant) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-50 p-6">
-        No tenant found.
-      </div>
-    );
-  }
+  const dueStatus = getDueStatus(property?.next_due_date ?? null);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-8 md:py-10">
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
+        <header className="mb-6 flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs text-slate-500 flex gap-2">
-              <Link href="/tenant" className="hover:text-emerald-400">
-                Tenant
-              </Link>
-              <span>/</span>
-              <span className="text-slate-300">Portal</span>
-            </div>
-            <h1 className="text-xl font-semibold mt-1">Tenant portal</h1>
+            <p className="text-[10px] text-slate-500 uppercase tracking-[0.18em]">
+              TENANT PORTAL
+            </p>
+            <h1 className="text-xl md:text-2xl font-semibold text-slate-50">
+              My Rent
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              View your rent details, lease info, and payment history — and pay
+              securely by card.
+            </p>
           </div>
+        </header>
 
-          <button
-            onClick={handleSignOut}
-            className="text-xs px-4 py-2 border border-slate-700 rounded-full hover:bg-slate-800"
-          >
-            Sign out
-          </button>
-        </div>
-
-        {(error || successMessage) && (
-          <div className="mb-4 space-y-2 text-sm">
-            {error && (
-              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-100">
-                {error}
-              </div>
-            )}
-            {successMessage && (
-              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-100">
-                {successMessage}
-              </div>
-            )}
+        {/* Error banner */}
+        {error && (
+          <div className="mb-4 rounded-lg border border-rose-500/70 bg-rose-950/50 px-4 py-3 text-sm text-rose-50">
+            {error}
           </div>
         )}
 
-        <div className="grid md:grid-cols-[1.6fr_1.3fr] gap-4">
-          {/* LEFT SIDE */}
-          <div className="space-y-4">
-            {/* Rent card */}
-            <section className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-              <p className="text-xs text-slate-500 uppercase">Current rent</p>
-              <p className="text-3xl font-semibold mt-1">
-                {formatCurrency(rentAmount)}
-              </p>
-              <p className="text-xs mt-1 text-slate-400">
-                Next due: <span className="text-slate-200">{nextDueLabel}</span>
-              </p>
+        <div className="grid md:grid-cols-[minmax(0,2fr)_minmax(0,1.3fr)] gap-5 md:gap-6">
+          {/* Left column */}
+          <div className="space-y-5">
+            {/* Current rent card */}
+            <section className="rounded-2xl bg-slate-950 border border-slate-800/80 shadow-[0_0_0_1px_rgba(15,23,42,0.7)] p-5 md:p-6">
+              {loading ? (
+                <p className="text-sm text-slate-400">
+                  Loading your rent info…
+                </p>
+              ) : !tenant ? (
+                <p className="text-sm text-rose-200">
+                  We couldn&apos;t find your tenant record.
+                </p>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 mb-1">
+                        CURRENT RENT
+                      </p>
+                      <p className="text-2xl font-semibold text-slate-50">
+                        {formatAmount(property?.monthly_rent)}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Next due date:{' '}
+                        <span className="text-slate-200">
+                          {formatDate(property?.next_due_date)}
+                        </span>
+                      </p>
+                    </div>
+                    <div
+                      className={`text-[11px] px-3 py-1.5 rounded-full font-medium ${dueStatus.className}`}
+                    >
+                      {dueStatus.label}
+                    </div>
+                  </div>
 
-              <div className="mt-4 space-y-2">
-                <button
-                  disabled={paying || !rentAmount}
-                  onClick={handlePayWithCard}
-                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold py-2 rounded-xl"
-                >
-                  {paying ? 'Redirecting…' : 'Pay rent securely with card'}
-                </button>
-                <p className="mt-2 text-[11px] text-slate-400">
-  Card payments are processed by Stripe. Your landlord uses RentZentro,
-  which charges a <span className="text-slate-200 font-medium">2.5% platform fee</span>{' '}
-  to the landlord for each successful card payment.
-</p>
+                  <button
+                    type="button"
+                    onClick={handlePayWithCard}
+                    disabled={paying}
+                    className="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {paying ? 'Starting payment…' : 'Pay rent securely with card'}
+                  </button>
 
-                <button
-                  disabled={paying || !rentAmount}
-                  onClick={handleMarkPaid}
-                  className="w-full border border-emerald-400 text-emerald-200 py-2 rounded-xl"
-                >
-                  Mark as paid (manual)
-                </button>
-              </div>
+                  <p className="mt-2 text-[11px] text-slate-500 max-w-md">
+                    Your payment is processed securely by Stripe. You&apos;ll see
+                    RentZentro&apos;s 2.5% service fee plus any Stripe card fees
+                    before confirming.
+                  </p>
+                </>
+              )}
             </section>
 
             {/* Payment history */}
-            <section className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-              <p className="text-xs text-slate-500 uppercase">
-                Payment history
-              </p>
+            <section className="rounded-2xl bg-slate-950 border border-slate-800/80 p-5 md:p-6">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                  PAYMENT HISTORY
+                </p>
+              </div>
 
               {payments.length === 0 ? (
-                <p className="mt-4 text-xs text-slate-500">
-                  No payments recorded yet.
+                <p className="text-sm text-slate-400">
+                  No payments recorded yet. Once you pay through RentZentro, your
+                  history will appear here.
                 </p>
               ) : (
-                <div className="mt-4 space-y-2">
-                  {payments.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex justify-between items-center bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs"
-                    >
-                      <div>
-                        <p className="font-medium text-slate-100">
-                          {formatCurrency(p.amount)}
-                        </p>
-                        <p className="text-slate-400 text-[11px]">
-                          {formatDate(p.paid_on)}
-                        </p>
-                      </div>
-                      <p className="text-[11px] text-slate-500">
-                        {p.method || 'Method not specified'}
-                      </p>
-                    </div>
-                  ))}
+                <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden">
+                  <table className="w-full text-xs md:text-sm">
+                    <thead className="bg-slate-900/70">
+                      <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500">
+                        <th className="px-3 py-2">Date</th>
+                        <th className="px-3 py-2">Amount</th>
+                        <th className="px-3 py-2">Method</th>
+                        <th className="px-3 py-2">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map((p) => (
+                        <tr key={p.id} className="border-t border-slate-900/70">
+                          <td className="px-3 py-2 text-slate-300">
+                            {formatDateTime(p.paid_on)}
+                          </td>
+                          <td className="px-3 py-2 text-emerald-300 font-medium">
+                            {formatAmount(p.amount)}
+                          </td>
+                          <td className="px-3 py-2 text-slate-300">
+                            {p.method || '—'}
+                          </td>
+                          <td className="px-3 py-2 text-slate-400 max-w-xs">
+                            {p.note || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </section>
           </div>
 
-          {/* RIGHT SIDE */}
-          <div className="space-y-4">
+          {/* Right column */}
+          <div className="space-y-5">
             {/* Account status */}
-            <section className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-              <p className="text-xs text-slate-500 uppercase">Account status</p>
-
-              <div className="mt-2 flex justify-between items-center">
-                <div>
-                  <p className="text-sm font-medium">{tenant.name}</p>
-                  <p className="text-xs text-slate-400">{tenant.email}</p>
-                </div>
-
-                <span
-                  className={`text-xs px-3 py-1 rounded-full font-medium ${statusBadge}`}
-                >
-                  {tenant.status}
-                </span>
-              </div>
+            <section className="rounded-2xl bg-slate-950 border border-slate-800/80 p-5 md:p-6">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 mb-3">
+                ACCOUNT
+              </p>
+              {tenant ? (
+                <>
+                  <p className="text-sm font-semibold text-slate-50">
+                    {tenant.name}
+                  </p>
+                  <p className="text-xs text-slate-400 mb-1">
+                    {tenant.email || 'No email on file'}
+                  </p>
+                  <p className="text-xs text-slate-400 mb-3">
+                    {tenant.phone || 'No phone on file'}
+                  </p>
+                  <p className="text-[11px] inline-flex px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                    {tenant.status ? tenant.status.toUpperCase() : 'CURRENT'}
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-slate-400">No tenant loaded.</p>
+              )}
             </section>
 
             {/* Lease details */}
-            <section className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-              <p className="text-xs text-slate-500 uppercase">Lease details</p>
-
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <section className="rounded-2xl bg-slate-950 border border-slate-800/80 p-5 md:p-6">
+              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 mb-3">
+                LEASE & CONTACT
+              </p>
+              <div className="space-y-2 text-xs text-slate-300">
                 <div>
-                  <p className="text-xs text-slate-500 uppercase">
-                    Lease start
-                  </p>
-                  <p className="mt-1">{formatDate(tenant.lease_start)}</p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-slate-500 uppercase">
-                    Lease end
-                  </p>
-                  <p className="mt-1">{formatDate(tenant.lease_end)}</p>
-                </div>
-
-                <div>
-                  <p className="text-xs text-slate-500 uppercase">
-                    Property
-                  </p>
-                  <p className="mt-1">
-                    {property?.name}
-                    {property?.unit_label ? ` · ${property.unit_label}` : ''}
+                  <p className="text-slate-500 text-[11px] mb-0.5">PROPERTY</p>
+                  <p>
+                    {property?.name || 'Not assigned'}
+                    {property?.unit_label
+                      ? ` • Unit ${property.unit_label}`
+                      : ''}
                   </p>
                 </div>
-
-                <div>
-                  <p className="text-xs text-slate-500 uppercase">Phone</p>
-                  <p className="mt-1">{tenant.phone || 'Not provided'}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-slate-500 text-[11px] mb-0.5">
+                      LEASE START
+                    </p>
+                    <p>{formatDate(tenant?.lease_start)}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-[11px] mb-0.5">
+                      LEASE END
+                    </p>
+                    <p>{formatDate(tenant?.lease_end)}</p>
+                  </div>
                 </div>
+                <p className="text-[11px] text-slate-500 mt-3">
+                  Questions about your balance, late fees, or lease terms?
+                  Contact your landlord or property manager directly.
+                  RentZentro powers the payment rails only.
+                </p>
               </div>
             </section>
           </div>
