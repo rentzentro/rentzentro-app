@@ -203,14 +203,6 @@ export default function LandlordDashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* NEW: Payouts via Stripe */}
-            <Link
-              href="/landlord/payouts"
-              className="text-xs px-3 py-2 rounded-full border border-emerald-500/70 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
-            >
-              Payouts via Stripe
-            </Link>
-
             {/* Settings (coming soon) */}
             <button
               type="button"
@@ -218,6 +210,14 @@ export default function LandlordDashboardPage() {
             >
               Settings (coming soon)
             </button>
+
+            {/* Documents */}
+            <Link
+              href="/landlord/documents"
+              className="text-xs px-3 py-2 rounded-full border border-emerald-600 bg-slate-900 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
+            >
+              Documents
+            </Link>
 
             {/* Sign out */}
             <button
@@ -401,7 +401,7 @@ export default function LandlordDashboardPage() {
                   {notDueYet.length}
                 </span>
               </div>
-              {notDueYet.length === 0 ? (
+              {notDueYet.length===0 ? (
                 <p className="text-[11px] text-emerald-100/80">
                   No units in &quot;not due yet&quot; status.
                 </p>
