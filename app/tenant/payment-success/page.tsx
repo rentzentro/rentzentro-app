@@ -1,38 +1,51 @@
-export default function PaymentSuccessPage() {
+// app/tenant/payment-success/page.tsx
+
+import Link from 'next/link';
+
+export default function TenantPaymentSuccessPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
-      <div className="max-w-md w-full text-center space-y-6">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-600/20 border border-emerald-600/40">
-          <svg
-            className="w-10 h-10 text-emerald-400"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M4.5 12.75l6 6 9-13.5"
-            />
-          </svg>
+      <div className="w-full max-w-md rounded-2xl border border-emerald-500/40 bg-slate-950/80 p-6 shadow-lg shadow-emerald-500/10">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wide">
+              Tenant portal
+            </p>
+            <h1 className="mt-1 text-lg font-semibold text-slate-50">
+              Payment successful
+            </h1>
+          </div>
+          <div className="h-9 w-9 rounded-full bg-emerald-500/10 border border-emerald-400/60 flex items-center justify-center text-emerald-400">
+            ✓
+          </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-emerald-400">
-          Payment Successful
-        </h1>
-
-        <p className="text-slate-400 text-sm leading-relaxed">
-          Thank you! Your payment has been successfully processed by Stripe.
-          You can return to your tenant portal to view your payment history.
+        <p className="text-sm text-slate-300">
+          Your rent payment was processed successfully through Stripe Checkout.
+          You&apos;ll see this payment appear in your payment history once your
+          landlord&apos;s records sync.
         </p>
 
-        <a
-          href="/tenant/portal"
-          className="inline-block mt-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-6 py-2 rounded-xl transition"
-        >
-          Return to Tenant Portal
-        </a>
+        <p className="mt-3 text-[11px] text-slate-500">
+          If you believe there is an issue with this payment, contact your
+          landlord or property manager directly.
+        </p>
+
+        <div className="mt-6 flex flex-col gap-2">
+          <Link
+            href="/tenant/portal"
+            className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 text-center hover:bg-emerald-400"
+          >
+            Return to my tenant portal
+          </Link>
+
+          <Link
+            href="/"
+            className="w-full rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 text-center hover:bg-slate-800"
+          >
+            Go to RentZentro home
+          </Link>
+        </div>
       </div>
     </div>
   );
