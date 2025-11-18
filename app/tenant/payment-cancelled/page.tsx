@@ -1,5 +1,3 @@
-// app/tenant/payment-cancelled/page.tsx
-
 import Link from 'next/link';
 
 export default function TenantPaymentCancelledPage() {
@@ -49,3 +47,4 @@ export default function TenantPaymentCancelledPage() {
     </div>
   );
 }
+

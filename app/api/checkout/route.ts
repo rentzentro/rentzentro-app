@@ -1,138 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
 
-export const runtime = 'nodejs';
-
-// --- Env vars ---
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!stripeSecret) console.error('❌ Missing STRIPE_SECRET_KEY');
-if (!supabaseUrl) console.error('❌ Missing NEXT_PUBLIC_SUPABASE_URL');
-if (!supabaseServiceKey) console.error('❌ Missing SUPABASE_SERVICE_ROLE_KEY');
-
-// StackBlitz forces this preview API version type
-const stripe = new Stripe(stripeSecret!, {
-  apiVersion: '2025-10-29.clover',
-});
-
-// Admin client so we can read landlords on the server
-const supabaseAdmin = createClient(supabaseUrl!, supabaseServiceKey!);
-
-// For now we assume a single landlord with id = 1
-const DEFAULT_LANDLORD_ID = 1;
-
-// 2.5% platform fee
-const PLATFORM_FEE_PERCENT = 0.025;
 
 export async function POST(req: NextRequest) {
+  if (!stripeSecret) {
+    console.error('Missing STRIPE_SECRET_KEY');
+    return NextResponse.json(
+      { error: 'Payment system is not configured.' },
+      { status: 500 }
+    );
+  }
+
+  const stripe = new Stripe(stripeSecret, {
+    apiVersion: '2024-06-20' as any,
+  });
+
+  let body: any = {};
   try {
-    const body = await req.json().catch(() => null as any);
+    body = await req.json();
+  } catch {
+    body = {};
+  }
 
-    if (!body) {
-      return NextResponse.json(
-        { error: 'Invalid JSON body.' },
-        { status: 400 }
-      );
-    }
+  const rawAmount = body.amount;
+  const amount = Number(rawAmount);
+  const description =
+    typeof body.description === 'string' && body.description.trim().length > 0
+      ? body.description.trim()
+      : 'Rent payment';
 
-    const { amount, description, tenantId, propertyId } = body;
+  if (!amount || isNaN(amount) || amount <= 0) {
+    return NextResponse.json(
+      { error: 'Invalid amount supplied for payment.' },
+      { status: 400 }
+    );
+  }
 
-    if (!amount || typeof amount !== 'number' || amount <= 0) {
-      return NextResponse.json(
-        { error: 'Missing or invalid amount.' },
-        { status: 400 }
-      );
-    }
+  // Figure out our base URL (Vercel / production / local)
+  const originHeader = req.headers.get('origin');
+  const origin =
+    originHeader ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    'http://localhost:3000';
 
-    const dollars = amount;
-    const amountInCents = Math.round(dollars * 100);
-
-    const origin =
-      req.headers.get('origin') ??
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      'http://localhost:3000';
-
-    // 1) Load landlord to get stripe_account_id
-    const { data: landlord, error: landlordError } = await supabaseAdmin
-      .from('landlords')
-      .select('id, stripe_account_id')
-      .eq('id', DEFAULT_LANDLORD_ID)
-      .single();
-
-    if (landlordError || !landlord) {
-      console.error('❌ Unable to load landlord record:', landlordError);
-      return NextResponse.json(
-        { error: 'Landlord not found on server.' },
-        { status: 500 }
-      );
-    }
-
-    const landlordStripeAccountId = landlord.stripe_account_id as
-      | string
-      | null;
-
-    // 2) Build base Checkout Session params
-    const params: Stripe.Checkout.SessionCreateParams = {
+  try {
+    const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
             currency: 'usd',
-            product_data: {
-              name: description || 'Rent payment',
-            },
-            unit_amount: amountInCents,
+            product_data: { name: description },
+            unit_amount: Math.round(amount * 100),
           },
           quantity: 1,
         },
       ],
-      success_url: `${origin}/tenant/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/tenant/cancel`,
+      // 👇 These must exactly match our Next.js routes below
+      success_url: `${origin}/tenant/payment-success`,
+      cancel_url: `${origin}/tenant/payment-cancelled`,
       metadata: {
-        tenant_id: tenantId ? String(tenantId) : '',
-        property_id: propertyId ? String(propertyId) : '',
+        tenant_id: body.tenantId ? String(body.tenantId) : '',
+        property_id: body.propertyId ? String(body.propertyId) : '',
       },
-    };
+    });
 
-    // 3) If landlord has a connected Stripe account, set fee + transfer
-    if (landlordStripeAccountId) {
-      const applicationFeeAmount = Math.round(
-        amountInCents * PLATFORM_FEE_PERCENT
-      );
-
-      (params as any).payment_intent_data = {
-        application_fee_amount: applicationFeeAmount,
-        transfer_data: {
-          destination: landlordStripeAccountId,
-        },
-      };
-
-      console.log('💸 Using Connect destination charge with: ', {
-        destination: landlordStripeAccountId,
-        application_fee_amount: applicationFeeAmount,
-        amountInCents,
-      });
-    } else {
-      console.warn(
-        '⚠️ No stripe_account_id for landlord; creating session without transfer/fee.'
+    if (!session.url) {
+      console.error('Stripe session created with no URL:', session.id);
+      return NextResponse.json(
+        { error: 'Stripe session created with no URL.' },
+        { status: 500 }
       );
     }
 
-    // 4) Create the Checkout Session
-    const session = await stripe.checkout.sessions.create(params);
-
-    console.log('✅ Created Checkout session:', session.id);
-
-    return NextResponse.json({ id: session.id, url: session.url });
+    return NextResponse.json({ url: session.url });
   } catch (err: any) {
-    console.error('❌ Error creating checkout session:', err);
+    console.error('Stripe Checkout Error:', err);
     return NextResponse.json(
-      { error: 'Failed to create checkout session.' },
+      {
+        error:
+          err?.message ??
+          'Unexpected error creating payment session. Please try again.',
+      },
       { status: 500 }
     );
   }
+}
+
+export function GET() {
+  // When you open /api/checkout in the browser directly, this is expected
+  return NextResponse.json({ error: 'Method not allowed.' }, { status: 405 });
 }
