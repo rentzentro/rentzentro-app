@@ -219,6 +219,14 @@ export default function LandlordDashboardPage() {
               Documents
             </Link>
 
+            {/* Maintenance */}
+            <Link
+              href="/landlord/maintenance"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            >
+              Maintenance
+            </Link>
+
             {/* Sign out */}
             <button
               type="button"
@@ -401,7 +409,7 @@ export default function LandlordDashboardPage() {
                   {notDueYet.length}
                 </span>
               </div>
-              {notDueYet.length===0 ? (
+              {notDueYet.length === 0 ? (
                 <p className="text-[11px] text-emerald-100/80">
                   No units in &quot;not due yet&quot; status.
                 </p>
