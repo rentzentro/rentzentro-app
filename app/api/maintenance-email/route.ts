@@ -1,21 +1,12 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-type MaintenanceEmailBody = {
-  landlordEmail?: string | null;
-  tenantName?: string | null;
-  tenantEmail?: string | null;
-  propertyName?: string | null;
-  unitLabel?: string | null;
-  title?: string | null;
-  description?: string | null;
-  priority?: string | null;
-};
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 /**
  * Expects JSON body like:
  * {
- *   landlordEmail: string;
+ *   landlordEmail?: string;
  *   tenantName?: string;
  *   tenantEmail?: string;
  *   propertyName?: string;
@@ -27,7 +18,7 @@ type MaintenanceEmailBody = {
  */
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as MaintenanceEmailBody;
+    const body = await req.json();
 
     const {
       landlordEmail,
@@ -38,40 +29,64 @@ export async function POST(req: Request) {
       title,
       description,
       priority,
-    } = body;
+    } = body as {
+      landlordEmail?: string | null;
+      tenantName?: string | null;
+      tenantEmail?: string | null;
+      propertyName?: string | null;
+      unitLabel?: string | null;
+      title?: string | null;
+      description?: string | null;
+      priority?: string | null;
+    };
 
-    // These come from your .env / Vercel env vars
-    const apiKey = process.env.RESEND_API_KEY || null;
+    const hasResendKey = !!process.env.RESEND_API_KEY;
     const fallbackTo = process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL || null;
+    const fromEnv = process.env.RENTZENTRO_FROM_EMAIL;
     const from =
-      process.env.RENTZENTRO_FROM_EMAIL ||
-      'RentZentro <no-reply@rentzentro.com>';
-
+      fromEnv && fromEnv.trim().length > 0
+        ? fromEnv
+        : 'RentZentro <onboarding@resend.dev>';
     const to = landlordEmail || fallbackTo;
 
-    // ✅ Defensive check so missing config NEVER kills a deploy
-    if (!apiKey || !from || !to) {
-      console.error('Missing email configuration:', {
-        hasApiKey: !!apiKey,
+    console.log('Maintenance email route hit with:', {
+      hasResendKey,
+      from,
+      to,
+      landlordEmail,
+      fallbackTo,
+      tenantName,
+      tenantEmail,
+      propertyName,
+      unitLabel,
+      title,
+      priority,
+    });
+
+    // If we’re missing critical config, don’t even try Resend
+    if (!hasResendKey || !to || !from) {
+      console.error('Email configuration missing on server.', {
+        hasResendKey,
         from,
         to,
       });
+
       return NextResponse.json(
-        { error: 'Email configuration is missing on the server.' },
-        { status: 500 }
+        {
+          ok: true,
+          emailSent: false,
+          error: 'Email configuration missing on server.',
+        },
+        { status: 200 }
       );
     }
-
-    // Create the client *inside* the handler so it runs at request-time,
-    // not at build-time.
-    const resend = new Resend(apiKey);
 
     const subject = `New maintenance request: ${title || 'No title'}`;
 
     const html = `
-      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size:14px; color:#0f172a;">
-        <h2 style="margin:0 0 8px 0; color:#16a34a;">New maintenance request</h2>
-        <p style="margin:0 0 16px 0; color:#475569;">
+      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: #0f172a;">
+        <h2 style="margin-bottom: 4px; color:#0f172a;">New maintenance request</h2>
+        <p style="margin:0 0 12px 0; color:#64748b;">
           A tenant submitted a new maintenance request in RentZentro.
         </p>
 
@@ -88,25 +103,24 @@ export async function POST(req: Request) {
             <tr>
               <td style="padding:2px 8px 2px 0; color:#64748b;">Property:</td>
               <td style="padding:2px 0;">
-                ${propertyName || 'Not set'}
-                ${unitLabel ? ' · ' + unitLabel : ''}
+                ${propertyName || 'Not set'}${unitLabel ? ` · ${unitLabel}` : ''}
               </td>
             </tr>
             ${
               priority
                 ? `<tr>
-                     <td style="padding:2px 8px 2px 0; color:#64748b;">Priority:</td>
-                     <td style="padding:2px 0;">${priority}</td>
-                   </tr>`
+                    <td style="padding:2px 8px 2px 0; color:#64748b;">Priority:</td>
+                    <td style="padding:2px 0;">${priority}</td>
+                  </tr>`
                 : ''
             }
           </tbody>
         </table>
 
-        <p style="margin:0 0 4px 0; color:#64748b;">Request title:</p>
-        <p style="margin:0 0 12px 0;"><strong>${title || 'No title'}</strong></p>
+        <p style="margin:0 0 8px 0; color:#64748b;"><strong>Request title:</strong></p>
+        <p style="margin:0 0 12px 0;">${title || 'No title'}</p>
 
-        <p style="margin:0 0 4px 0; color:#64748b;">Details:</p>
+        <p style="margin:0 0 8px 0; color:#64748b;"><strong>Details:</strong></p>
         <p style="margin:0 0 16px 0; white-space:pre-wrap;">
           ${description || 'No description provided.'}
         </p>
@@ -117,26 +131,49 @@ export async function POST(req: Request) {
       </div>
     `;
 
-    const { error } = await resend.emails.send({
-      from,
-      to,
-      subject,
-      html,
-    });
+    let emailError: any = null;
 
-    if (error) {
-      console.error('Resend send error:', error);
+    try {
+      const { error } = await resend.emails.send({
+        from,
+        to,
+        subject,
+        html,
+      });
+
+      if (error) {
+        emailError = error;
+        console.error('Resend send error:', error);
+      }
+    } catch (err) {
+      emailError = err;
+      console.error('Resend threw an exception:', err);
+    }
+
+    if (emailError) {
       return NextResponse.json(
-        { error: 'Failed to send maintenance email.' },
-        { status: 500 }
+        {
+          ok: true,
+          emailSent: false,
+          error:
+            (emailError as any)?.message ||
+            (emailError as any)?.name ||
+            'Unknown email error',
+        },
+        { status: 200 }
       );
     }
 
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error('Maintenance email route error:', err);
+    return NextResponse.json({ ok: true, emailSent: true });
+  } catch (err: any) {
+    console.error('Maintenance email route fatal error:', err);
     return NextResponse.json(
-      { error: 'Unexpected error sending maintenance email.' },
+      {
+        ok: false,
+        emailSent: false,
+        error:
+          err?.message || 'Unexpected error sending maintenance email.',
+      },
       { status: 500 }
     );
   }
