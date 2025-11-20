@@ -1,24 +1,20 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+type MaintenanceEmailPayload = {
+  landlordEmail?: string | null;
+  tenantName?: string | null;
+  tenantEmail?: string | null;
+  propertyName?: string | null;
+  unitLabel?: string | null;
+  title?: string | null;
+  description?: string | null;
+  priority?: string | null;
+};
 
-/**
- * Expects JSON body like:
- * {
- *   landlordEmail?: string;
- *   tenantName?: string;
- *   tenantEmail?: string;
- *   propertyName?: string;
- *   unitLabel?: string;
- *   title?: string;
- *   description?: string;
- *   priority?: string;
- * }
- */
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as MaintenanceEmailPayload;
 
     const {
       landlordEmail,
@@ -29,24 +25,22 @@ export async function POST(req: Request) {
       title,
       description,
       priority,
-    } = body as {
-      landlordEmail?: string | null;
-      tenantName?: string | null;
-      tenantEmail?: string | null;
-      propertyName?: string | null;
-      unitLabel?: string | null;
-      title?: string | null;
-      description?: string | null;
-      priority?: string | null;
-    };
+    } = body;
 
-    const hasResendKey = !!process.env.RESEND_API_KEY;
-    const fallbackTo = process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL || null;
+    // --- Read env vars at request-time, NOT at module load ---
+    const apiKey = process.env.RESEND_API_KEY;
+    const hasResendKey = !!apiKey;
+
+    const fallbackTo =
+      process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL || null;
+
     const fromEnv = process.env.RENTZENTRO_FROM_EMAIL;
+    // fallback is the Resend default sender
     const from =
       fromEnv && fromEnv.trim().length > 0
         ? fromEnv
         : 'RentZentro <onboarding@resend.dev>';
+
     const to = landlordEmail || fallbackTo;
 
     console.log('Maintenance email route hit with:', {
@@ -63,7 +57,7 @@ export async function POST(req: Request) {
       priority,
     });
 
-    // If we’re missing critical config, don’t even try Resend
+    // If config is missing, DO NOT crash, just skip email
     if (!hasResendKey || !to || !from) {
       console.error('Email configuration missing on server.', {
         hasResendKey,
@@ -80,6 +74,9 @@ export async function POST(req: Request) {
         { status: 200 }
       );
     }
+
+    // --- Create Resend client now that we know apiKey exists ---
+    const resend = new Resend(apiKey);
 
     const subject = `New maintenance request: ${title || 'No title'}`;
 
