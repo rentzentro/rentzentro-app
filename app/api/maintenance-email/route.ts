@@ -1,20 +1,24 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-type MaintenanceEmailPayload = {
-  landlordEmail?: string | null;
-  tenantName?: string | null;
-  tenantEmail?: string | null;
-  propertyName?: string | null;
-  unitLabel?: string | null;
-  title?: string | null;
-  description?: string | null;
-  priority?: string | null;
-};
+const resend = new Resend(process.env.RESEND_API_KEY);
 
+/**
+ * Expects JSON body like:
+ * {
+ *   landlordEmail?: string;
+ *   tenantName?: string;
+ *   tenantEmail?: string;
+ *   propertyName?: string;
+ *   unitLabel?: string;
+ *   title?: string;
+ *   description?: string;
+ *   priority?: string;
+ * }
+ */
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as MaintenanceEmailPayload;
+    const body = await req.json();
 
     const {
       landlordEmail,
@@ -25,58 +29,56 @@ export async function POST(req: Request) {
       title,
       description,
       priority,
-    } = body;
+    } = body as {
+      landlordEmail?: string | null;
+      tenantName?: string | null;
+      tenantEmail?: string | null;
+      propertyName?: string | null;
+      unitLabel?: string | null;
+      title?: string | null;
+      description?: string | null;
+      priority?: string | null;
+    };
 
-    // --- Read env vars at request-time, NOT at module load ---
-    const apiKey = process.env.RESEND_API_KEY;
-    const hasResendKey = !!apiKey;
-
-    const fallbackTo =
-      process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL || null;
-
+    // ----- Read server envs -----
+    const hasResendKey = !!process.env.RESEND_API_KEY;
+    const fallbackTo = process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL || null;
     const fromEnv = process.env.RENTZENTRO_FROM_EMAIL;
-    // fallback is the Resend default sender
+
+    // Always prefer env "from", but fall back to Resend’s onboarding address
     const from =
       fromEnv && fromEnv.trim().length > 0
         ? fromEnv
         : 'RentZentro <onboarding@resend.dev>';
 
+    // Prefer landlordEmail from body, fall back to env notify email
     const to = landlordEmail || fallbackTo;
 
-    console.log('Maintenance email route hit with:', {
+    const debug = {
       hasResendKey,
-      from,
-      to,
-      landlordEmail,
-      fallbackTo,
-      tenantName,
-      tenantEmail,
-      propertyName,
-      unitLabel,
-      title,
-      priority,
-    });
+      landlordEmailInBody: landlordEmail || null,
+      fallbackToEnv: fallbackTo,
+      fromEnv: fromEnv || null,
+      finalFrom: from || null,
+      finalTo: to || null,
+    };
 
-    // If config is missing, DO NOT crash, just skip email
+    console.log('Maintenance email route hit with debug:', debug);
+
+    // If we’re missing critical config, report it (but don’t hard-fail the request)
     if (!hasResendKey || !to || !from) {
-      console.error('Email configuration missing on server.', {
-        hasResendKey,
-        from,
-        to,
-      });
+      console.error('Email configuration missing on server.', debug);
 
       return NextResponse.json(
         {
           ok: true,
           emailSent: false,
           error: 'Email configuration missing on server.',
+          debug,
         },
         { status: 200 }
       );
     }
-
-    // --- Create Resend client now that we know apiKey exists ---
-    const resend = new Resend(apiKey);
 
     const subject = `New maintenance request: ${title || 'No title'}`;
 
@@ -175,4 +177,3 @@ export async function POST(req: Request) {
     );
   }
 }
-
