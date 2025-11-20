@@ -131,7 +131,9 @@ export default function TenantMaintenancePage() {
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
   ) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -172,34 +174,37 @@ export default function TenantMaintenancePage() {
       if (insertError) throw insertError;
 
       // Optimistically update list in UI
-      setRequests((prev) => [
-        insertData as MaintenanceRow,
-        ...prev,
-      ]);
+      setRequests((prev) => [insertData as MaintenanceRow, ...prev]);
 
-      // 2) Fire-and-forget email to landlord
-      const landlordEmail =
-        property?.landlord_email || process.env.NEXT_PUBLIC_FALLBACK_EMAIL || '';
+      // 2) Always call the email route (server handles fallbacks)
+      const landlordEmail = property?.landlord_email ?? null;
 
-      if (landlordEmail) {
-        // Note: even if this fails, the request itself is still saved.
-        fetch('/api/maintenance-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            landlordEmail,
-            tenantName: tenant.name,
-            tenantEmail: tenant.email,
-            propertyName: property?.name,
-            unitLabel: property?.unit_label,
-            title: form.title,
-            description: form.description,
-            priority: form.priority,
-          }),
-        }).catch((err) => {
-          console.error('Maintenance email fire-and-forget error:', err);
-        });
-      }
+      console.log('Client: calling /api/maintenance-email with:', {
+        landlordEmail,
+        tenantName: tenant.name,
+        tenantEmail: tenant.email,
+        propertyName: property?.name,
+        unitLabel: property?.unit_label,
+        title: form.title,
+        priority: form.priority,
+      });
+
+      fetch('/api/maintenance-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          landlordEmail, // may be null; server will fall back to env email
+          tenantName: tenant.name,
+          tenantEmail: tenant.email,
+          propertyName: property?.name,
+          unitLabel: property?.unit_label,
+          title: form.title,
+          description: form.description,
+          priority: form.priority,
+        }),
+      }).catch((err) => {
+        console.error('Maintenance email fire-and-forget error:', err);
+      });
 
       setForm(emptyForm);
       setSuccess('Your maintenance request has been submitted.');
@@ -237,7 +242,9 @@ export default function TenantMaintenancePage() {
             >
               ← Back
             </button>
-            <h1 className="mt-2 text-2xl font-semibold">Maintenance requests</h1>
+            <h1 className="mt-2 text-2xl font-semibold">
+              Maintenance requests
+            </h1>
             <p className="text-xs text-slate-400 mt-1">
               Submit a maintenance request for your unit and track its status.
             </p>
@@ -333,7 +340,9 @@ export default function TenantMaintenancePage() {
                     <option value="low">Low</option>
                     <option value="normal">Normal</option>
                     <option value="high">High</option>
-                    <option value="emergency">Emergency (already called)</option>
+                    <option value="emergency">
+                      Emergency (already called)
+                    </option>
                   </select>
                 </div>
 
@@ -372,9 +381,7 @@ export default function TenantMaintenancePage() {
                       <p className="text-[11px] font-semibold text-slate-100 truncate">
                         {r.title || 'Maintenance request'}
                       </p>
-                      <span
-                        className="text-[10px] px-2 py-0.5 rounded-full border border-slate-700 text-slate-200"
-                      >
+                      <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-700 text-slate-200">
                         {r.status || 'open'}
                       </span>
                     </div>
@@ -383,9 +390,7 @@ export default function TenantMaintenancePage() {
                     </p>
                     <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
                       <span>{new Date(r.created_at).toLocaleString()}</span>
-                      {r.priority && (
-                        <span>Priority: {r.priority}</span>
-                      )}
+                      {r.priority && <span>Priority: {r.priority}</span>}
                     </div>
                   </div>
                 ))}
