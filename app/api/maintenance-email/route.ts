@@ -6,7 +6,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 /**
  * Expects JSON body like:
  * {
- *   landlordEmail: string;
+ *   landlordEmail?: string;
  *   tenantName?: string;
  *   tenantEmail?: string;
  *   propertyName?: string;
@@ -18,6 +18,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  */
 export async function POST(req: Request) {
   try {
+    // --- Parse body ---
     const body = await req.json();
 
     const {
@@ -40,18 +41,27 @@ export async function POST(req: Request) {
       priority?: string | null;
     };
 
-    const fallbackTo = process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL || null;
-    const from = process.env.RENTZENTRO_FROM_EMAIL;
+    const fallbackTo =
+      process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL || null;
+    const from = process.env.RENTZENTRO_FROM_EMAIL || null;
+    const to = (landlordEmail || fallbackTo) ?? null;
 
-    const to = landlordEmail || fallbackTo;
+    // --- Debug logging so we can see what's happening ---
+    console.log('Maintenance email route hit with:', {
+      hasResendKey: !!process.env.RESEND_API_KEY,
+      from,
+      to,
+      landlordEmail,
+      fallbackTo,
+    });
 
     if (!from || !to) {
-      console.error(
-        'Missing email configuration. From:',
-        !!from,
-        'To:',
-        !!to
-      );
+      console.error('Missing email configuration in maintenance-email route', {
+        from,
+        to,
+        fallbackTo,
+      });
+
       return NextResponse.json(
         { error: 'Email configuration is missing on the server.' },
         { status: 500 }
@@ -61,49 +71,50 @@ export async function POST(req: Request) {
     const subject = `New maintenance request: ${title || 'No title'}`;
 
     const html = `
-      <div style="font-family: system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:#0f172a;">
-        <h2 style="margin-bottom:4px;">New maintenance request</h2>
-        <p style="margin:0 0 12px 0;color:#6b7280;">
+      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: #0f172a;">
+        <h2 style="margin-bottom: 4px; color:#0f172a;">New maintenance request</h2>
+        <p style="margin: 0 0 12px 0; color:#64748b;">
           A tenant submitted a new maintenance request in RentZentro.
         </p>
 
-        <table style="border-collapse:collapse;margin-bottom:16px;">
+        <table style="border-collapse: collapse; margin-bottom: 16px;">
           <tbody>
             <tr>
-              <td style="padding:2px 8px 2px 0;color:#6b7280;">Tenant:</td>
-              <td style="padding:2px 0;">${tenantName || 'Unknown'}</td>
+              <td style="padding: 2px 8px 2px 0; color:#64748b;">Tenant:</td>
+              <td style="padding: 2px 0;">${tenantName || 'Unknown'}</td>
             </tr>
             <tr>
-              <td style="padding:2px 8px 2px 0;color:#6b7280;">Email:</td>
-              <td style="padding:2px 0;">${tenantEmail || 'Unknown'}</td>
+              <td style="padding: 2px 8px 2px 0; color:#64748b;">Email:</td>
+              <td style="padding: 2px 0;">${tenantEmail || 'Unknown'}</td>
             </tr>
             <tr>
-              <td style="padding:2px 8px 2px 0;color:#6b7280;">Property:</td>
-              <td style="padding:2px 0;">
-                ${propertyName || 'Not set'}
-                ${unitLabel ? ` · ${unitLabel}` : ''}
+              <td style="padding: 2px 8px 2px 0; color:#64748b;">Property:</td>
+              <td style="padding: 2px 0;">
+                ${propertyName || 'Not set'}${unitLabel ? ` · ${unitLabel}` : ''}
               </td>
             </tr>
             ${
               priority
-                ? `<tr>
-                     <td style="padding:2px 8px 2px 0;color:#6b7280;">Priority:</td>
-                     <td style="padding:2px 0;">${priority}</td>
-                   </tr>`
+                ? `
+            <tr>
+              <td style="padding: 2px 8px 2px 0; color:#64748b;">Priority:</td>
+              <td style="padding: 2px 0;">${priority}</td>
+            </tr>
+            `
                 : ''
             }
           </tbody>
         </table>
 
-        <p style="margin:0 0 4px 0;color:#6b7280;">Request title:</p>
-        <p style="margin:0 0 12px 0;"><strong>${title || 'No title'}</strong></p>
+        <p style="margin: 0 0 4px 0; color:#64748b;"><strong>Request title:</strong></p>
+        <p style="margin: 0 0 12px 0;">${title || 'No title'}</p>
 
-        <p style="margin:0 0 4px 0;color:#6b7280;">Details:</p>
-        <p style="margin:0 0 16px 0;white-space:pre-wrap;">${
-          description || 'No description provided.'
-        }</p>
+        <p style="margin: 0 0 4px 0; color:#64748b;"><strong>Details:</strong></p>
+        <p style="margin: 0 0 16px 0; white-space: pre-wrap;">
+          ${description || 'No description provided.'}
+        </p>
 
-        <p style="margin:0;color:#6b7280;">
+        <p style="margin: 0; color:#64748b;">
           Log in to your RentZentro landlord portal to view and manage this request.
         </p>
       </div>
@@ -124,6 +135,7 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log('Maintenance email sent successfully via Resend.');
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error('Maintenance email route error:', err);

@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@react-email/render": "^1.4.0",
     "@stripe/stripe-js": "^8.4.0",
     "@supabase/supabase-js": "^2.81.1",
     "@types/node": "20.6.2",
@@ -21,6 +22,7 @@
     "postcss": "8.4.30",
     "react": "18.2.0",
     "react-dom": "18.2.0",
+    "resend": "^6.5.2",
     "stripe": "^19.3.1",
     "tailwindcss": "3.3.3",
     "typescript": "5.2.2"
