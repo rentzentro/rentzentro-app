@@ -1,50 +1,54 @@
-import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { NextResponse } from 'next/server';
 
-const stripeSecret = process.env.STRIPE_SECRET_KEY;
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
-export async function POST(req: NextRequest) {
-  if (!stripeSecret) {
-    console.error('Missing STRIPE_SECRET_KEY');
-    return NextResponse.json(
-      { error: 'Payment system is not configured.' },
-      { status: 500 }
-    );
-  }
+if (!stripeSecretKey) {
+  console.warn('STRIPE_SECRET_KEY is not set in environment variables.');
+}
 
-  const stripe = new Stripe(stripeSecret, {
-    apiVersion: '2024-06-20' as any,
-  });
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, {
+      apiVersion: '2025-11-15',
+    })
+  : null;
 
-  let body: any = {};
+export async function POST(req: Request) {
   try {
-    body = await req.json();
-  } catch {
-    body = {};
-  }
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Stripe is not configured on the server.' },
+        { status: 500 }
+      );
+    }
 
-  const rawAmount = body.amount;
-  const amount = Number(rawAmount);
-  const description =
-    typeof body.description === 'string' && body.description.trim().length > 0
-      ? body.description.trim()
-      : 'Rent payment';
+    const body = await req.json();
 
-  if (!amount || isNaN(amount) || amount <= 0) {
-    return NextResponse.json(
-      { error: 'Invalid amount supplied for payment.' },
-      { status: 400 }
-    );
-  }
+    const {
+      amount,
+      description,
+      tenantId,
+      propertyId,
+    } = body as {
+      amount?: number;
+      description?: string;
+      tenantId?: number;
+      propertyId?: number | null;
+    };
 
-  // Figure out our base URL (Vercel / production / local)
-  const originHeader = req.headers.get('origin');
-  const origin =
-    originHeader ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    'http://localhost:3000';
+    if (!amount || isNaN(amount)) {
+      return NextResponse.json(
+        { error: 'A valid amount is required to start checkout.' },
+        { status: 400 }
+      );
+    }
 
-  try {
+    // Base URL for success/cancel
+    const origin =
+      req.headers.get('origin') ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      'http://localhost:3000';
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -52,44 +56,40 @@ export async function POST(req: NextRequest) {
         {
           price_data: {
             currency: 'usd',
-            product_data: { name: description },
-            unit_amount: Math.round(amount * 100),
+            product_data: {
+              name: description || 'Rent payment',
+            },
+            unit_amount: Math.round(amount * 100), // dollars → cents
           },
           quantity: 1,
         },
       ],
-      // 👇 These must exactly match our Next.js routes below
       success_url: `${origin}/tenant/payment-success`,
-      cancel_url: `${origin}/tenant/payment-cancelled`,
+      cancel_url: `${origin}/tenant/payment-cancel`,
       metadata: {
-        tenant_id: body.tenantId ? String(body.tenantId) : '',
-        property_id: body.propertyId ? String(body.propertyId) : '',
+        tenantId: tenantId != null ? String(tenantId) : '',
+        propertyId: propertyId != null ? String(propertyId) : '',
+        // Optional: also store the amount we intended to charge
+        intendedAmount: String(amount),
       },
     });
 
     if (!session.url) {
-      console.error('Stripe session created with no URL:', session.id);
       return NextResponse.json(
-        { error: 'Stripe session created with no URL.' },
+        { error: 'Stripe did not return a checkout URL.' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ url: session.url });
   } catch (err: any) {
-    console.error('Stripe Checkout Error:', err);
+    console.error('Error creating Stripe Checkout session:', err);
     return NextResponse.json(
       {
         error:
-          err?.message ??
-          'Unexpected error creating payment session. Please try again.',
+          err?.message || 'Failed to create Stripe Checkout session.',
       },
       { status: 500 }
     );
   }
-}
-
-export function GET() {
-  // When you open /api/checkout in the browser directly, this is expected
-  return NextResponse.json({ error: 'Method not allowed.' }, { status: 405 });
 }
