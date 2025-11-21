@@ -36,6 +36,11 @@ type PaymentRow = {
   note: string | null;
 };
 
+type MaintenanceRow = {
+  id: number;
+  status: string | null;
+};
+
 // ---------- Helpers ----------
 
 const formatCurrency = (v: number | null | undefined) =>
@@ -51,8 +56,19 @@ const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '-';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
+
+  // Use viewer's local timezone + full month style (A + T)
+  const local = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    d.getHours(),
+    d.getMinutes(),
+    d.getSeconds()
+  );
+
+  return local.toLocaleDateString('en-US', {
+    month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
@@ -74,6 +90,7 @@ export default function LandlordDashboardPage() {
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // ---------- Load data ----------
@@ -84,29 +101,33 @@ export default function LandlordDashboardPage() {
       setError(null);
 
       try {
-        const [propRes, tenantRes, paymentRes] = await Promise.all([
-          supabase
-            .from('properties')
-            .select('*')
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('tenants')
-            .select('*')
-            .order('created_at', { ascending: false }),
+        const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
+          supabase.from('properties').select('*').order('created_at', {
+            ascending: false,
+          }),
+          supabase.from('tenants').select('*').order('created_at', {
+            ascending: false,
+          }),
           supabase
             .from('payments')
             .select('*')
             .order('paid_on', { ascending: false })
             .limit(10),
+          supabase
+            .from('maintenance_requests')
+            .select('id, status')
+            .order('created_at', { ascending: false }),
         ]);
 
         if (propRes.error) throw propRes.error;
         if (tenantRes.error) throw tenantRes.error;
         if (paymentRes.error) throw paymentRes.error;
+        if (maintRes.error) throw maintRes.error;
 
         setProperties((propRes.data || []) as PropertyRow[]);
         setTenants((tenantRes.data || []) as TenantRow[]);
         setPayments((paymentRes.data || []) as PaymentRow[]);
+        setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Failed to load landlord dashboard data.');
@@ -166,6 +187,10 @@ export default function LandlordDashboardPage() {
   const tenantById = new Map<number, TenantRow>();
   tenants.forEach((t) => tenantById.set(t.id, t));
 
+  const newMaintenanceCount = maintenanceRequests.filter(
+    (m) => m.status?.toLowerCase() === 'new'
+  ).length;
+
   // ---------- Actions ----------
 
   const handleSignOut = async () => {
@@ -187,7 +212,7 @@ export default function LandlordDashboardPage() {
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
         {/* Header / breadcrumb */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <div className="text-xs text-slate-500 flex gap-2">
               <Link href="/landlord" className="hover:text-emerald-400">
@@ -204,30 +229,37 @@ export default function LandlordDashboardPage() {
             </p>
           </div>
 
-          {/* Right side buttons (stack on mobile) */}
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            {/* Settings now links to /landlord/settings */}
-            <Link
-              href="/landlord/settings"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 text-center"
+          <div className="flex flex-wrap gap-2 md:justify-end">
+            {/* Settings (coming soon) */}
+            <button
+              type="button"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
             >
-              Settings
-            </Link>
+              Settings (coming soon)
+            </button>
 
+            {/* Documents */}
             <Link
               href="/landlord/documents"
-              className="text-xs px-3 py-2 rounded-full border border-emerald-600 bg-slate-900 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200 text-center"
+              className="text-xs px-3 py-2 rounded-full border border-emerald-600 bg-slate-900 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
             >
               Documents
             </Link>
 
+            {/* Maintenance with badge */}
             <Link
               href="/landlord/maintenance"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 text-center"
+              className="relative flex items-center gap-1 text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
             >
-              Maintenance
+              <span>Maintenance</span>
+              {newMaintenanceCount > 0 && (
+                <span className="ml-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
+                  {newMaintenanceCount}
+                </span>
+              )}
             </Link>
 
+            {/* Sign out */}
             <button
               type="button"
               onClick={handleSignOut}
@@ -314,7 +346,7 @@ export default function LandlordDashboardPage() {
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Link
                 href="/landlord/properties"
                 className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
@@ -402,7 +434,9 @@ export default function LandlordDashboardPage() {
             {/* Not due yet */}
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold text-emerald-200">Not due yet</p>
+                <p className="font-semibold text-emerald-200">
+                  Not due yet
+                </p>
                 <span className="text-[11px] text-emerald-200/80">
                   {notDueYet.length}
                 </span>
@@ -576,8 +610,8 @@ export default function LandlordDashboardPage() {
             )}
 
             <p className="mt-3 text-[11px] text-slate-500">
-              Once Stripe webhooks are connected, card payments from tenants
-              will appear here automatically.
+              Card payments from tenants are recorded here automatically after
+              Stripe confirms the payment.
             </p>
           </section>
         </div>

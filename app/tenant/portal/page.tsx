@@ -59,8 +59,19 @@ const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '-';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
+
+  // Viewer local timezone, full month (A + T)
+  const local = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    d.getHours(),
+    d.getMinutes(),
+    d.getSeconds()
+  );
+
+  return local.toLocaleDateString('en-US', {
+    month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
@@ -183,7 +194,9 @@ export default function TenantPortalPage() {
     }
 
     const amount =
-      tenant.monthly_rent ?? property?.monthly_rent ?? null;
+      tenant.monthly_rent ??
+      property?.monthly_rent ??
+      null;
 
     if (!amount || isNaN(amount)) {
       setError(
@@ -248,7 +261,7 @@ export default function TenantPortalPage() {
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
         {/* Header + logout button */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
           <div>
             <div className="text-xs text-slate-500 flex gap-2">
               <button
@@ -337,6 +350,13 @@ export default function TenantPortalPage() {
                   className="w-full text-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-800"
                 >
                   Mark rent as paid (manual)
+                </Link>
+
+                <Link
+                  href="/tenant/maintenance"
+                  className="w-full text-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-800"
+                >
+                  Submit a maintenance request
                 </Link>
               </div>
 
@@ -484,34 +504,6 @@ export default function TenantPortalPage() {
               <p className="mt-3 text-[11px] text-slate-500">
                 Documents here are read-only. For questions about any lease
                 terms, reach out to your landlord.
-              </p>
-            </section>
-
-            {/* Maintenance & requests */}
-            <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Maintenance & requests
-              </p>
-              <p className="mt-1 text-sm font-medium text-slate-50">
-                Report an issue or request repairs
-              </p>
-              <p className="mt-2 text-xs text-slate-400">
-                If something in your unit needs attention, you can submit a
-                maintenance request so your landlord can review and respond.
-              </p>
-
-              <div className="mt-3">
-                <Link
-                  href="/tenant/maintenance"
-                  className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800"
-                >
-                  View / submit maintenance requests
-                </Link>
-              </div>
-
-              <p className="mt-2 text-[11px] text-slate-500">
-                For emergencies (fire, gas leak, major water damage), contact
-                local emergency services first, then notify your landlord.
               </p>
             </section>
           </div>
