@@ -57,7 +57,7 @@ const formatDate = (iso: string | null | undefined) => {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '-';
 
-  // Use viewer's local timezone + full month style (A + T)
+  // Viewer local timezone, full month name
   const local = new Date(
     d.getFullYear(),
     d.getMonth(),
@@ -230,13 +230,13 @@ export default function LandlordDashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
-            {/* Settings (coming soon) */}
-            <button
-              type="button"
+            {/* Settings (real page) */}
+            <Link
+              href="/landlord/settings"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
             >
-              Settings (coming soon)
-            </button>
+              Settings
+            </Link>
 
             {/* Documents */}
             <Link
