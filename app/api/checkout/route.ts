@@ -1,95 +1,55 @@
+import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { NextResponse } from 'next/server';
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+export const runtime = 'nodejs';
 
-if (!stripeSecretKey) {
-  console.warn('STRIPE_SECRET_KEY is not set in environment variables.');
+const stripeSecret = process.env.STRIPE_SECRET_KEY;
+if (!stripeSecret) {
+  console.error("❌ Missing STRIPE_SECRET_KEY");
 }
 
-const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, {
-      apiVersion: '2025-11-15',
-    })
-  : null;
+const stripe = new Stripe(stripeSecret!, {
+  apiVersion: '2024-06-20', // REAL stable API version
+});
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    if (!stripe) {
-      return NextResponse.json(
-        { error: 'Stripe is not configured on the server.' },
-        { status: 500 }
-      );
-    }
-
     const body = await req.json();
+    const { amount, tenantId, propertyId, tenantEmail } = body;
 
-    const {
-      amount,
-      description,
-      tenantId,
-      propertyId,
-    } = body as {
-      amount?: number;
-      description?: string;
-      tenantId?: number;
-      propertyId?: number | null;
-    };
-
-    if (!amount || isNaN(amount)) {
-      return NextResponse.json(
-        { error: 'A valid amount is required to start checkout.' },
-        { status: 400 }
-      );
+    if (!amount || !tenantId || !propertyId) {
+      console.log("❌ Missing checkout body fields:", body);
+      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
-    // Base URL for success/cancel
-    const origin =
-      req.headers.get('origin') ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      'http://localhost:3000';
+    console.log("➡️ Creating Stripe session with:", body);
 
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: ['card'],
+      mode: "payment",
+      customer_email: tenantEmail || undefined,
       line_items: [
         {
           price_data: {
-            currency: 'usd',
+            currency: "usd",
             product_data: {
-              name: description || 'Rent payment',
+              name: "Rent Payment",
             },
-            unit_amount: Math.round(amount * 100), // dollars → cents
+            unit_amount: Math.round(amount * 100),
           },
           quantity: 1,
         },
       ],
-      success_url: `${origin}/tenant/payment-success`,
-      cancel_url: `${origin}/tenant/payment-cancel`,
       metadata: {
-        tenantId: tenantId != null ? String(tenantId) : '',
-        propertyId: propertyId != null ? String(propertyId) : '',
-        // Optional: also store the amount we intended to charge
-        intendedAmount: String(amount),
+        tenant_id: String(tenantId),
+        property_id: String(propertyId),
       },
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/payment-success`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/payment-cancelled`,
     });
-
-    if (!session.url) {
-      return NextResponse.json(
-        { error: 'Stripe did not return a checkout URL.' },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({ url: session.url });
   } catch (err: any) {
-    console.error('Error creating Stripe Checkout session:', err);
-    return NextResponse.json(
-      {
-        error:
-          err?.message || 'Failed to create Stripe Checkout session.',
-      },
-      { status: 500 }
-    );
+    console.error("❌ Checkout error:", err);
+    return NextResponse.json({ error: "Checkout failed" }, { status: 500 });
   }
 }
