@@ -58,9 +58,8 @@ const formatCurrency = (v: number | null | undefined) =>
 const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '-';
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return '-';
+  if (Number.isNaN(d.getTime())) return '-';
 
-  // Viewer local timezone, full month (A + T)
   const local = new Date(
     d.getFullYear(),
     d.getMonth(),
@@ -77,6 +76,19 @@ const formatDate = (iso: string | null | undefined) => {
   });
 };
 
+const formatDateTime = (iso: string | null | undefined) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
 // ---------- Component ----------
 
 export default function TenantPortalPage() {
@@ -88,6 +100,7 @@ export default function TenantPortalPage() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
 
   // ---------- Load tenant + related data ----------
@@ -96,9 +109,9 @@ export default function TenantPortalPage() {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setSuccess(null);
 
       try {
-        // Get current auth user
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
         if (authError) throw authError;
@@ -107,7 +120,7 @@ export default function TenantPortalPage() {
           throw new Error('Unable to load tenant: missing email.');
         }
 
-        // Find tenant by email
+        // Tenant
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select('*')
@@ -115,30 +128,28 @@ export default function TenantPortalPage() {
           .limit(1);
 
         if (tenantError) throw tenantError;
-        const t = (tenantRows || [])[0] as TenantRow | undefined;
+        const t = (tenantRows && tenantRows[0]) as TenantRow | undefined;
         if (!t) {
-          throw new Error(
-            "We couldn't find your tenant record. Please contact your landlord."
-          );
+          throw new Error('Tenant not found for logged-in user.');
         }
 
         setTenant(t);
 
-        // Load property (if any)
-        let prop: PropertyRow | null = null;
+        // Property
         if (t.property_id) {
-          const { data: propRows, error: propError } = await supabase
+          const { data: propRow, error: propError } = await supabase
             .from('properties')
             .select('*')
             .eq('id', t.property_id)
-            .limit(1);
+            .single();
 
           if (propError) throw propError;
-          prop = ((propRows || [])[0] as PropertyRow | undefined) || null;
+          setProperty(propRow as PropertyRow);
+        } else {
+          setProperty(null);
         }
-        setProperty(prop);
 
-        // Load payments
+        // Payments
         const { data: payRows, error: payError } = await supabase
           .from('payments')
           .select('*')
@@ -149,7 +160,7 @@ export default function TenantPortalPage() {
         if (payError) throw payError;
         setPayments((payRows || []) as PaymentRow[]);
 
-        // Load documents linked to this property (lease/docs)
+        // Documents
         if (t.property_id) {
           const { data: docRows, error: docError } = await supabase
             .from('documents')
@@ -188,25 +199,24 @@ export default function TenantPortalPage() {
   };
 
   const handlePayWithCard = async () => {
-    if (!tenant) {
-      setError('Unable to start payment: missing tenant record.');
-      return;
-    }
+    if (!tenant) return;
 
     const amount =
-      tenant.monthly_rent ??
       property?.monthly_rent ??
-      null;
+      tenant.monthly_rent ??
+      0;
 
-    if (!amount || isNaN(amount)) {
+    if (!amount || amount <= 0) {
       setError(
-        'Unable to start payment: monthly rent is not set. Please contact your landlord.'
+        'Your monthly rent amount is not set. Please contact your landlord.'
       );
+      setSuccess(null);
       return;
     }
 
     setPaying(true);
     setError(null);
+    setSuccess(null);
 
     try {
       const res = await fetch('/api/checkout', {
@@ -237,97 +247,124 @@ export default function TenantPortalPage() {
 
       window.location.href = data.url;
     } catch (err: any) {
-      console.error('Stripe Checkout Error:', err);
+      console.error(err);
       setError(
         err?.message ||
-          'Unexpected error starting payment. Please try again or contact support.'
+          'Something went wrong while starting your card payment. Please try again.'
       );
     } finally {
       setPaying(false);
     }
   };
 
-  // ---------- UI ----------
+  // ---------- Render ----------
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-50 p-6">
-        <p>Loading your tenant portal…</p>
-      </div>
+      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
+        <p className="text-sm text-slate-400">
+          Loading your tenant portal…
+        </p>
+      </main>
     );
   }
 
+  if (!tenant) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-700 p-6 shadow-xl space-y-4">
+          <p className="text-sm text-red-400">
+            {error ||
+              'We could not find a tenant record for this account. Please reach out to your landlord.'}
+          </p>
+          <button
+            onClick={handleLogOut}
+            className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+          >
+            Back to login
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  const currentRent =
+    property?.monthly_rent ??
+    tenant.monthly_rent ??
+    null;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-8">
-        {/* Header + logout button */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
-          <div>
-            <div className="text-xs text-slate-500 flex gap-2">
-              <button
-                type="button"
-                onClick={handleBack}
-                className="text-slate-400 hover:text-emerald-400 underline-offset-2 hover:underline"
-              >
-                ← Back
-              </button>
-            </div>
-            <h1 className="text-xl font-semibold mt-1 text-slate-50">
+    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
+      <div className="mx-auto max-w-5xl space-y-4">
+        {/* Global banner */}
+        {(success || error) && (
+          <div
+            className={`rounded-xl border px-4 py-2 text-sm ${
+              success
+                ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200'
+                : 'border-red-500/60 bg-red-500/10 text-red-200'
+            }`}
+          >
+            {success || error}
+          </div>
+        )}
+
+        {/* Header row */}
+        <header className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="text-[11px] text-slate-500 hover:text-emerald-300"
+            >
+              ← Back
+            </button>
+            <h1 className="text-lg font-semibold text-slate-50">
               Tenant portal
             </h1>
-            <p className="text-[13px] text-slate-400">
+            <p className="text-[11px] text-slate-400">
               View your rent details, lease info, documents, and payment history.
             </p>
           </div>
-
-          {/* RIGHT SIDE: Tenant info + Logout */}
-          <div className="flex flex-col items-end gap-2">
-            <div className="text-right text-xs text-slate-400">
-              <p className="text-slate-300 font-medium">
-                {tenant?.name || 'Tenant account'}
+          <div className="flex flex-col items-end gap-2 text-right">
+            <div className="text-xs">
+              <p className="font-medium text-slate-100">
+                {tenant.name || 'Tenant'}
               </p>
-              <p className="truncate max-w-[180px]">{tenant?.email}</p>
+              <p className="text-slate-400 text-[11px]">
+                {tenant.email}
+              </p>
             </div>
-
             <button
               onClick={handleLogOut}
-              className="text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
             >
               Log out
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Error */}
-        {error && (
-          <div className="mb-4 rounded-2xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-sm text-rose-100">
-            {error}
-          </div>
-        )}
-
-        {/* MAIN CONTENT */}
+        {/* Main grid */}
         <div className="grid gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)]">
           {/* LEFT COLUMN */}
           <div className="space-y-4">
-            {/* Current Rent Card */}
+            {/* Current rent / actions */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
                 Current rent
               </p>
-              <h2 className="mt-1 text-2xl font-semibold text-slate-50">
-                {formatCurrency(
-                  tenant?.monthly_rent ?? property?.monthly_rent ?? null
-                )}
-              </h2>
-
+              <div className="mt-1 flex items-baseline gap-2">
+                <p className="text-2xl font-semibold text-slate-50">
+                  {formatCurrency(currentRent)}
+                </p>
+              </div>
               <p className="mt-1 text-xs text-slate-400">
                 Next due date:{' '}
                 <span className="text-slate-200">
                   {formatDate(property?.next_due_date)}
                 </span>
               </p>
-
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-slate-400">
                 Property:{' '}
                 <span className="text-slate-200">
                   {property?.name || 'Not set'}
@@ -340,7 +377,7 @@ export default function TenantPortalPage() {
                   type="button"
                   onClick={handlePayWithCard}
                   disabled={paying}
-                  className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {paying ? 'Starting payment…' : 'Pay rent securely with card'}
                 </button>
@@ -351,13 +388,6 @@ export default function TenantPortalPage() {
                 >
                   Mark rent as paid (manual)
                 </Link>
-
-                <Link
-                  href="/tenant/maintenance"
-                  className="w-full text-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-800"
-                >
-                  Submit a maintenance request
-                </Link>
               </div>
 
               <p className="mt-3 text-[11px] text-slate-500">
@@ -367,9 +397,9 @@ export default function TenantPortalPage() {
               </p>
             </section>
 
-            {/* Payment History */}
+            {/* Payment history */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-slate-500 uppercase tracking-wide">
                     Payment history
@@ -389,22 +419,26 @@ export default function TenantPortalPage() {
                   {payments.map((p) => (
                     <div
                       key={p.id}
-                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
+                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"
                     >
-                      <div>
-                        <p className="font-medium text-slate-100">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-slate-50">
                           {formatCurrency(p.amount)}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {formatDate(p.paid_on)} •{' '}
-                          {p.method || 'Method not specified'}
-                        </p>
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {formatDateTime(p.paid_on)}
+                        </span>
                       </div>
-                      {p.note && (
-                        <p className="max-w-[200px] truncate text-[11px] text-slate-500 text-right">
-                          {p.note}
+                      <div className="text-right">
+                        <p className="text-[11px] text-slate-300">
+                          {p.method || 'Payment'}
                         </p>
-                      )}
+                        {p.note && (
+                          <p className="mt-0.5 text-[10px] text-slate-500">
+                            {p.note}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -420,34 +454,34 @@ export default function TenantPortalPage() {
                 Account status
               </p>
               <h2 className="mt-1 text-sm font-semibold text-slate-50">
-                {tenant?.name || 'Tenant account'}
+                {tenant.name || 'Tenant account'}
               </h2>
-              <p className="mt-1 text-xs text-slate-400">{tenant?.email}</p>
+              <p className="mt-1 text-xs text-slate-400">{tenant.email}</p>
 
               <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3 py-1 text-[11px] text-emerald-100">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                {tenant?.status?.toLowerCase() === 'current'
+                {tenant.status?.toLowerCase() === 'current'
                   ? 'Current tenant in good standing'
-                  : tenant?.status || 'Status not set'}
+                  : tenant.status || 'Status not set'}
               </div>
 
-              <dl className="mt-4 space-y-2 text-xs">
-                <div className="flex justify-between gap-4">
+              <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-[11px]">
+                <div>
                   <dt className="text-slate-500">Lease start</dt>
-                  <dd className="text-slate-200">
-                    {formatDate(tenant?.lease_start)}
+                  <dd className="text-slate-100">
+                    {formatDate(tenant.lease_start)}
                   </dd>
                 </div>
-                <div className="flex justify-between gap-4">
+                <div>
                   <dt className="text-slate-500">Lease end</dt>
-                  <dd className="text-slate-200">
-                    {formatDate(tenant?.lease_end)}
+                  <dd className="text-slate-100">
+                    {formatDate(tenant.lease_end)}
                   </dd>
                 </div>
-                <div className="flex justify-between gap-4">
+                <div>
                   <dt className="text-slate-500">Tenant phone</dt>
-                  <dd className="text-slate-200">
-                    {tenant?.phone || 'Not provided'}
+                  <dd className="text-slate-100">
+                    {tenant.phone || 'Not provided'}
                   </dd>
                 </div>
               </dl>
@@ -458,7 +492,7 @@ export default function TenantPortalPage() {
               </p>
             </section>
 
-            {/* Lease & documents */}
+            {/* Lease & documents + maintenance explanation */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
                 Lease & documents
@@ -478,21 +512,21 @@ export default function TenantPortalPage() {
                   {documents.map((doc) => (
                     <div
                       key={doc.id}
-                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
+                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"
                     >
                       <div className="min-w-0">
-                        <p className="font-medium text-slate-100 truncate">
+                        <p className="truncate text-slate-50 text-[13px]">
                           {doc.title}
                         </p>
-                        <p className="text-[11px] text-slate-400">
-                          Uploaded {formatDate(doc.created_at)}
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          Added {formatDateTime(doc.created_at)}
                         </p>
                       </div>
                       <a
                         href={doc.file_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                        className="ml-3 rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
                       >
                         Open
                       </a>
@@ -505,10 +539,32 @@ export default function TenantPortalPage() {
                 Documents here are read-only. For questions about any lease
                 terms, reach out to your landlord.
               </p>
+
+              {/* Maintenance explanation + button in this card */}
+              <div className="mt-4 border-t border-slate-800 pt-3 space-y-2">
+                <p className="text-[11px] text-slate-400">
+                  Use a maintenance request to report issues with your unit—
+                  for example plumbing, heating, appliances, or general repairs.
+                  Your request will be sent to your landlord and saved in your
+                  maintenance history.
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  For true emergencies (fire, active flooding, gas smells, or
+                  anything life-threatening), call your local emergency
+                  services first, then contact your landlord or property
+                  manager directly.
+                </p>
+                <Link
+                  href="/tenant/maintenance"
+                  className="mt-1 inline-flex w-full items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
+                >
+                  Submit a maintenance request
+                </Link>
+              </div>
             </section>
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
