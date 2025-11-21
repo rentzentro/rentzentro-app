@@ -75,7 +75,6 @@ export default function LandlordDashboardPage() {
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [openMaintenanceCount, setOpenMaintenanceCount] = useState<number | null>(null);
 
   // ---------- Load data ----------
 
@@ -86,12 +85,14 @@ export default function LandlordDashboardPage() {
 
       try {
         const [propRes, tenantRes, paymentRes] = await Promise.all([
-          supabase.from('properties').select('*').order('created_at', {
-            ascending: false,
-          }),
-          supabase.from('tenants').select('*').order('created_at', {
-            ascending: false,
-          }),
+          supabase
+            .from('properties')
+            .select('*')
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('tenants')
+            .select('*')
+            .order('created_at', { ascending: false }),
           supabase
             .from('payments')
             .select('*')
@@ -106,19 +107,6 @@ export default function LandlordDashboardPage() {
         setProperties((propRes.data || []) as PropertyRow[]);
         setTenants((tenantRes.data || []) as TenantRow[]);
         setPayments((paymentRes.data || []) as PaymentRow[]);
-
-        // 🔔 Count open maintenance requests (all open for now)
-        const { count, error: maintError } = await supabase
-          .from('maintenance_requests')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'open');
-
-        if (maintError) {
-          console.error('Error counting maintenance requests:', maintError);
-          setOpenMaintenanceCount(null);
-        } else {
-          setOpenMaintenanceCount(count ?? 0);
-        }
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Failed to load landlord dashboard data.');
@@ -199,7 +187,7 @@ export default function LandlordDashboardPage() {
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
         {/* Header / breadcrumb */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
             <div className="text-xs text-slate-500 flex gap-2">
               <Link href="/landlord" className="hover:text-emerald-400">
@@ -216,39 +204,30 @@ export default function LandlordDashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Settings (coming soon) */}
-            <button
-              type="button"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+          {/* Right side buttons (stack on mobile) */}
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {/* Settings now links to /landlord/settings */}
+            <Link
+              href="/landlord/settings"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 text-center"
             >
-              Settings (coming soon)
-            </button>
+              Settings
+            </Link>
 
-            {/* Documents */}
             <Link
               href="/landlord/documents"
-              className="text-xs px-3 py-2 rounded-full border border-emerald-600 bg-slate-900 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
+              className="text-xs px-3 py-2 rounded-full border border-emerald-600 bg-slate-900 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200 text-center"
             >
               Documents
             </Link>
 
-            {/* Maintenance with badge */}
             <Link
               href="/landlord/maintenance"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 text-center"
             >
-              <span className="inline-flex items-center gap-1.5">
-                Maintenance
-                {openMaintenanceCount !== null && openMaintenanceCount > 0 && (
-                  <span className="inline-flex items-center justify-center rounded-full bg-emerald-500 text-slate-950 text-[10px] font-semibold px-1.5 min-w-[1.4rem]">
-                    {openMaintenanceCount}
-                  </span>
-                )}
-              </span>
+              Maintenance
             </Link>
 
-            {/* Sign out */}
             <button
               type="button"
               onClick={handleSignOut}
@@ -423,9 +402,7 @@ export default function LandlordDashboardPage() {
             {/* Not due yet */}
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold text-emerald-200">
-                  Not due yet
-                </p>
+                <p className="font-semibold text-emerald-200">Not due yet</p>
                 <span className="text-[11px] text-emerald-200/80">
                   {notDueYet.length}
                 </span>
@@ -608,4 +585,3 @@ export default function LandlordDashboardPage() {
     </div>
   );
 }
-

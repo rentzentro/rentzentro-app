@@ -31,6 +31,7 @@ type MaintenanceRow = {
   description: string | null;
   priority: string | null;
   status: string | null;
+  resolution_note: string | null; // 👈 NEW
 };
 
 // ---------- Component ----------
@@ -104,7 +105,7 @@ export default function TenantMaintenancePage() {
         // Existing maintenance requests for this tenant
         const { data: reqRows, error: reqError } = await supabase
           .from('maintenance_requests')
-          .select('*')
+          .select('*') // includes resolution_note
           .eq('tenant_id', t.id)
           .order('created_at', { ascending: false });
 
@@ -166,7 +167,7 @@ export default function TenantMaintenancePage() {
           title: form.title.trim(),
           description: form.description.trim(),
           priority: form.priority,
-          status: 'open',
+          status: 'new', // 👈 match landlord page statuses
         })
         .select('*')
         .single();
@@ -176,24 +177,15 @@ export default function TenantMaintenancePage() {
       // Optimistically update list in UI
       setRequests((prev) => [insertData as MaintenanceRow, ...prev]);
 
-      // 2) Always call the email route (server handles fallbacks)
-      const landlordEmail = property?.landlord_email ?? null;
+      // 2) Fire-and-forget email to landlord
+      const landlordEmail =
+        property?.landlord_email ||
+        process.env.NEXT_PUBLIC_FALLBACK_EMAIL ||
+        '';
 
-      console.log('Client: calling /api/maintenance-email with:', {
-        landlordEmail,
-        tenantName: tenant.name,
-        tenantEmail: tenant.email,
-        propertyName: property?.name,
-        unitLabel: property?.unit_label,
-        title: form.title,
-        priority: form.priority,
-      });
-
-      fetch('/api/maintenance-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          landlordEmail, // may be null; server will fall back to env email
+      if (landlordEmail) {
+        console.log('Client: calling /api/maintenance-email with:', {
+          landlordEmail,
           tenantName: tenant.name,
           tenantEmail: tenant.email,
           propertyName: property?.name,
@@ -201,10 +193,25 @@ export default function TenantMaintenancePage() {
           title: form.title,
           description: form.description,
           priority: form.priority,
-        }),
-      }).catch((err) => {
-        console.error('Maintenance email fire-and-forget error:', err);
-      });
+        });
+
+        fetch('/api/maintenance-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            landlordEmail,
+            tenantName: tenant.name,
+            tenantEmail: tenant.email,
+            propertyName: property?.name,
+            unitLabel: property?.unit_label,
+            title: form.title,
+            description: form.description,
+            priority: form.priority,
+          }),
+        }).catch((err) => {
+          console.error('Maintenance email fire-and-forget error:', err);
+        });
+      }
 
       setForm(emptyForm);
       setSuccess('Your maintenance request has been submitted.');
@@ -242,9 +249,7 @@ export default function TenantMaintenancePage() {
             >
               ← Back
             </button>
-            <h1 className="mt-2 text-2xl font-semibold">
-              Maintenance requests
-            </h1>
+            <h1 className="mt-2 text-2xl font-semibold">Maintenance requests</h1>
             <p className="text-xs text-slate-400 mt-1">
               Submit a maintenance request for your unit and track its status.
             </p>
@@ -340,9 +345,7 @@ export default function TenantMaintenancePage() {
                     <option value="low">Low</option>
                     <option value="normal">Normal</option>
                     <option value="high">High</option>
-                    <option value="emergency">
-                      Emergency (already called)
-                    </option>
+                    <option value="emergency">Emergency (already called)</option>
                   </select>
                 </div>
 
@@ -382,12 +385,20 @@ export default function TenantMaintenancePage() {
                         {r.title || 'Maintenance request'}
                       </p>
                       <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-700 text-slate-200">
-                        {r.status || 'open'}
+                        {r.status || 'new'}
                       </span>
                     </div>
-                    <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
+                    <p className="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap">
                       {r.description || 'No description provided.'}
                     </p>
+
+                    {/* 👇 Landlord note visible to tenant */}
+                    {r.resolution_note && (
+                      <p className="mt-1 text-[11px] text-emerald-300 whitespace-pre-wrap">
+                        Landlord update: {r.resolution_note}
+                      </p>
+                    )}
+
                     <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
                       <span>{new Date(r.created_at).toLocaleString()}</span>
                       {r.priority && <span>Priority: {r.priority}</span>}
