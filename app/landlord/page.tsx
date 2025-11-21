@@ -75,6 +75,7 @@ export default function LandlordDashboardPage() {
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [openMaintenanceCount, setOpenMaintenanceCount] = useState<number | null>(null);
 
   // ---------- Load data ----------
 
@@ -105,6 +106,19 @@ export default function LandlordDashboardPage() {
         setProperties((propRes.data || []) as PropertyRow[]);
         setTenants((tenantRes.data || []) as TenantRow[]);
         setPayments((paymentRes.data || []) as PaymentRow[]);
+
+        // 🔔 Count open maintenance requests (all open for now)
+        const { count, error: maintError } = await supabase
+          .from('maintenance_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'open');
+
+        if (maintError) {
+          console.error('Error counting maintenance requests:', maintError);
+          setOpenMaintenanceCount(null);
+        } else {
+          setOpenMaintenanceCount(count ?? 0);
+        }
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Failed to load landlord dashboard data.');
@@ -219,12 +233,19 @@ export default function LandlordDashboardPage() {
               Documents
             </Link>
 
-            {/* Maintenance */}
+            {/* Maintenance with badge */}
             <Link
               href="/landlord/maintenance"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
             >
-              Maintenance
+              <span className="inline-flex items-center gap-1.5">
+                Maintenance
+                {openMaintenanceCount !== null && openMaintenanceCount > 0 && (
+                  <span className="inline-flex items-center justify-center rounded-full bg-emerald-500 text-slate-950 text-[10px] font-semibold px-1.5 min-w-[1.4rem]">
+                    {openMaintenanceCount}
+                  </span>
+                )}
+              </span>
             </Link>
 
             {/* Sign out */}
@@ -587,3 +608,4 @@ export default function LandlordDashboardPage() {
     </div>
   );
 }
+
