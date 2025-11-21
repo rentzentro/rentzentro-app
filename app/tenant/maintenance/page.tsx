@@ -28,9 +28,40 @@ type MaintenanceRow = {
   property_id: number;
   title: string;
   description: string;
-  status: string;
+  status: string | null;
   priority: string | null;
   created_at: string;
+};
+
+// ---------- Helpers ----------
+
+const emptyForm = {
+  title: '',
+  description: '',
+  priority: 'Normal',
+};
+
+const formatStatusLabel = (status: string | null) => {
+  if (!status) return 'Unknown';
+  const s = status.toLowerCase();
+  if (s === 'new') return 'New';
+  if (s === 'in progress') return 'In Progress';
+  if (s === 'resolved' || s === 'closed') return 'Resolved';
+  return status;
+};
+
+const statusBadgeClasses = (status: string | null) => {
+  const s = (status || '').toLowerCase();
+  if (s === 'new') {
+    return 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40';
+  }
+  if (s === 'in progress') {
+    return 'bg-amber-500/15 text-amber-300 border border-amber-500/40';
+  }
+  if (s === 'resolved' || s === 'closed') {
+    return 'bg-sky-500/15 text-sky-300 border border-sky-500/40';
+  }
+  return 'bg-slate-700 text-slate-200 border border-slate-500/60';
 };
 
 // ---------- Component ----------
@@ -39,25 +70,23 @@ export default function TenantMaintenancePage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
   const [tenant, setTenant] = useState<TenantRow | null>(null);
   const [property, setProperty] = useState<PropertyRow | null>(null);
   const [requests, setRequests] = useState<MaintenanceRow[]>([]);
 
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    priority: 'Normal',
-  });
-  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // ---------- Load tenant + property + maintenance ----------
+  // ---------- Load data ----------
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
+        setError(null);
 
         // Auth
         const { data: authData, error: authError } =
@@ -89,7 +118,7 @@ export default function TenantMaintenancePage() {
           throw new Error('Tenant is not assigned to a property.');
         }
 
-        // Property info (including landlord_email)
+        // Property info
         const { data: propertyRow, error: propertyError } = await supabase
           .from('properties')
           .select('*')
@@ -97,7 +126,6 @@ export default function TenantMaintenancePage() {
           .single();
 
         if (propertyError) throw propertyError;
-
         setProperty(propertyRow);
 
         // Existing maintenance requests for this tenant
@@ -149,7 +177,7 @@ export default function TenantMaintenancePage() {
       setError(null);
       setSuccess(null);
 
-      // 1) Insert into Supabase
+      // 1) Insert into Supabase with status 'new' (like before)
       const { data: insertData, error: insertError } = await supabase
         .from('maintenance_requests')
         .insert({
@@ -157,8 +185,8 @@ export default function TenantMaintenancePage() {
           property_id: property.id,
           title: form.title.trim(),
           description: form.description.trim(),
-          status: 'Open',
           priority: form.priority,
+          status: 'new', // ✅ show as "New" in UI
         })
         .select()
         .single();
@@ -168,10 +196,9 @@ export default function TenantMaintenancePage() {
       // Optimistically update list in UI
       setRequests((prev) => [insertData as MaintenanceRow, ...prev]);
 
-      // 2) Email to landlord (always attempt; route will decide actual recipient)
+      // 2) Email to landlord (always attempt; route handles fallbacks)
       const landlordEmail = property?.landlord_email || '';
 
-      // Note: even if this fails, the request itself is still saved.
       fetch('/api/maintenance-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -189,13 +216,7 @@ export default function TenantMaintenancePage() {
         console.error('Maintenance email fire-and-forget error:', err);
       });
 
-      // Reset form
-      setForm({
-        title: '',
-        description: '',
-        priority: 'Normal',
-      });
-
+      setForm(emptyForm);
       setSuccess('Maintenance request submitted successfully.');
     } catch (err: any) {
       console.error('Error submitting maintenance request:', err);
@@ -213,26 +234,30 @@ export default function TenantMaintenancePage() {
     router.push('/tenant/login');
   };
 
+  const handleBack = () => {
+    router.push('/tenant/portal');
+  };
+
   // ---------- Render ----------
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-50">
-        <div className="mx-auto max-w-3xl px-4 py-6">
-          <p className="text-sm text-slate-600">Loading maintenance portal...</p>
-        </div>
+      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
+        <p className="text-sm text-slate-400">
+          Loading maintenance requests…
+        </p>
       </main>
     );
   }
 
   if (error && !tenant) {
     return (
-      <main className="min-h-screen bg-slate-50">
-        <div className="mx-auto max-w-3xl px-4 py-6">
-          <p className="mb-4 text-sm text-red-600">{error}</p>
+      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
+        <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-700 p-6 shadow-xl">
+          <p className="mb-4 text-sm text-red-400">{error}</p>
           <button
             onClick={() => router.push('/tenant/login')}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
+            className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-emerald-400"
           >
             Back to Tenant Login
           </button>
@@ -242,178 +267,204 @@ export default function TenantMaintenancePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <div className="border-b bg-white">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-          <div>
-            <h1 className="text-base font-semibold text-slate-900">
-              RentZentro Tenant Maintenance
+    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-8">
+      <div className="mx-auto max-w-4xl space-y-6">
+        {/* Header */}
+        <header className="flex items-center justify-between">
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="text-[11px] text-slate-500 hover:text-emerald-300"
+            >
+              ← Back to tenant portal
+            </button>
+            <h1 className="text-lg font-semibold text-slate-50">
+              Maintenance requests
             </h1>
             {tenant && (
-              <p className="text-xs text-slate-500">
-                Signed in as <span className="font-medium">{tenant.email}</span>
+              <p className="text-[11px] text-slate-400">
+                Signed in as{' '}
+                <span className="font-medium text-slate-100">
+                  {tenant.email}
+                </span>
               </p>
             )}
           </div>
           <div className="flex items-center gap-3">
-            <Link
-              href="/tenant/portal"
-              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Back to Tenant Portal
-            </Link>
+            {property && (
+              <div className="hidden text-right text-[11px] sm:block">
+                <p className="text-slate-400">Property</p>
+                <p className="font-medium text-slate-100">
+                  {property.name || 'Unnamed property'}
+                </p>
+                <p className="text-slate-500">
+                  Unit: {property.unit_label || 'N/A'}
+                </p>
+              </div>
+            )}
             <button
               onClick={handleLogout}
-              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-900"
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
             >
               Log out
             </button>
           </div>
-        </div>
-      </div>
+        </header>
 
-      <div className="mx-auto max-w-4xl px-4 py-6">
-        {/* Property card */}
+        {/* Property summary (mobile) */}
         {property && (
-          <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-1 text-sm font-semibold text-slate-900">
-              Your Property
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-sm sm:hidden">
+            <h2 className="mb-1 text-xs font-semibold text-slate-100">
+              Your property
             </h2>
-            <p className="text-sm text-slate-700">
-              {property.name || 'Unnamed Property'}
+            <p className="text-sm text-slate-50">
+              {property.name || 'Unnamed property'}
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-[11px] text-slate-400">
               Unit: {property.unit_label || 'N/A'}
             </p>
             {property.landlord_email && (
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-[11px] text-slate-500">
                 Landlord contact: {property.landlord_email}
               </p>
             )}
           </section>
         )}
 
-        {/* New request form */}
-        <section className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Submit a Maintenance Request
-            </h2>
-            {success && (
-              <span className="text-xs font-medium text-emerald-600">
-                {success}
-              </span>
+        {/* Form + list */}
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.1fr)]">
+          {/* New request form */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-100">
+                Submit a new request
+              </h2>
+              {success && (
+                <span className="text-[11px] font-medium text-emerald-300">
+                  {success}
+                </span>
+              )}
+            </div>
+
+            {error && (
+              <p className="mb-3 text-[11px] text-red-400">{error}</p>
             )}
-          </div>
 
-          {error && (
-            <p className="mb-3 text-xs text-red-600">
-              {error}
-            </p>
-          )}
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-slate-200">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  value={form.title}
+                  onChange={handleInputChange}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                  placeholder="Brief summary of the issue"
+                  required
+                />
+              </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">
-                Title
-              </label>
-              <input
-                type="text"
-                name="title"
-                value={form.title}
-                onChange={handleInputChange}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                placeholder="Brief summary of the issue"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">
-                Priority
-              </label>
-              <select
-                name="priority"
-                value={form.priority}
-                onChange={handleInputChange}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value="Normal">Normal</option>
-                <option value="Urgent">Urgent</option>
-                <option value="Emergency">Emergency</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">
-                Description
-              </label>
-              <textarea
-                name="description"
-                value={form.description}
-                onChange={handleInputChange}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                rows={4}
-                placeholder="Describe the issue in as much detail as possible."
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {submitting ? 'Submitting...' : 'Submit Request'}
-            </button>
-          </form>
-        </section>
-
-        {/* Existing requests list */}
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">
-            Your Recent Maintenance Requests
-          </h2>
-
-          {requests.length === 0 ? (
-            <p className="text-xs text-slate-500">
-              You have not submitted any maintenance requests yet.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {requests.map((r) => (
-                <div
-                  key={r.id}
-                  className="rounded-lg border border-slate-100 bg-slate-50 p-3"
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-slate-200">
+                  Priority
+                </label>
+                <select
+                  name="priority"
+                  value={form.priority}
+                  onChange={handleInputChange}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
                 >
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-slate-900">
-                      {r.title}
-                    </h3>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        r.status === 'Open'
-                          ? 'bg-amber-100 text-amber-700'
-                          : r.status === 'In Progress'
-                          ? 'bg-sky-100 text-sky-700'
-                          : 'bg-emerald-100 text-emerald-700'
-                      }`}
-                    >
-                      {r.status}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-700">
-                    {r.description}
-                  </p>
-                  <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
-                    <span>{new Date(r.created_at).toLocaleString()}</span>
-                    {r.priority && <span>Priority: {r.priority}</span>}
-                  </div>
-                </div>
-              ))}
+                  <option>Normal</option>
+                  <option>Urgent</option>
+                  <option>Emergency</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-slate-200">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  value={form.description}
+                  onChange={handleInputChange}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 shadow-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                  rows={4}
+                  placeholder="Describe the issue in as much detail as possible."
+                  required
+                />
+                <p className="mt-1 text-[10px] text-slate-500">
+                  For emergencies (fire, active flooding, gas smells, etc.),
+                  call your local emergency services first, then contact your
+                  landlord or property manager directly.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex items-center rounded-md bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60"
+              >
+                {submitting ? 'Submitting…' : 'Submit request'}
+              </button>
+            </form>
+          </section>
+
+          {/* Existing requests list */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-100">
+                Your recent requests
+              </h2>
+              <span className="text-[11px] text-slate-400">
+                {requests.length} total
+              </span>
             </div>
-          )}
-        </section>
+
+            {requests.length === 0 ? (
+              <p className="text-[11px] text-slate-500">
+                You haven&apos;t submitted any maintenance requests yet.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {requests.map((r) => (
+                  <div
+                    key={r.id}
+                    className="rounded-xl border border-slate-800 bg-slate-950/60 p-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <h3 className="text-sm font-medium text-slate-50">
+                          {r.title}
+                        </h3>
+                        <p className="mt-1 text-[11px] text-slate-300">
+                          {r.description}
+                        </p>
+                      </div>
+                      <span
+                        className={
+                          'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ' +
+                          statusBadgeClasses(r.status)
+                        }
+                      >
+                        {formatStatusLabel(r.status)}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
+                      <span>
+                        {new Date(r.created_at).toLocaleString()}
+                      </span>
+                      {r.priority && <span>Priority: {r.priority}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </main>
   );
