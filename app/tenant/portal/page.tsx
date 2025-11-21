@@ -45,6 +45,17 @@ type DocumentRow = {
   property_id: number | null;
 };
 
+type MaintenanceRow = {
+  id: number;
+  tenant_id: number;
+  property_id: number;
+  title: string;
+  description: string;
+  status: string | null;
+  priority: string | null;
+  created_at: string;
+};
+
 // ---------- Helpers ----------
 
 const formatCurrency = (v: number | null | undefined) =>
@@ -89,6 +100,29 @@ const formatDateTime = (iso: string | null | undefined) => {
   });
 };
 
+const formatStatusLabel = (status: string | null) => {
+  if (!status) return 'Unknown';
+  const s = status.toLowerCase();
+  if (s === 'new') return 'New';
+  if (s === 'in progress') return 'In Progress';
+  if (s === 'resolved' || s === 'closed') return 'Resolved';
+  return status;
+};
+
+const statusBadgeClasses = (status: string | null) => {
+  const s = (status || '').toLowerCase();
+  if (s === 'new') {
+    return 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40';
+  }
+  if (s === 'in progress') {
+    return 'bg-amber-500/15 text-amber-300 border border-amber-500/40';
+  }
+  if (s === 'resolved' || s === 'closed') {
+    return 'bg-sky-500/15 text-sky-300 border border-sky-500/40';
+  }
+  return 'bg-slate-700 text-slate-200 border border-slate-500/60';
+};
+
 // ---------- Component ----------
 
 export default function TenantPortalPage() {
@@ -99,6 +133,7 @@ export default function TenantPortalPage() {
   const [property, setProperty] = useState<PropertyRow | null>(null);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [maintenance, setMaintenance] = useState<MaintenanceRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
@@ -173,6 +208,17 @@ export default function TenantPortalPage() {
         } else {
           setDocuments([]);
         }
+
+        // Recent maintenance requests (show a few on portal)
+        const { data: maintRows, error: maintError } = await supabase
+          .from('maintenance_requests')
+          .select('*')
+          .eq('tenant_id', t.id)
+          .order('created_at', { ascending: false })
+          .limit(4);
+
+        if (maintError) throw maintError;
+        setMaintenance((maintRows || []) as MaintenanceRow[]);
       } catch (err: any) {
         console.error(err);
         setError(
@@ -492,7 +538,7 @@ export default function TenantPortalPage() {
               </p>
             </section>
 
-            {/* Lease & documents + maintenance explanation */}
+            {/* Lease & documents */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
                 Lease & documents
@@ -539,26 +585,81 @@ export default function TenantPortalPage() {
                 Documents here are read-only. For questions about any lease
                 terms, reach out to your landlord.
               </p>
+            </section>
 
-              {/* Maintenance explanation + button in this card */}
-              <div className="mt-4 border-t border-slate-800 pt-3 space-y-2">
-                <p className="text-[11px] text-slate-400">
-                  Use a maintenance request to report issues with your unit—
-                  for example plumbing, heating, appliances, or general repairs.
-                  Your request will be sent to your landlord and saved in your
-                  maintenance history.
+            {/* Maintenance overview (separate card) */}
+            <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">
+                Maintenance
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-50">
+                Requests for your unit
+              </p>
+
+              <p className="mt-2 text-[11px] text-slate-400">
+                Use a maintenance request to report issues with your unit—for
+                example plumbing, heating, appliances, or general repairs. Your
+                requests are sent to your landlord and tracked for your records.
+              </p>
+              <p className="mt-1 text-[10px] text-slate-500">
+                For true emergencies (fire, active flooding, gas smells, or
+                anything life-threatening), call your local emergency services
+                first, then contact your landlord or property manager directly.
+              </p>
+
+              {/* Recent requests */}
+              {maintenance.length === 0 ? (
+                <p className="mt-3 text-[11px] text-slate-500">
+                  You haven&apos;t submitted any maintenance requests yet.
                 </p>
-                <p className="text-[10px] text-slate-500">
-                  For true emergencies (fire, active flooding, gas smells, or
-                  anything life-threatening), call your local emergency
-                  services first, then contact your landlord or property
-                  manager directly.
-                </p>
+              ) : (
+                <div className="mt-3 space-y-2 text-[11px]">
+                  {maintenance.map((m) => (
+                    <div
+                      key={m.id}
+                      className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"
+                    >
+                      <div className="flex items-start justify-between gap-3 min-w-0">
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-slate-50 text-[13px]">
+                            {m.title}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-slate-400">
+                            {formatDateTime(m.created_at)}
+                          </p>
+                          {m.priority && (
+                            <p className="mt-0.5 text-[10px] text-slate-500">
+                              Priority: {m.priority}
+                            </p>
+                          )}
+                        </div>
+                        <span
+                          className={
+                            'shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ' +
+                            statusBadgeClasses(m.status)
+                          }
+                        >
+                          {formatStatusLabel(m.status)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Link
                   href="/tenant/maintenance"
-                  className="mt-1 inline-flex w-full items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
+                  className="flex-1 inline-flex items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
                 >
                   Submit a maintenance request
+                </Link>
+                <Link
+                  href="/tenant/maintenance"
+                  className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800"
+                >
+                  View all requests
                 </Link>
               </div>
             </section>
