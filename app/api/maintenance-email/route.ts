@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     const fallbackNotify = process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL;
     const fallbackPublic = process.env.NEXT_PUBLIC_FALLBACK_EMAIL;
 
-    const FROM_EMAIL = 'RentZentro <onboarding@resend.dev>';
+    const FROM_EMAIL = 'RentZentro <no-reply@rentzentro.com>';
 
     const to =
       (landlordEmail && landlordEmail.trim()) ||
