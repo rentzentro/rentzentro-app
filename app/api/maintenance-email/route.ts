@@ -1,22 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-// Lazily create the Resend client so builds don't crash
-let resendClient: Resend | null = null;
-
-function getResendClient(): Resend | null {
-  if (resendClient) return resendClient;
-
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.error('[maintenance-email] RESEND_API_KEY is missing');
-    return null;
-  }
-
-  resendClient = new Resend(apiKey);
-  return resendClient;
-}
-
 /**
  * Expects JSON body like:
  * {
@@ -54,36 +38,41 @@ export async function POST(req: Request) {
       priority?: string | null;
     };
 
-    const hasResendKey = !!process.env.RESEND_API_KEY;
-    const fallbackTo = process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL || null;
+    // ----- READ ENV *INSIDE* THE HANDLER -----
+    const resendKey = process.env.RESEND_API_KEY || '';
     const fromEnv = process.env.RENTZENTRO_FROM_EMAIL;
+    const notifyEnv = process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL;
+    const publicFallback = process.env.NEXT_PUBLIC_FALLBACK_EMAIL;
 
     const from =
-      fromEnv && fromEnv.trim().length > 0
+      (fromEnv && fromEnv.trim().length > 0
         ? fromEnv
-        : 'RentZentro <onboarding@resend.dev>';
+        : 'RentZentro <onboarding@resend.dev>');
 
-    const to = landlordEmail || fallbackTo;
+    // to = landlordEmail from property, or notify email, or NEXT_PUBLIC_FALLBACK_EMAIL
+    const to =
+      landlordEmail && landlordEmail.trim().length > 0
+        ? landlordEmail
+        : notifyEnv && notifyEnv.trim().length > 0
+        ? notifyEnv
+        : publicFallback && publicFallback.trim().length > 0
+        ? publicFallback
+        : '';
 
-    console.log('[maintenance-email] route hit with:', {
-      hasResendKey,
-      from,
-      to,
-      landlordEmail,
-      fallbackTo,
-      tenantName,
-      tenantEmail,
-      propertyName,
-      unitLabel,
-      title,
-      priority,
+    // DEBUG LOG (goes to Vercel function logs, not the browser)
+    console.log('Email env debug:', {
+      hasResendKey: !!resendKey,
+      fromEnv,
+      notifyEnv,
+      publicFallback,
+      computedFrom: from,
+      computedTo: to,
     });
 
-    // If we’re missing critical config, don’t try to send
-    if (!hasResendKey || !to || !from) {
-      console.error('[maintenance-email] Email configuration missing on server', {
-        hasResendKey,
-        from,
+    // If we’re missing critical config, don’t even try Resend
+    if (!resendKey || !to) {
+      console.error('Email configuration missing on server.', {
+        hasResendKey: !!resendKey,
         to,
       });
 
@@ -97,18 +86,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get a Resend client using the env key
-    const resend = getResendClient();
-    if (!resend) {
-      return NextResponse.json(
-        {
-          ok: true,
-          emailSent: false,
-          error: 'Resend client could not be created (missing API key).',
-        },
-        { status: 200 }
-      );
-    }
+    const resend = new Resend(resendKey);
 
     const subject = `New maintenance request: ${title || 'No title'}`;
 
@@ -172,11 +150,11 @@ export async function POST(req: Request) {
 
       if (error) {
         emailError = error;
-        console.error('[maintenance-email] Resend send error:', error);
+        console.error('Resend send error:', error);
       }
     } catch (err) {
       emailError = err;
-      console.error('[maintenance-email] Resend threw an exception:', err);
+      console.error('Resend threw an exception:', err);
     }
 
     if (emailError) {
@@ -195,7 +173,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, emailSent: true });
   } catch (err: any) {
-    console.error('[maintenance-email] fatal error:', err);
+    console.error('Maintenance email route fatal error:', err);
     return NextResponse.json(
       {
         ok: false,
