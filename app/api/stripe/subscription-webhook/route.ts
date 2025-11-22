@@ -4,26 +4,32 @@ import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-// ✅ Stripe client WITHOUT apiVersion to avoid TS red underline
+// Ensure Node runtime for Stripe + env vars
+export const runtime = 'nodejs';
+
+// Create Stripe client (no apiVersion so TypeScript stops yelling)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-const ENDPOINT_SECRET = process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET as string;
-
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  process.env.SUPABASE_SERVICE_ROLE_KEY as string
+);
 
 export async function POST(req: Request) {
-  if (!ENDPOINT_SECRET) {
-    console.error('Missing STRIPE_SUBSCRIPTION_WEBHOOK_SECRET env var');
+  // Read webhook secret at runtime
+  const endpointSecret = process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET;
+
+  if (!endpointSecret) {
+    console.error(
+      'STRIPE_SUBSCRIPTION_WEBHOOK_SECRET is missing in this environment'
+    );
     return NextResponse.json(
       { error: 'Webhook secret not configured.' },
       { status: 500 }
     );
   }
 
-  const headerStore = headers();
-  const sig = headerStore.get('stripe-signature');
+  const sig = headers().get('stripe-signature');
 
   if (!sig) {
     return NextResponse.json(
@@ -36,7 +42,7 @@ export async function POST(req: Request) {
 
   try {
     const rawBody = await req.text();
-    event = stripe.webhooks.constructEvent(rawBody, sig, ENDPOINT_SECRET);
+    event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
   } catch (err: any) {
     console.error('Stripe webhook signature verification failed:', err);
     return NextResponse.json(
@@ -47,9 +53,9 @@ export async function POST(req: Request) {
 
   try {
     switch (event.type) {
-      // -----------------------------
-      // 1) Checkout session completed
-      // -----------------------------
+      // ------------------------------------------------
+      // 1) Checkout session completed (start subscription)
+      // ------------------------------------------------
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
 
@@ -64,26 +70,25 @@ export async function POST(req: Request) {
         });
 
         if (!landlordIdStr || !customerId || !subscriptionId) {
-          // We still return 200 so Stripe doesn’t keep retrying forever.
           console.warn(
             'Missing landlordId/customerId/subscriptionId on checkout.session.completed'
           );
-          break;
+          break; // still return 200 at bottom
         }
 
-        const landlordId = parseInt(landlordIdStr, 10);
-        if (Number.isNaN(landlordId)) {
+        const landlordId = Number(landlordIdStr);
+        if (!Number.isFinite(landlordId)) {
           console.warn('Invalid landlordId in metadata:', landlordIdStr);
           break;
         }
 
-        // Attach customer + subscription to landlord
+        // Attach Stripe customer + subscription to landlord row
         const { error: updateError } = await supabaseAdmin
           .from('landlords')
           .update({
             stripe_customer_id: customerId,
             stripe_subscription_id: subscriptionId,
-            // status & period end will be set by subscription.updated
+            // status + period end set later by subscription.updated
           })
           .eq('id', landlordId);
 
@@ -97,16 +102,16 @@ export async function POST(req: Request) {
         break;
       }
 
-      // ---------------------------------------
+      // ------------------------------------------------
       // 2) Subscription updated or deleted
-      // ---------------------------------------
+      // ------------------------------------------------
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
         const customerId = subscription.customer as string;
         const status = subscription.status; // 'active', 'past_due', 'canceled', etc.
 
-        // Stripe sends current_period_end in UNIX seconds – may be null/undefined.
+        // UNIX seconds -> ISO string (or null)
         const currentPeriodEndUnix = (subscription as any)
           .current_period_end as number | null | undefined;
 
@@ -167,11 +172,11 @@ export async function POST(req: Request) {
       }
 
       default: {
-        // For anything else, just log and ack
         console.log(`Unhandled Stripe event type: ${event.type}`);
       }
     }
 
+    // Always ack so Stripe stops retrying
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err: any) {
     console.error('Error handling Stripe subscription webhook:', err);
