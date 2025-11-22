@@ -1,110 +1,132 @@
-import { NextRequest, NextResponse } from 'next/server';
+// app/api/stripe/webhook/route.ts
+import { NextResponse } from 'next/server';
+import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import { supabase } from '../../../supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
-export const runtime = 'nodejs';
+// Use your secret key – no apiVersion option to avoid TS complaints
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
-// --- Stripe setup ---
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
+const ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET as string;
 
-if (!stripeSecretKey) {
-  console.error('❌ STRIPE_SECRET_KEY is missing in environment variables');
-}
-if (!webhookSecret) {
-  console.error('❌ STRIPE_WEBHOOK_SECRET is missing in environment variables');
-}
+const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-// Force a real, stable API version but bypass the weird type that insists on the Clover preview
-const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, {
-      apiVersion: '2024-06-20' as any,
-    })
-  : null;
-
-// Simple GET for sanity check in a browser
-export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    message: 'Stripe webhook endpoint is reachable',
-  });
-}
-
-export async function POST(req: NextRequest) {
-  if (!stripe || !webhookSecret) {
-    console.error('❌ Webhook called but Stripe or webhook secret is not configured.');
-    return new NextResponse('Stripe not configured on server', { status: 500 });
+export async function POST(req: Request) {
+  if (!ENDPOINT_SECRET) {
+    console.error('Missing STRIPE_WEBHOOK_SECRET env var');
+    return NextResponse.json(
+      { error: 'Webhook secret not configured.' },
+      { status: 500 }
+    );
   }
 
-  const body = await req.text();
-  const signature = req.headers.get('stripe-signature');
+  const headerStore = headers();
+  const sig = headerStore.get('stripe-signature');
 
-  if (!signature) {
-    console.error('❌ Missing stripe-signature header');
-    return new NextResponse('Missing stripe-signature header', { status: 400 });
+  if (!sig) {
+    return NextResponse.json(
+      { error: 'Missing Stripe signature header.' },
+      { status: 400 }
+    );
   }
 
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    const rawBody = await req.text();
+    event = stripe.webhooks.constructEvent(rawBody, sig, ENDPOINT_SECRET);
   } catch (err: any) {
-    console.error('❌ Stripe signature verification failed:', err.message);
-    return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
+    console.error('Stripe webhook signature verification failed:', err);
+    return NextResponse.json(
+      { error: 'Webhook signature verification failed.' },
+      { status: 400 }
+    );
   }
 
-  console.log('🔔 Stripe webhook event type:', event.type);
-
   try {
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
+    switch (event.type) {
+      // Tenant rent payments use Checkout Sessions in "payment" mode
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
 
-      console.log('📦 Session metadata:', session.metadata);
-      console.log('📦 amount_total:', session.amount_total);
+        // If this is a subscription checkout, ignore it here.
+        // The /api/stripe/subscription-webhook endpoint handles those.
+        if (session.mode === 'subscription') {
+          console.log(
+            'Ignoring subscription checkout in main webhook (handled by subscription-webhook).'
+          );
+          break;
+        }
 
-      const tenantId = Number(session.metadata?.tenant_id);
-      const propertyId = Number(session.metadata?.property_id);
-      const amount = session.amount_total != null ? session.amount_total / 100 : null;
+        const metadata = session.metadata || {};
+        const tenantIdStr = metadata.tenantId;
+        const propertyIdStr = metadata.propertyId;
 
-      if (!tenantId || !propertyId || !amount) {
-        console.error('⚠️ Missing tenant_id, property_id, or amount_total in session metadata.', {
+        // If the metadata we rely on is missing, just log & ignore.
+        // Returning 200 prevents Stripe from retrying and stops 400 errors.
+        if (!tenantIdStr || !propertyIdStr) {
+          console.warn(
+            'checkout.session.completed received without tenant/property metadata – ignoring.'
+          );
+          break;
+        }
+
+        const tenantId = parseInt(tenantIdStr, 10);
+        const propertyId = parseInt(propertyIdStr, 10);
+
+        if (Number.isNaN(tenantId) || Number.isNaN(propertyId)) {
+          console.warn(
+            'Invalid tenantId/propertyId metadata – ignoring session.',
+            { tenantIdStr, propertyIdStr }
+          );
+          break;
+        }
+
+        const amountTotal = session.amount_total ?? 0;
+        const amount = amountTotal / 100; // cents → dollars
+        const paidOn =
+          session.created != null
+            ? new Date(session.created * 1000).toISOString()
+            : new Date().toISOString();
+
+        console.log('Recording tenant rent payment from webhook', {
           tenantId,
           propertyId,
           amount,
+          paidOn,
         });
-        return new NextResponse('Missing metadata', { status: 400 });
+
+        const { error: insertError } = await supabaseAdmin.from('payments').insert({
+          tenant_id: tenantId,
+          property_id: propertyId,
+          amount,
+          paid_on: paidOn,
+          method: 'card',
+          note: 'Stripe Checkout rent payment',
+        });
+
+        if (insertError) {
+          console.error('Error inserting payment record:', insertError);
+        }
+
+        break;
       }
 
-      console.log('💾 Inserting payment into Supabase:', {
-        tenant_id: tenantId,
-        property_id: propertyId,
-        amount,
-      });
-
-      const { error } = await supabase.from('payments').insert({
-        tenant_id: tenantId,
-        property_id: propertyId,
-        amount,
-        paid_on: new Date().toISOString(),
-        method: 'card',
-        note: 'Stripe Checkout payment',
-      });
-
-      if (error) {
-        console.error('❌ Supabase insert error in webhook:', error);
-        // IMPORTANT: return 500 so Stripe shows a failure if DB write fails
-        return new NextResponse('Database error while inserting payment', { status: 500 });
+      // You can add other payment-related events here if needed
+      default: {
+        console.log(`Unhandled Stripe event type in main webhook: ${event.type}`);
       }
-
-      console.log('✅ Payment inserted successfully into Supabase');
-    } else {
-      console.log('ℹ️ Webhook event type not handled:', event.type);
     }
 
-    // If we reach here, we successfully handled the event
-    return new NextResponse('OK', { status: 200 });
+    // Always ACK so Stripe stops retrying
+    return NextResponse.json({ received: true }, { status: 200 });
   } catch (err: any) {
-    console.error('❌ Unexpected error in Stripe webhook handler:', err);
-    return new NextResponse('Webhook handler error', { status: 500 });
+    console.error('Error handling Stripe webhook:', err);
+    return NextResponse.json(
+      { error: err?.message || 'Unexpected error while handling webhook.' },
+      { status: 500 }
+    );
   }
 }
