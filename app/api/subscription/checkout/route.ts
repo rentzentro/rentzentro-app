@@ -1,24 +1,33 @@
+// app/api/subscription/checkout/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Stripe – no apiVersion needed here, it will use your dashboard's pinned version.
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+// ---- Stripe client ----
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+if (!stripeSecretKey) {
+  throw new Error('STRIPE_SECRET_KEY is not set on the server.');
+}
 
+const stripe = new Stripe(stripeSecretKey, {
+  // apiVersion is optional; leaving it out avoids TS complaining in some setups
+  // apiVersion: '2024-06-20',
+});
+
+// ---- Supabase (service role) ----
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-const SUBSCRIPTION_PRICE_ID = process.env.STRIPE_SUBSCRIPTION_PRICE_ID as string;
 
-// Use your existing public site URL env
-const APP_URL =
-  (process.env.NEXT_PUBLIC_SITE_URL as string) || 'http://localhost:3000';
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  throw new Error('Supabase service-role environment variables are not set.');
+}
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+// ---- Route handler ----
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-
     const { landlordId } = body as { landlordId?: number };
 
     if (!landlordId) {
@@ -27,6 +36,16 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    // Read these INSIDE the handler so we’re sure we see the env from Vercel
+    const SUBSCRIPTION_PRICE_ID = process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
+    const APP_URL =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      'http://localhost:3000';
+
+    // Debug log to Vercel function logs
+    console.log('DEBUG PRICE:', SUBSCRIPTION_PRICE_ID);
 
     if (!SUBSCRIPTION_PRICE_ID) {
       return NextResponse.json(
