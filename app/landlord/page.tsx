@@ -7,6 +7,12 @@ import { supabase } from '../supabaseClient';
 
 // ---------- Types ----------
 
+type LandlordRow = {
+  id: number;
+  email: string;
+  subscription_status: string | null;
+};
+
 type PropertyRow = {
   id: number;
   name: string | null;
@@ -93,7 +99,7 @@ export default function LandlordDashboardPage() {
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------- Load data ----------
+  // ---------- Load data + enforce subscription ----------
 
   useEffect(() => {
     const load = async () => {
@@ -101,6 +107,43 @@ export default function LandlordDashboardPage() {
       setError(null);
 
       try {
+        // 1) Check auth
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+
+        const email = authData.user?.email;
+        if (!email) {
+          router.replace('/landlord/login');
+          setLoading(false);
+          return;
+        }
+
+        // 2) Check landlord + subscription status
+        const { data: landlord, error: landlordError } = await supabase
+          .from('landlords')
+          .select('id, email, subscription_status')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (landlordError) throw landlordError;
+
+        const landlordRow = landlord as LandlordRow | null;
+        if (!landlordRow) {
+          // No landlord record yet – send to settings to finish setup / subscription
+          router.replace('/landlord/settings?needsSubscription=1');
+          setLoading(false);
+          return;
+        }
+
+        const status = landlordRow.subscription_status;
+        if (!status || status.toLowerCase() !== 'active') {
+          // Not subscribed – send them to subscription settings
+          router.replace('/landlord/settings?needsSubscription=1');
+          setLoading(false);
+          return;
+        }
+
+        // 3) Subscription is active → load dashboard data
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase.from('properties').select('*').order('created_at', {
             ascending: false,
@@ -137,7 +180,7 @@ export default function LandlordDashboardPage() {
     };
 
     load();
-  }, []);
+  }, [router]);
 
   // ---------- Metrics ----------
 
@@ -208,6 +251,22 @@ export default function LandlordDashboardPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-50 p-6">
+        <div className="mx-auto max-w-xl rounded-xl border border-red-500/50 bg-red-500/10 p-4">
+          <p className="text-sm text-red-200">{error}</p>
+          <button
+            onClick={() => router.refresh()}
+            className="mt-3 inline-flex items-center rounded-md border border-red-400/60 bg-red-500/20 px-3 py-1.5 text-xs font-medium text-red-50 hover:bg-red-500/30"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -230,7 +289,7 @@ export default function LandlordDashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
-            {/* Settings (real page) */}
+            {/* Settings */}
             <Link
               href="/landlord/settings"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
@@ -270,7 +329,7 @@ export default function LandlordDashboardPage() {
           </div>
         </div>
 
-        {/* 🔔 Pricing banner (2.5% fee) */}
+        {/* 🔔 Pricing banner (current message) */}
         <div className="mb-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-xs text-emerald-100">
           <p className="font-medium">
             Current RentZentro pricing:{' '}
@@ -287,13 +346,6 @@ export default function LandlordDashboardPage() {
             for details.
           </p>
         </div>
-
-        {/* Error */}
-        {error && (
-          <div className="mb-4 text-sm p-3 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-100">
-            {error}
-          </div>
-        )}
 
         {/* Summary cards */}
         <div className="grid gap-4 md:grid-cols-3 mb-6">
@@ -484,12 +536,12 @@ export default function LandlordDashboardPage() {
                   Units & rent
                 </p>
               </div>
-              <Link
-                href="/landlord/properties"
-                className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
-              >
-                View all
-              </Link>
+            <Link
+              href="/landlord/properties"
+              className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+            >
+              View all
+            </Link>
             </div>
 
             {properties.length === 0 ? (
