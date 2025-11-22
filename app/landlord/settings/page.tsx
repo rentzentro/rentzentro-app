@@ -143,7 +143,7 @@ export default function LandlordSettingsPage() {
           </div>
 
           <Link
-            href="/landlord/dashboard"
+            href="/landlord"
             className="text-[11px] px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
           >
             Go to dashboard
