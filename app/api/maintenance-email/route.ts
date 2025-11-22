@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-/**
- * Maintenance email route with debug info.
- * Sends maintenance request emails directly to the landlord of the tenant.
- */
+const RESEND_KEY = process.env.RESEND_API_KEY || '';
+const FROM_ENV = process.env.RENTZENTRO_FROM_EMAIL; // e.g. "RentZentro <no-reply@rentzentro.com>"
+const NOTIFY_ENV = process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL; // default landlord inbox
+const PUBLIC_FALLBACK = process.env.NEXT_PUBLIC_FALLBACK_EMAIL; // last-resort fallback
+
+const resend = new Resend(RESEND_KEY);
 
 export async function POST(req: Request) {
-  const debug: any = {};
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
 
     const {
       landlordEmail,
@@ -20,162 +21,140 @@ export async function POST(req: Request) {
       title,
       description,
       priority,
-    } = body as {
-      landlordEmail?: string | null;
-      tenantName?: string | null;
-      tenantEmail?: string | null;
-      propertyName?: string | null;
-      unitLabel?: string | null;
-      title?: string | null;
-      description?: string | null;
-      priority?: string | null;
-    };
+    } = body || {};
 
-    debug.body = {
-      landlordEmail,
-      tenantName,
-      tenantEmail,
-      propertyName,
-      unitLabel,
-      title,
-      priority,
-      hasDescription: !!description,
-    };
+    // ----- Compute from / to -----
 
-    const resendKey = process.env.RESEND_API_KEY;
-    const fallbackNotify = process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL;
-    const fallbackPublic = process.env.NEXT_PUBLIC_FALLBACK_EMAIL;
-
-    const FROM_EMAIL = 'RentZentro <no-reply@rentzentro.com>';
+    const from =
+      (FROM_ENV && FROM_ENV.trim().length > 0
+        ? FROM_ENV
+        : 'RentZentro <onboarding@resend.dev>');
 
     const to =
-      (landlordEmail && landlordEmail.trim()) ||
-      (fallbackNotify && fallbackNotify.trim()) ||
-      (fallbackPublic && fallbackPublic.trim()) ||
-      '';
+      (landlordEmail && landlordEmail.trim().length > 0
+        ? landlordEmail
+        : NOTIFY_ENV && NOTIFY_ENV.trim().length > 0
+        ? NOTIFY_ENV
+        : PUBLIC_FALLBACK && PUBLIC_FALLBACK.trim().length > 0
+        ? PUBLIC_FALLBACK
+        : '');
 
-    debug.env = {
-      hasResendKey: !!resendKey,
-      fallbackNotify,
-      fallbackPublic,
+    const debugEnv = {
+      hasResendKey: !!RESEND_KEY,
+      fromEnv: FROM_ENV,
+      notifyEnv: NOTIFY_ENV,
+      publicFallback: PUBLIC_FALLBACK,
+      computedFrom: from,
       computedTo: to,
-      from: FROM_EMAIL,
     };
 
-    if (!resendKey) {
-      console.error('RESEND_API_KEY missing in environment.');
+    if (!RESEND_KEY || !to) {
+      console.error('Maintenance email config missing:', debugEnv);
       return NextResponse.json(
         {
           ok: false,
           emailSent: false,
-          error: 'Missing RESEND_API_KEY on server.',
-          debug,
+          debug: { env: debugEnv },
+          error:
+            'Email configuration missing on server (RESEND_API_KEY or destination address).',
         },
         { status: 500 }
       );
     }
 
-    if (!to) {
-      console.error('No valid TO email found for maintenance email.');
-      return NextResponse.json(
-        {
-          ok: true,
-          emailSent: false,
-          error: 'No valid landlord / fallback email.',
-          debug,
-        },
-        { status: 200 }
-      );
-    }
-
-    const resend = new Resend(resendKey);
+    // ----- Build email content -----
 
     const subject = `New maintenance request: ${title || 'No title'}`;
 
-    const safeDescription = (description || 'No description provided')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-
     const html = `
-      <div style="font-family: sans-serif; font-size:14px;">
-        <h2>New maintenance request</h2>
-        <p>A tenant submitted a new maintenance request via RentZentro.</p>
+      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: #0f172a;">
+        <h2 style="margin-bottom: 4px; color:#0f172a;">New maintenance request</h2>
+        <p style="margin:0 0 12px 0; color:#64748b;">
+          A tenant submitted a new maintenance request in RentZentro.
+        </p>
 
-        <p><strong>Tenant:</strong> ${tenantName || 'Unknown'} ${
-      tenantEmail ? `(${tenantEmail})` : ''
-    }</p>
-        <p><strong>Property:</strong> ${propertyName || 'N/A'}</p>
-        <p><strong>Unit:</strong> ${unitLabel || 'N/A'}</p>
-        <p><strong>Priority:</strong> ${priority || 'N/A'}</p>
+        <table style="border-collapse:collapse; margin-bottom:16px;">
+          <tbody>
+            <tr>
+              <td style="padding:2px 8px 2px 0; color:#64748b;">Tenant:</td>
+              <td style="padding:2px 0;">${tenantName || 'Unknown'}</td>
+            </tr>
+            <tr>
+              <td style="padding:2px 8px 2px 0; color:#64748b;">Tenant email:</td>
+              <td style="padding:2px 0;">${tenantEmail || 'Not provided'}</td>
+            </tr>
+            <tr>
+              <td style="padding:2px 8px 2px 0; color:#64748b;">Property:</td>
+              <td style="padding:2px 0;">
+                ${propertyName || 'Not set'}${unitLabel ? ` · ${unitLabel}` : ''}
+              </td>
+            </tr>
+            ${
+              priority
+                ? `<tr>
+                     <td style="padding:2px 8px 2px 0; color:#64748b;">Priority:</td>
+                     <td style="padding:2px 0;">${priority}</td>
+                   </tr>`
+                : ''
+            }
+          </tbody>
+        </table>
 
-        <h3>Title</h3>
-        <p>${title || 'No title provided'}</p>
+        <p style="margin:0 0 8px 0; color:#64748b;"><strong>Request title:</strong></p>
+        <p style="margin:0 0 12px 0;">${title || 'No title'}</p>
 
-        <h3>Description</h3>
-        <p style="white-space:pre-wrap;">${safeDescription}</p>
+        <p style="margin:0 0 8px 0; color:#64748b;"><strong>Details:</strong></p>
+        <p style="margin:0 0 16px 0; white-space:pre-wrap;">
+          ${description || 'No description provided.'}
+        </p>
 
-        <hr />
-        <p style="font-size:12px; color:#888;">View and manage this request in your landlord dashboard.</p>
+        <p style="margin:0; color:#64748b;">
+          Log in to your RentZentro landlord portal to view and manage this request.
+        </p>
       </div>
     `;
 
-    const text = `
-New maintenance request in RentZentro
+    // ----- Call Resend -----
 
-Tenant: ${tenantName || 'Unknown'} (${tenantEmail || 'No email'})
-Property: ${propertyName || 'N/A'}
-Unit: ${unitLabel || 'N/A'}
-Priority: ${priority || 'N/A'}
+    const { data, error } = await resend.emails.send({
+      from,
+      to,
+      subject,
+      html,
+      // let landlord reply straight to tenant
+      reply_to: tenantEmail || undefined,
+    });
 
-Title:
-${title || 'No title'}
+    const debugResend = { data, error };
 
-Description:
-${description || 'No description provided'}
-    `.trim();
-
-    try {
-      const result = await resend.emails.send({
-        from: FROM_EMAIL,
-        to,
-        replyTo: tenantEmail || undefined,
-        subject,
-        html,
-        text,
-      });
-
-      debug.resendResult = result;
-
-      console.log('Maintenance email sent:', result);
-
-      return NextResponse.json(
-        { ok: true, emailSent: true, debug },
-        { status: 200 }
-      );
-    } catch (sendErr: any) {
-      console.error('Maintenance email send error:', sendErr);
-      debug.sendError = sendErr?.message || String(sendErr);
-
+    if (error) {
+      console.error('Resend maintenance email error:', error);
       return NextResponse.json(
         {
           ok: false,
           emailSent: false,
-          error: sendErr?.message || 'Failed to send maintenance email.',
-          debug,
+          debug: { env: debugEnv, resend: debugResend },
+          error:
+            (error as any)?.message ||
+            (error as any)?.name ||
+            'Unknown email error from Resend.',
         },
         { status: 500 }
       );
     }
+
+    return NextResponse.json({
+      ok: true,
+      emailSent: true,
+      debug: { env: debugEnv, resend: debugResend },
+    });
   } catch (err: any) {
     console.error('Maintenance email route fatal error:', err);
-    debug.fatalError = err?.message || String(err);
-
     return NextResponse.json(
       {
         ok: false,
         emailSent: false,
         error: err?.message || 'Unexpected error sending maintenance email.',
-        debug,
       },
       { status: 500 }
     );

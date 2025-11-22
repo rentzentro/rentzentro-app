@@ -599,12 +599,12 @@ export default function TenantPortalPage() {
                 example plumbing, heating, appliances, or general repairs. Your
                 requests are sent to your landlord and tracked for your records.
               </p>
-              <p className="mt-1 text-[10px] text-slate-500">
-                For true emergencies (fire, active flooding, gas smells, or
-                anything life-threatening), call your local emergency services
-                first, then contact your landlord or property manager directly.
-              </p>
-
+              <p className="mt-1 text-[10px] text-amber-300 flex items-start gap-1">
+  <span className="text-amber-300 text-xs mt-[1px]">⚠️</span>
+  For true emergencies (fire, active flooding, gas smells, or anything
+  life-threatening), call your local emergency services first, then
+  contact your landlord or property manager directly.
+</p>
               {/* Recent requests */}
               {maintenance.length === 0 ? (
                 <p className="mt-3 text-[11px] text-slate-500">
