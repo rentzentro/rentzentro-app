@@ -1,106 +1,70 @@
-import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-// ---------- Stripe & Supabase Setup ----------
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string); // no apiVersion – use dashboard version
+// Stripe client – no apiVersion to keep TS happy
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
+const ENDPOINT_SECRET = process.env
+  .STRIPE_SUBSCRIPTION_WEBHOOK_SECRET as string;
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-// Set this env in Stripe webhook: STRIPE_SUBSCRIPTION_WEBHOOK_SECRET=whsec_xxx
-const endpointSecret = process.env
-  .STRIPE_SUBSCRIPTION_WEBHOOK_SECRET as string;
-
-// ---------- Route Handler ----------
+// Recommended so Next doesn’t try to cache this route
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
-  const body = await req.text();
-  const sig = (await headers()).get('stripe-signature');
+  if (!ENDPOINT_SECRET) {
+    console.error('Missing STRIPE_SUBSCRIPTION_WEBHOOK_SECRET');
+    return NextResponse.json(
+      { error: 'Webhook not configured.' },
+      { status: 500 }
+    );
+  }
 
-  if (!sig || !endpointSecret) {
-    console.error('Missing stripe-signature or webhook secret');
-    return new NextResponse('Unauthorized', { status: 400 });
+  const sig = req.headers.get('stripe-signature');
+  if (!sig) {
+    return NextResponse.json(
+      { error: 'Missing Stripe signature header.' },
+      { status: 400 }
+    );
   }
 
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
+    const rawBody = await req.text();
+    event = stripe.webhooks.constructEvent(rawBody, sig, ENDPOINT_SECRET);
   } catch (err: any) {
-    console.error('Stripe webhook signature error:', err?.message);
-    return new NextResponse(`Webhook Error: ${err?.message}`, {
-      status: 400,
-    });
+    console.error('Stripe webhook signature verification failed:', err);
+    return NextResponse.json(
+      { error: 'Invalid Stripe webhook signature.' },
+      { status: 400 }
+    );
   }
 
   try {
     switch (event.type) {
-      // ------------------------------
-      // When checkout session completes
-      // ------------------------------
-      case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session;
-
-        if (session.mode !== 'subscription') break;
-
-        const customerId = session.customer as string | null;
-        const subscriptionId = session.subscription as string | null;
-
-        if (!customerId || !subscriptionId) break;
-
-        // we might also have landlordId in metadata if you set it that way
-        const landlordIdFromMeta = session.metadata?.landlordId;
-
-        if (landlordIdFromMeta) {
-          // If we stored landlordId in metadata, update by id
-          await supabaseAdmin
-            .from('landlords')
-            .update({
-              stripe_customer_id: customerId,
-              stripe_subscription_id: subscriptionId,
-              subscription_status: 'active',
-            })
-            .eq('id', Number(landlordIdFromMeta));
-        } else {
-          // Otherwise, update by stripe_customer_id
-          await supabaseAdmin
-            .from('landlords')
-            .update({
-              stripe_subscription_id: subscriptionId,
-              subscription_status: 'active',
-            })
-            .eq('stripe_customer_id', customerId);
-        }
-
-        break;
-      }
-
-      // ------------------------------
-      // Subscription updated or deleted
-      // ------------------------------
+      case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
-
         const customerId = subscription.customer as string;
-        const status = subscription.status; // active, past_due, canceled, etc.
+        const status = subscription.status; // 'active', 'past_due', 'canceled', etc.
 
-        // NOTE: we're using "as any" here because TS types are being annoying.
-        const rawCurrentPeriodEnd =
-          (subscription as any).current_period_end as
-            | number
-            | null
-            | undefined;
+        // ----- current_period_end handling (fix for red underline) -----
+        // Access via `any` so TS stops complaining, then validate manually.
+        const rawCurrentPeriodEnd = (subscription as any).current_period_end;
+        const currentPeriodEndUnix =
+          typeof rawCurrentPeriodEnd === 'number' ? rawCurrentPeriodEnd : null;
 
         const currentPeriodEnd =
-          typeof rawCurrentPeriodEnd === 'number' && !isNaN(rawCurrentPeriodEnd)
-            ? new Date(rawCurrentPeriodEnd * 1000).toISOString()
+          currentPeriodEndUnix && !Number.isNaN(currentPeriodEndUnix)
+            ? new Date(currentPeriodEndUnix * 1000).toISOString()
             : null;
+        // ---------------------------------------------------------------
 
         // Find landlord by stripe_customer_id
         const { data: landlord, error: landlordError } = await supabaseAdmin
@@ -124,13 +88,16 @@ export async function POST(req: Request) {
       }
 
       default:
-        // ignore everything else for now
+        // Ignore other Stripe events for now
         break;
     }
 
-    return new NextResponse('OK', { status: 200 });
+    return NextResponse.json({ received: true }, { status: 200 });
   } catch (err: any) {
-    console.error('Stripe subscription webhook handler error:', err);
-    return new NextResponse('Webhook handler failed', { status: 500 });
+    console.error('Error handling subscription webhook:', err);
+    return NextResponse.json(
+      { error: err?.message || 'Webhook handler error.' },
+      { status: 500 }
+    );
   }
 }

@@ -1,30 +1,28 @@
-// app/api/subscription/checkout/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-// ---- Stripe client ----
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-if (!stripeSecretKey) {
-  throw new Error('STRIPE_SECRET_KEY is not set on the server.');
-}
+// ---------- Stripe client ----------
+// No apiVersion here – fixes the red underline.
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
-const stripe = new Stripe(stripeSecretKey, {
-  // apiVersion is optional; leaving it out avoids TS complaining in some setups
-  // apiVersion: '2024-06-20',
-});
+// If env is being weird, fallback to the known price ID.
+// (Price IDs are not secret, it’s OK to have this in code.)
+const FALLBACK_SUBSCRIPTION_PRICE_ID = 'price_1SWJTQPbPgn5DmhBanWMq830';
 
-// ---- Supabase (service role) ----
+// ---------- Supabase (admin) ----------
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-  throw new Error('Supabase service-role environment variables are not set.');
-}
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  'http://localhost:3000';
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-// ---- Route handler ----
+// ---------- Handler ----------
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -37,15 +35,15 @@ export async function POST(req: Request) {
       );
     }
 
-    // Read these INSIDE the handler so we’re sure we see the env from Vercel
-    const SUBSCRIPTION_PRICE_ID = process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
-    const APP_URL =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      'http://localhost:3000';
+    // Read env inside the handler
+    const envPriceId = process.env.STRIPE_SUBSCRIPTION_PRICE_ID;
+    const SUBSCRIPTION_PRICE_ID =
+      envPriceId && envPriceId.length > 0
+        ? envPriceId
+        : FALLBACK_SUBSCRIPTION_PRICE_ID;
 
-    // Debug log to Vercel function logs
-    console.log('DEBUG PRICE:', SUBSCRIPTION_PRICE_ID);
+    console.log('DEBUG PRICE (env):', envPriceId);
+    console.log('DEBUG PRICE (using):', SUBSCRIPTION_PRICE_ID);
 
     if (!SUBSCRIPTION_PRICE_ID) {
       return NextResponse.json(
@@ -54,7 +52,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1) Load landlord so we have email + (optional) existing customer id
+    // 1) Load landlord (email + optional existing customer id)
     const { data: landlord, error: landlordError } = await supabaseAdmin
       .from('landlords')
       .select('id, email, stripe_customer_id')
