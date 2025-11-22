@@ -143,7 +143,7 @@ export default function LandlordSettingsPage() {
               Account Settings
             </h1>
             <p className="text-slate-400 text-xs">
-              Manage your subscription & account preferences.
+              Manage your subscription &amp; account preferences.
             </p>
           </div>
 
@@ -178,7 +178,7 @@ export default function LandlordSettingsPage() {
               </p>
 
               <p className="text-xs text-slate-500">
-                You're subscribed to the RentZentro Landlord Plan ($29.95/mo).
+                You are subscribed to the RentZentro Landlord Plan ($29.95/mo).
               </p>
             </div>
           ) : (
