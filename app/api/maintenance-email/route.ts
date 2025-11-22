@@ -116,14 +116,25 @@ export async function POST(req: Request) {
 
     // ----- Call Resend -----
 
-    const { data, error } = await resend.emails.send({
+    // Build options so we only add reply_to when we actually have an email.
+    const emailOptions: {
+      from: string;
+      to: string;
+      subject: string;
+      html: string;
+      reply_to?: string | string[];
+    } = {
       from,
       to,
       subject,
       html,
-      // let landlord reply straight to tenant
-      reply_to: tenantEmail || undefined,
-    });
+    };
+
+    if (tenantEmail && tenantEmail.trim().length > 0) {
+      emailOptions.reply_to = tenantEmail;
+    }
+
+    const { data, error } = await resend.emails.send(emailOptions);
 
     const debugResend = { data, error };
 
