@@ -31,6 +31,7 @@ type MaintenanceRow = {
   status: string | null;
   priority: string | null;
   created_at: string;
+  resolution_note: string | null; // 👈 landlord note
 };
 
 // ---------- Helpers ----------
@@ -128,7 +129,7 @@ export default function TenantMaintenancePage() {
         if (propertyError) throw propertyError;
         setProperty(propertyRow);
 
-        // Existing maintenance requests for this tenant
+        // Existing maintenance requests for this tenant (includes resolution_note)
         const { data: maintenanceRows, error: maintenanceError } =
           await supabase
             .from('maintenance_requests')
@@ -138,7 +139,7 @@ export default function TenantMaintenancePage() {
 
         if (maintenanceError) throw maintenanceError;
 
-        setRequests(maintenanceRows || []);
+        setRequests((maintenanceRows || []) as MaintenanceRow[]);
       } catch (err: any) {
         console.error('Error loading tenant maintenance:', err);
         setError(err?.message || 'Failed to load maintenance data.');
@@ -197,7 +198,6 @@ export default function TenantMaintenancePage() {
 
       if (insertError) throw insertError;
 
-      // Optimistically update list in UI
       setRequests((prev) => [insertData as MaintenanceRow, ...prev]);
 
       // 2) Email to landlord (route handles fallbacks)
@@ -454,6 +454,18 @@ export default function TenantMaintenancePage() {
                         <p className="mt-1 text-[11px] text-slate-300 break-words whitespace-pre-wrap">
                           {r.description}
                         </p>
+
+                        {/* landlord note */}
+                        {r.resolution_note && (
+                          <div className="mt-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                              Landlord note
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-slate-200 whitespace-pre-wrap break-words">
+                              {r.resolution_note}
+                            </p>
+                          </div>
+                        )}
                       </div>
                       <span
                         className={

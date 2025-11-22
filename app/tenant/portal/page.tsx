@@ -54,6 +54,7 @@ type MaintenanceRow = {
   status: string | null;
   priority: string | null;
   created_at: string;
+  resolution_note: string | null; // 👈 landlord note
 };
 
 // ---------- Helpers ----------
@@ -209,7 +210,7 @@ export default function TenantPortalPage() {
           setDocuments([]);
         }
 
-        // Recent maintenance requests (show a few on portal)
+        // Recent maintenance (only a few)
         const { data: maintRows, error: maintError } = await supabase
           .from('maintenance_requests')
           .select('*')
@@ -342,7 +343,6 @@ export default function TenantPortalPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto max-w-5xl space-y-4">
-        {/* Global banner */}
         {(success || error) && (
           <div
             className={`rounded-xl border px-4 py-2 text-sm ${
@@ -377,9 +377,7 @@ export default function TenantPortalPage() {
               <p className="font-medium text-slate-100">
                 {tenant.name || 'Tenant'}
               </p>
-              <p className="text-slate-400 text-[11px]">
-                {tenant.email}
-              </p>
+              <p className="text-slate-400 text-[11px]">{tenant.email}</p>
             </div>
             <button
               onClick={handleLogOut}
@@ -587,7 +585,7 @@ export default function TenantPortalPage() {
               </p>
             </section>
 
-            {/* Maintenance overview (separate card) */}
+            {/* Maintenance overview */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
                 Maintenance
@@ -630,6 +628,15 @@ export default function TenantPortalPage() {
                           {m.priority && (
                             <p className="mt-0.5 text-[10px] text-slate-500">
                               Priority: {m.priority}
+                            </p>
+                          )}
+
+                          {m.resolution_note && (
+                            <p className="mt-1 text-[10px] text-slate-300 line-clamp-2 break-words">
+                              <span className="font-semibold text-slate-200">
+                                Landlord note:{' '}
+                              </span>
+                              {m.resolution_note}
                             </p>
                           )}
                         </div>
