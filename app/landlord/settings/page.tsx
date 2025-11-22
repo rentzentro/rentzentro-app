@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '../../supabaseClient';
 import Link from 'next/link';
+import { supabase } from '../../supabaseClient';
 
 // ---------- Types ----------
 type LandlordRow = {
@@ -35,7 +35,7 @@ export default function LandlordSettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
 
-  // Load logged-in landlord (and create if missing)
+  // Load logged-in landlord
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -47,36 +47,16 @@ export default function LandlordSettingsPage() {
         const email = auth.data.user?.email;
         if (!email) throw new Error('Unable to load landlord account.');
 
-        // Try to find existing landlord row
-        const {
-          data,
-          error: landlordError,
-        } = await supabase
+        const { data, error: landlordError } = await supabase
           .from('landlords')
           .select('*')
           .eq('email', email)
           .maybeSingle();
 
         if (landlordError) throw landlordError;
+        if (!data) throw new Error('Landlord record not found.');
 
-        let landlordRow = data as LandlordRow | null;
-
-        // If no row exists yet, create one on the fly
-        if (!landlordRow) {
-          const {
-            data: inserted,
-            error: insertError,
-          } = await supabase
-            .from('landlords')
-            .insert({ email })
-            .select('*')
-            .single();
-
-          if (insertError) throw insertError;
-          landlordRow = inserted as LandlordRow;
-        }
-
-        setLandlord(landlordRow);
+        setLandlord(data);
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Unable to load settings.');
@@ -97,6 +77,7 @@ export default function LandlordSettingsPage() {
     try {
       const res = await fetch('/api/subscription/checkout', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ landlordId: landlord.id }),
       });
 
@@ -165,7 +146,7 @@ export default function LandlordSettingsPage() {
               Account Settings
             </h1>
             <p className="text-slate-400 text-xs">
-              Manage your subscription &amp; account preferences.
+              Manage your subscription & account preferences.
             </p>
           </div>
 
@@ -200,7 +181,8 @@ export default function LandlordSettingsPage() {
               </p>
 
               <p className="text-xs text-slate-500">
-                You are subscribed to the RentZentro Landlord Plan ($29.95/mo).
+                You&apos;re subscribed to the RentZentro Landlord Plan
+                ($29.95/mo).
               </p>
             </div>
           ) : (
@@ -214,7 +196,9 @@ export default function LandlordSettingsPage() {
                 disabled={startingCheckout}
                 className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-emerald-400 disabled:opacity-60"
               >
-                {startingCheckout ? 'Starting checkout…' : 'Subscribe for $29.95/mo'}
+                {startingCheckout
+                  ? 'Starting checkout…'
+                  : 'Subscribe for $29.95/mo'}
               </button>
 
               <p className="text-xs text-slate-500">

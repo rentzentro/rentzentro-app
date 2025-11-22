@@ -1,423 +1,313 @@
+'use client';
+
 import Link from 'next/link';
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50">
-      {/* Background accents */}
-      <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.08),_transparent_55%),radial-gradient(circle_at_bottom,_rgba(15,23,42,0.9),_rgba(15,23,42,1))]" />
-
-      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-        {/* Header */}
-        <header className="flex items-center justify-between pb-6">
+    <main className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
+      {/* Top nav */}
+      <header className="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur">
+        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/40 shadow-sm shadow-emerald-500/20">
-              <span className="text-xs font-bold tracking-tight text-emerald-400">
-                RZ
-              </span>
+            <div className="h-7 w-7 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 text-xs font-extrabold">
+              RZ
             </div>
             <div>
-              <p className="text-sm font-semibold tracking-tight text-slate-50">
+              <p className="text-sm font-semibold tracking-tight">
                 RentZentro
               </p>
-              <p className="text-[11px] text-slate-400">
-                Rent, tenants & maintenance in one place.
+              <p className="text-[11px] text-slate-400 -mt-0.5">
+                Simple rent collection for small landlords
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-xs">
+          <nav className="hidden sm:flex items-center gap-6 text-[11px] text-slate-400">
+            <a href="#features" className="hover:text-emerald-300">
+              Features
+            </a>
+            <a href="#pricing" className="hover:text-emerald-300">
+              Pricing
+            </a>
+            <a href="#how-it-works" className="hover:text-emerald-300">
+              How it works
+            </a>
+          </nav>
+
+          <div className="flex items-center gap-2">
             <Link
               href="/landlord/login"
-              className="hidden rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800 sm:inline-flex"
+              className="hidden sm:inline-flex rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
             >
               Landlord login
             </Link>
             <Link
               href="/tenant/login"
-              className="hidden rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800 sm:inline-flex"
+              className="inline-flex rounded-full border border-slate-800 bg-slate-950 px-3 py-1.5 text-[11px] font-medium text-slate-200 hover:bg-slate-900"
             >
               Tenant login
             </Link>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* Main content */}
-        <div className="grid flex-1 gap-8 pb-10 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] md:items-center">
-          {/* Left: Hero + CTAs */}
-          <section className="space-y-7">
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-100 shadow-sm shadow-emerald-500/30">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Built for small landlords who want big-software clarity.
-            </div>
+      {/* Main content */}
+      <div className="flex-1">
+        <div className="mx-auto max-w-6xl px-4 py-8 lg:py-10 space-y-10">
+          {/* Hero */}
+          <section className="grid gap-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.1fr)] items-start">
+            <div className="space-y-5">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span className="text-[11px] text-emerald-100 font-medium">
+                  Built for small landlords · No setup fees
+                </span>
+              </div>
 
-            <div className="space-y-4">
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl lg:text-[2.5rem]">
-                A clean portal for rent, tenants & maintenance—without the
-                enterprise headache.
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-slate-50">
+                Collect rent online without buying a full property-management
+                empire.
               </h1>
-              <p className="max-w-xl text-sm leading-relaxed text-slate-300">
-                RentZentro gives landlords a clear view of who&apos;s paid,
-                what&apos;s due, and which maintenance issues are open. Tenants
-                you invite get a simple place to pay rent, see their lease, and
-                submit requests—no confusing apps or portals.
+
+              <p className="text-sm text-slate-300 leading-relaxed max-w-xl">
+                RentZentro gives you the parts you actually need—online rent
+                payments, tenant portal, maintenance tracking, and receipts—
+                without the bloated software and $100+/month price tags.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link
+                  href="/landlord/login"
+                  className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400"
+                >
+                  I&apos;m a landlord
+                </Link>
+                <Link
+                  href="/tenant/login"
+                  className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800"
+                >
+                  I&apos;m a tenant
+                </Link>
+              </div>
+
+              <p className="text-[11px] text-slate-500 max-w-md">
+                Landlords create a free account first. Subscription billing
+                happens later from inside your secure dashboard—never on this
+                public landing page.
               </p>
             </div>
 
-            {/* Primary CTAs */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              {/* Landlord card */}
-              <Link
-                href="/landlord/login"
-                className="group rounded-2xl border border-emerald-500/50 bg-slate-950/80 p-4 shadow-lg shadow-emerald-500/20 transition-colors hover:border-emerald-400 hover:bg-slate-950"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
-                      I&apos;m a landlord
-                    </p>
-                    <p className="mt-1 text-sm text-slate-100">
-                      Log in to your dashboard.
-                    </p>
-                  </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-500/50 bg-emerald-500/10 text-lg">
-                    🏢
-                  </div>
-                </div>
-                <ul className="mt-3 space-y-1.5 text-[11px] text-slate-400">
-                  <li className="flex items-center gap-2">
-                    <span className="h-1 w-1 rounded-full bg-emerald-400" />
-                    See who has paid, who&apos;s upcoming, and who&apos;s late.
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1 w-1 rounded-full bg-emerald-400" />
-                    Track maintenance requests with status & notes.
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1 w-1 rounded-full bg-emerald-400" />
-                    Share leases & documents directly with tenants.
-                  </li>
-                </ul>
-              </Link>
-
-              {/* Tenant card */}
-              <Link
-                href="/tenant/login"
-                className="group rounded-2xl border border-slate-800 bg-slate-950/80 p-4 shadow-md shadow-black/40 transition-colors hover:border-slate-600 hover:bg-slate-950"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-sky-300">
-                      I&apos;m a tenant
-                    </p>
-                    <p className="mt-1 text-sm text-slate-100">
-                      Log in with the invite from your landlord.
-                    </p>
-                  </div>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-sky-500/50 bg-sky-500/10 text-lg">
-                    🏠
-                  </div>
-                </div>
-                <ul className="mt-3 space-y-1.5 text-[11px] text-slate-400">
-                  <li className="flex items-center gap-2">
-                    <span className="h-1 w-1 rounded-full bg-sky-400" />
-                    See when rent is due and your current balance.
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1 w-1 rounded-full bg-sky-400" />
-                    Submit maintenance requests.
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-1 w-1 rounded-full bg-sky-400" />
-                    Access shared lease documents.
-                  </li>
-                </ul>
-              </Link>
-            </div>
-
-            {/* Reassurance row */}
-            <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-500">
-              <div className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                Card payments processed securely by Stripe.
-              </div>
-              <span className="hidden h-3 w-px bg-slate-700 sm:inline-block" />
-              <p>Flat $29.95 / month per landlord. No per-unit surprises.</p>
-            </div>
-          </section>
-
-          {/* Right: Landlord dashboard demo preview (slightly simplified) */}
-          <section className="mt-2 md:mt-0">
-            <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-4 shadow-2xl shadow-black/50 backdrop-blur">
-              {/* Demo header */}
-              <div className="mb-3 flex items-center justify-between">
+            {/* Fake dashboard preview */}
+            <div className="rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 shadow-lg shadow-emerald-500/5 p-4">
+              <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-xs font-medium text-slate-200">
-                    Landlord dashboard demo
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    A peek at what you&apos;ll see after logging in.
+                  <p className="text-xs text-slate-400">Landlord demo</p>
+                  <p className="text-sm font-semibold text-slate-50">
+                    Portfolio overview
                   </p>
                 </div>
-                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                <span className="rounded-full bg-emerald-500/10 text-emerald-200 text-[11px] px-2 py-1 border border-emerald-500/40">
                   Sample view
                 </span>
               </div>
 
-              {/* Fake app window */}
-              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/90">
-                {/* Top bar */}
-                <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/90 px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-red-500/70" />
-                    <span className="h-2 w-2 rounded-full bg-amber-400/70" />
-                    <span className="h-2 w-2 rounded-full bg-emerald-400/70" />
+              <div className="space-y-3 text-xs">
+                <div className="flex items-center justify-between rounded-xl bg-slate-950/70 border border-slate-800 px-3 py-2">
+                  <div>
+                    <p className="text-slate-400 text-[11px]">
+                      This month&apos;s rent
+                    </p>
+                    <p className="text-sm font-semibold text-slate-50">
+                      $4,250.00
+                    </p>
                   </div>
-                  <p className="text-[11px] text-slate-400">
-                    RentZentro · Landlord dashboard
-                  </p>
-                  <div className="h-4 w-10" />
+                  <div className="text-right">
+                    <p className="text-[11px] text-emerald-300">92% collected</p>
+                    <p className="text-[11px] text-slate-500">
+                      1 payment overdue
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex">
-                  {/* Sidebar */}
-                  <aside className="hidden w-28 border-r border-slate-800 bg-slate-950/95 px-2 py-3 text-[10px] text-slate-400 sm:block">
-                    <p className="mb-2 px-1 text-[10px] font-semibold tracking-wide text-slate-500">
-                      MENU
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2">
+                    <p className="text-[11px] text-slate-400">
+                      Upcoming payments
                     </p>
-                    <nav className="space-y-1.5">
-                      <div className="rounded-md bg-emerald-500/15 px-2 py-1.5 text-emerald-200 border border-emerald-500/40 text-[10px] font-medium">
-                        Dashboard
-                      </div>
-                      <div className="rounded-md px-2 py-1.5 hover:bg-slate-900/80">
-                        Properties
-                      </div>
-                      <div className="rounded-md px-2 py-1.5 hover:bg-slate-900/80">
-                        Tenants
-                      </div>
-                      <div className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-slate-900/80">
-                        <span>Maintenance</span>
-                        <span className="rounded-full bg-amber-500/20 px-1.5 text-[9px] text-amber-300">
-                          2
-                        </span>
-                      </div>
-                      <div className="rounded-md px-2 py-1.5 hover:bg-slate-900/80">
-                        Documents
-                      </div>
-                    </nav>
-                  </aside>
+                    <p className="mt-1 text-sm text-slate-50 font-medium">
+                      3 tenants
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      Next due Jan 1
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2">
+                    <p className="text-[11px] text-slate-400">Open requests</p>
+                    <p className="mt-1 text-sm text-slate-50 font-medium">
+                      2 issues
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      Plumbing · Heating
+                    </p>
+                  </div>
+                </div>
 
-                  {/* Main demo content */}
-                  <div className="flex-1 space-y-3 bg-slate-950/80 p-3">
-                    {/* Top row: greeting + summary */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-medium text-slate-100">
-                          Good afternoon, Landlord
-                        </p>
-                        <p className="text-[11px] text-slate-500">
-                          Quick snapshot of rent & maintenance.
-                        </p>
-                      </div>
-                      <div className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-300">
-                        Next rent cycle in 12 days
-                      </div>
-                    </div>
-
-                    {/* Stats row */}
-                    <div className="grid gap-2 text-[11px] sm:grid-cols-2">
-                      <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-2.5">
-                        <p className="text-slate-400">This month&apos;s rent</p>
-                        <p className="mt-1 text-lg font-semibold text-slate-50">
-                          $4,250
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-emerald-300">
-                          4 of 5 units paid
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-2.5">
-                        <p className="text-slate-400">Open issues</p>
-                        <p className="mt-1 text-lg font-semibold text-amber-300">
-                          2
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-slate-400">
-                          1 urgent · 1 in progress
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Maintenance + payments in one simple stack */}
-                    <div className="space-y-2 text-[11px]">
-                      {/* Maintenance preview */}
-                      <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-2.5">
-                        <div className="mb-1 flex items-center justify-between">
-                          <p className="text-xs font-medium text-slate-100">
-                            Maintenance requests
-                          </p>
-                          <span className="text-[10px] text-slate-500">
-                            Preview only
-                          </span>
-                        </div>
-                        <div className="space-y-1.5">
-                          <div className="flex items-start justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/90 px-2 py-1.5">
-                            <div className="min-w-0">
-                              <p className="truncate text-[11px] text-slate-50">
-                                Leaky kitchen sink
-                              </p>
-                              <p className="text-[10px] text-slate-400">
-                                Unit 2B · Submitted today
-                              </p>
-                            </div>
-                            <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[9px] font-medium text-amber-300">
-                              In progress
-                            </span>
-                          </div>
-
-                          <div className="flex items-start justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/90 px-2 py-1.5">
-                            <div className="min-w-0">
-                              <p className="truncate text-[11px] text-slate-50">
-                                Heat not working
-                              </p>
-                              <p className="text-[10px] text-slate-400">
-                                Unit 3A · 2 hrs ago
-                              </p>
-                            </div>
-                            <span className="shrink-0 rounded-full bg-red-500/20 px-2 py-0.5 text-[9px] font-medium text-red-300">
-                              New
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Recent payments preview */}
-                      <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-2.5">
-                        <div className="mb-1 flex items-center justify-between">
-                          <p className="text-xs font-medium text-slate-100">
-                            Recent payments
-                          </p>
-                          <span className="text-[10px] text-slate-500">
-                            Sample data
-                          </span>
-                        </div>
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/90 px-2 py-1.5">
-                            <div>
-                              <p className="text-[11px] text-slate-50">
-                                $1,050 · Unit 1A
-                              </p>
-                              <p className="text-[10px] text-slate-400">
-                                Paid today · Card
-                              </p>
-                            </div>
-                            <span className="text-[10px] text-emerald-300">
-                              On time
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/90 px-2 py-1.5">
-                            <div>
-                              <p className="text-[11px] text-slate-50">
-                                $850 · Unit 2B
-                              </p>
-                              <p className="text-[10px] text-slate-400">
-                                Paid yesterday · ACH
-                              </p>
-                            </div>
-                            <span className="text-[10px] text-slate-400">
-                              Cleared
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2">
+                  <p className="text-[11px] text-slate-400 mb-1">
+                    Tenant portal preview
+                  </p>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-300">
+                      Download receipts, view balance, submit maintenance.
+                    </span>
+                    <span className="hidden sm:inline text-emerald-300">
+                      Clean & simple.
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
           </section>
-        </div>
 
-        {/* ---- WHY RENTZENTRO SECTION (simpler) ---- */}
-        <section className="mb-6 mt-2 rounded-3xl border border-slate-800 bg-slate-950/90 p-5 shadow-inner shadow-black/40">
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
-                Why landlords choose RentZentro
-              </p>
-              <h2 className="text-base font-semibold text-slate-50 sm:text-lg">
-                Clearer than spreadsheets. Simpler than “all-in-one” portals.
-              </h2>
+          {/* Features */}
+          <section id="features" className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-50">
+              What you get with RentZentro
+            </h2>
+
+            <div className="grid gap-4 md:grid-cols-2 text-sm">
+              <div className="space-y-3">
+                <FeatureItem
+                  title="Online rent payments"
+                  body="Secure card payments via Stripe, plus support for manual payments so your records stay clean."
+                />
+                <FeatureItem
+                  title="Tenant portal"
+                  body="Tenants can log in to see their balance, payment history, documents, and maintenance requests."
+                />
+                <FeatureItem
+                  title="Maintenance tracking + email alerts"
+                  body="Tenants submit requests, you get an email, and both sides can follow the status without messy text threads."
+                />
+                <FeatureItem
+                  title="Receipts & payment history"
+                  body="Automatic receipts and a clear history for every unit to keep everyone on the same page."
+                />
+              </div>
+
+              <div className="space-y-3">
+                <FeatureItem
+                  title="Property & unit overview"
+                  body="See current rent, next due date, and status at a glance for each unit you manage."
+                />
+                <FeatureItem
+                  title="Document sharing"
+                  body="Upload leases or addenda once and let tenants view them securely in their portal."
+                />
+                <FeatureItem
+                  title="Straightforward pricing"
+                  body="$29.95/month for landlords, plus standard Stripe card fees. No per-tenant or per-unit surprises."
+                />
+                <FeatureItem
+                  title="Designed for growth"
+                  body="Start with a few units and grow. RentZentro is built to scale with you—not get in your way."
+                />
+              </div>
             </div>
-            <p className="max-w-sm text-[11px] text-slate-400">
-              One clean portal for you and your invited tenants at a flat{' '}
-              <span className="font-semibold text-slate-100">
-                $29.95 / month
-              </span>{' '}
-              per landlord.
-            </p>
-          </div>
+          </section>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <BenefitRow
-              title="Know who has paid in seconds"
-              description="See paid, upcoming, and late rent by unit without digging through your bank app or messages."
-            />
-            <BenefitRow
-              title="Requests in one place, not your texts"
-              description="Tenants submit maintenance online; you track status and notes instead of juggling calls and screenshots."
-            />
-            <BenefitRow
-              title="Leases and documents stay attached"
-              description="Upload key files once and keep them tied to the right property and tenant for easy reference."
-            />
-            <BenefitRow
-              title="Made for owners, not IT teams"
-              description="A focused, lightweight experience tuned for small landlords and growing portfolios."
-            />
-          </div>
-        </section>
+          {/* Pricing – info only, no checkout here */}
+          <section id="pricing" className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-50">
+              Simple pricing when you&apos;re ready
+            </h2>
 
-        {/* Footer */}
-        <footer className="mt-2 border-t border-slate-800 pt-5 pb-8 text-center text-[11px] text-slate-500">
-          <div className="flex flex-wrap justify-center gap-4">
-            <Link
-              href="/terms"
-              className="hover:text-slate-300 transition-colors"
-            >
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-50">
+                  RentZentro Landlord Plan
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-emerald-300">
+                  $29.95
+                  <span className="text-sm text-slate-400 font-normal">
+                    {' '}
+                    / month
+                  </span>
+                </p>
+                <p className="mt-1 text-xs text-slate-400 max-w-md">
+                  Pricing is activated from inside your landlord dashboard after
+                  you create an account. No one can start a subscription from
+                  this public page.
+                </p>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <Link
+                  href="/landlord/login"
+                  className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+                >
+                  Create or access landlord account
+                </Link>
+                <p className="text-[11px] text-slate-500">
+                  You&apos;ll see subscription options in{' '}
+                  <span className="font-medium text-slate-300">
+                    Settings &gt; Subscription
+                  </span>{' '}
+                  after you&apos;re logged in.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* How it works */}
+          <section id="how-it-works" className="space-y-3 text-sm">
+            <h2 className="text-lg font-semibold text-slate-50">
+              How RentZentro fits into your workflow
+            </h2>
+            <ol className="list-decimal list-inside space-y-2 text-slate-300">
+              <li>Create a landlord account and add your properties & tenants.</li>
+              <li>
+                Invite tenants; they get a secure portal to pay rent and submit
+                requests.
+              </li>
+              <li>
+                When you&apos;re ready, enable the $29.95/month plan from
+                Settings to unlock full online payments and automation.
+              </li>
+            </ol>
+          </section>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-800 bg-slate-950">
+        <div className="mx-auto max-w-6xl px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-[11px] text-slate-500">
+            &copy; {new Date().getFullYear()} RentZentro. All rights reserved.
+          </p>
+          <div className="flex items-center gap-4 text-[11px] text-slate-500">
+            <Link href="/terms" className="hover:text-emerald-300">
               Terms of Service
             </Link>
-            <Link
-              href="/privacy"
-              className="hover:text-slate-300 transition-colors"
-            >
+            <Link href="/privacy" className="hover:text-emerald-300">
               Privacy Policy
             </Link>
           </div>
-          <p className="mt-3">
-            © {new Date().getFullYear()} RentZentro — All rights reserved.
-          </p>
-        </footer>
-      </div>
+        </div>
+      </footer>
     </main>
   );
 }
 
-function BenefitRow({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
+function FeatureItem({ title, body }: { title: string; body: string }) {
   return (
-    <div className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-2.5">
-      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-emerald-500/50 bg-emerald-500/10 text-xs text-emerald-300">
+    <div className="flex gap-3">
+      <div className="mt-1 h-5 w-5 rounded-full border border-emerald-500/60 bg-emerald-500/10 flex items-center justify-center text-[11px] text-emerald-200">
         ✓
       </div>
-      <div className="min-w-0">
-        <p className="text-[13px] font-semibold text-slate-50">{title}</p>
-        <p className="mt-0.5 text-[11px] leading-snug text-slate-400">
-          {description}
-        </p>
+      <div>
+        <p className="text-xs font-semibold text-slate-50">{title}</p>
+        <p className="mt-0.5 text-xs text-slate-400">{body}</p>
       </div>
     </div>
   );
