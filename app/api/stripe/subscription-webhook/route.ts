@@ -4,10 +4,9 @@ import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-// Ensure Node runtime for Stripe + env vars
+// Force Node runtime (no edge) so Stripe + env vars work properly
 export const runtime = 'nodejs';
 
-// Create Stripe client (no apiVersion so TypeScript stops yelling)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 const supabaseAdmin = createClient(
@@ -18,6 +17,12 @@ const supabaseAdmin = createClient(
 export async function POST(req: Request) {
   // Read webhook secret at runtime
   const endpointSecret = process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET;
+
+  // 🔍 DEBUG: Log if the secret is visible at all
+  console.log(
+    'DEBUG SUBSCRIPTION WEBHOOK SECRET PRESENT:',
+    endpointSecret ? 'YES' : 'NO'
+  );
 
   if (!endpointSecret) {
     console.error(
@@ -54,7 +59,7 @@ export async function POST(req: Request) {
   try {
     switch (event.type) {
       // ------------------------------------------------
-      // 1) Checkout session completed (start subscription)
+      // 1) Checkout session completed
       // ------------------------------------------------
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -69,11 +74,12 @@ export async function POST(req: Request) {
           subscriptionId,
         });
 
+        // If this is an old session without metadata, just log & ACK.
         if (!landlordIdStr || !customerId || !subscriptionId) {
           console.warn(
-            'Missing landlordId/customerId/subscriptionId on checkout.session.completed'
+            'Old/invalid checkout.session.completed (missing landlordId/customerId/subscriptionId). Acking anyway.'
           );
-          break; // still return 200 at bottom
+          break;
         }
 
         const landlordId = Number(landlordIdStr);
@@ -88,7 +94,7 @@ export async function POST(req: Request) {
           .update({
             stripe_customer_id: customerId,
             stripe_subscription_id: subscriptionId,
-            // status + period end set later by subscription.updated
+            // status & period end set later by subscription.updated
           })
           .eq('id', landlordId);
 
@@ -176,7 +182,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Always ack so Stripe stops retrying
+    // Always ACK so Stripe stops retrying
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err: any) {
     console.error('Error handling Stripe subscription webhook:', err);
