@@ -35,7 +35,7 @@ export default function LandlordSettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
 
-  // Load logged-in landlord
+  // Load logged-in landlord (and create if missing)
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -47,16 +47,36 @@ export default function LandlordSettingsPage() {
         const email = auth.data.user?.email;
         if (!email) throw new Error('Unable to load landlord account.');
 
-        const { data, error: landlordError } = await supabase
+        // Try to find existing landlord row
+        const {
+          data,
+          error: landlordError,
+        } = await supabase
           .from('landlords')
           .select('*')
           .eq('email', email)
           .maybeSingle();
 
         if (landlordError) throw landlordError;
-        if (!data) throw new Error('Landlord record not found.');
 
-        setLandlord(data);
+        let landlordRow = data as LandlordRow | null;
+
+        // If no row exists yet, create one on the fly
+        if (!landlordRow) {
+          const {
+            data: inserted,
+            error: insertError,
+          } = await supabase
+            .from('landlords')
+            .insert({ email })
+            .select('*')
+            .single();
+
+          if (insertError) throw insertError;
+          landlordRow = inserted as LandlordRow;
+        }
+
+        setLandlord(landlordRow);
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Unable to load settings.');
@@ -116,7 +136,9 @@ export default function LandlordSettingsPage() {
   if (!landlord) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <p className="text-red-400 text-sm">{error || 'Unable to load account.'}</p>
+        <p className="text-red-400 text-sm">
+          {error || 'Unable to load account.'}
+        </p>
       </main>
     );
   }
