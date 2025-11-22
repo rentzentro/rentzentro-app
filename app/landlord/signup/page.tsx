@@ -146,7 +146,7 @@ export default function LandlordSignupPage() {
             href="/landlord/login"
             className="text-emerald-400 hover:text-emerald-300"
           >
-            Log in instead
+            Log in
           </Link>
           .
         </p>

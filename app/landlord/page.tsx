@@ -316,7 +316,7 @@ export default function LandlordDashboardPage() {
               href="/landlord/settings"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
             >
-              Settings
+              Subscription
             </Link>
 
             <Link
