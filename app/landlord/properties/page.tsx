@@ -27,72 +27,69 @@ const formatCurrency = (v: number | null | undefined) =>
       });
 
 const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '';
+  if (!iso) return '-';
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
+  if (isNaN(d.getTime())) return '-';
   return d.toLocaleDateString('en-US', {
-    year: 'numeric',
     month: 'short',
     day: 'numeric',
+    year: 'numeric',
   });
 };
 
 export default function LandlordPropertiesPage() {
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const [properties, setProperties] = useState<PropertyRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // form state
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState('');
   const [unitLabel, setUnitLabel] = useState('');
-  const [monthlyRent, setMonthlyRent] = useState('');
-  const [status, setStatus] = useState<'current' | 'vacant' | 'off-market'>(
-    'current'
-  );
+  const [monthlyRent, setMonthlyRent] = useState<string>('');
+  const [status, setStatus] = useState('Current');
   const [nextDueDate, setNextDueDate] = useState('');
+
+  // -------- Load user + data --------
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
-      setSuccess(null);
-
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-
-      if (authError || !user) {
-        console.error('Auth error / no user:', authError);
-        router.push('/landlord/login');
-        return;
-      }
-
-      const uid = user.id;
-      const email = user.email ?? null;
-      setUserId(uid);
-      setUserEmail(email);
-
       try {
-        const { data, error: propError } = await supabase
+        const { data: authData, error: authError } =
+          await supabase.auth.getUser();
+        if (authError) throw authError;
+        const user = authData.user;
+        if (!user) {
+          router.push('/landlord/login');
+          return;
+        }
+        setUserId(user.id);
+        setUserEmail(user.email ?? null);
+
+        const { data, error: propsError } = await supabase
           .from('properties')
           .select('*')
-          .eq('owner_id', uid)
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: false });
 
-        if (propError) throw propError;
+        if (propsError) throw propsError;
 
         setProperties((data || []) as PropertyRow[]);
       } catch (err: any) {
         console.error(err);
-        setError(err.message || 'Failed to load properties.');
+        setError(
+          err?.message ||
+            'Failed to load properties. Please refresh and try again.'
+        );
       } finally {
         setLoading(false);
       }
@@ -101,25 +98,51 @@ export default function LandlordPropertiesPage() {
     load();
   }, [router]);
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/landlord/login');
+  const resetForm = () => {
+    setEditingId(null);
+    setName('');
+    setUnitLabel('');
+    setMonthlyRent('');
+    setStatus('Current');
+    setNextDueDate('');
   };
 
-  const reloadProperties = async (uid: string) => {
-    const { data, error } = await supabase
-      .from('properties')
-      .select('*')
-      .eq('owner_id', uid)
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
-    setProperties((data || []) as PropertyRow[]);
+  const beginEdit = (p: PropertyRow) => {
+    setEditingId(p.id);
+    setName(p.name || '');
+    setUnitLabel(p.unit_label || '');
+    setMonthlyRent(p.monthly_rent != null ? String(p.monthly_rent) : '');
+    setStatus(p.status || 'Current');
+    setNextDueDate(p.next_due_date || '');
+    setError(null);
+    setSuccess(null);
   };
 
-  const handleCreateProperty = async () => {
+  const handleDelete = async (id: number) => {
+    if (!confirm('Delete this property? This cannot be undone.')) return;
+    setError(null);
+    setSuccess(null);
+    try {
+      const { error: delError } = await supabase
+        .from('properties')
+        .delete()
+        .eq('id', id);
+
+      if (delError) throw delError;
+
+      setProperties((prev) => prev.filter((p) => p.id !== id));
+      if (editingId === id) resetForm();
+      setSuccess('Property deleted.');
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || 'Failed to delete property.');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!userId) {
-      setError('Missing landlord account. Please log in again.');
+      setError('Not logged in.');
       return;
     }
 
@@ -128,67 +151,59 @@ export default function LandlordPropertiesPage() {
     setSuccess(null);
 
     try {
-      const { error: insertError } = await supabase.from('properties').insert({
-        name: name || null,
-        unit_label: unitLabel || null,
+      const payload: Partial<PropertyRow> = {
+        name: name.trim() || null,
+        unit_label: unitLabel.trim() || null,
         monthly_rent: monthlyRent ? Number(monthlyRent) : null,
-        status,
+        status: status.trim() || null,
         next_due_date: nextDueDate || null,
-        owner_id: userId, // 🔑 matches RLS
-        landlord_email: userEmail,
-      });
+      };
 
-      if (insertError) {
-        console.error('Insert property error:', insertError);
-        setError(insertError.message || 'Failed to create property.');
-        return;
+      if (editingId == null) {
+        const { data, error: insertError } = await supabase
+          .from('properties')
+          .insert([
+            {
+              ...payload,
+              owner_id: userId,
+              landlord_email: userEmail,
+            },
+          ])
+          .select('*')
+          .single();
+
+        if (insertError) throw insertError;
+
+        setProperties((prev) => [data as PropertyRow, ...prev]);
+        resetForm();
+        setSuccess('Property created.');
+      } else {
+        const { data, error: updateError } = await supabase
+          .from('properties')
+          .update(payload)
+          .eq('id', editingId)
+          .select('*')
+          .single();
+
+        if (updateError) throw updateError;
+
+        setProperties((prev) =>
+          prev.map((p) => (p.id === editingId ? (data as PropertyRow) : p))
+        );
+        resetForm();
+        setSuccess('Property updated.');
       }
-
-      setSuccess('Property created.');
-      setName('');
-      setUnitLabel('');
-      setMonthlyRent('');
-      setStatus('current');
-      setNextDueDate('');
-
-      await reloadProperties(userId);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Unexpected error creating property.');
-      return;
+      setError(err?.message || 'Failed to save property.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDeleteProperty = async (propertyId: number) => {
-    if (!userId) return;
-
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const { error } = await supabase
-        .from('properties')
-        .delete()
-        .eq('id', propertyId)
-        .eq('owner_id', userId);
-
-      if (error) {
-        console.error('Delete property error:', error);
-        setError(
-          error.message ||
-            'Failed to delete property (check tenants/payments linked).'
-        );
-        return;
-      }
-
-      setSuccess('Property deleted.');
-      await reloadProperties(userId);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Unexpected error deleting property.');
-    }
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/landlord/login');
   };
 
   if (loading) {
@@ -201,9 +216,9 @@ export default function LandlordPropertiesPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+      <div className="mx-auto max-w-5xl px-4 py-8">
         {/* Header */}
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="text-xs text-slate-500 flex gap-2">
               <Link href="/landlord" className="hover:text-emerald-400">
@@ -216,58 +231,56 @@ export default function LandlordPropertiesPage() {
               Properties
             </h1>
             <p className="text-[13px] text-slate-400">
-              Add and manage the units you collect rent for.
+              Track each unit, its status, and rent.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
             <Link
               href="/landlord"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
             >
               Back to dashboard
             </Link>
             <button
               type="button"
               onClick={handleSignOut}
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-100"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
             >
               Log out
             </button>
           </div>
-        </header>
+        </div>
 
-        {/* Alerts */}
         {(error || success) && (
           <div
-            className={`rounded-2xl border px-4 py-2 text-sm ${
+            className={`mb-4 rounded-2xl border px-4 py-2 text-sm ${
               error
-                ? 'border-rose-500/60 bg-rose-500/10 text-rose-100'
-                : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-100'
+                ? 'border-rose-500/60 bg-rose-950/40 text-rose-100'
+                : 'border-emerald-500/60 bg-emerald-950/40 text-emerald-100'
             }`}
           >
             {error || success}
           </div>
         )}
 
-        {/* Content */}
-        <section className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.1fr)]">
-          {/* Left: list */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+        <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)]">
+          {/* List */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wide">
-                  Your properties
+                  Your units
                 </p>
                 <p className="mt-1 text-sm font-medium text-slate-50">
-                  {properties.length} unit
+                  {properties.length} record
                   {properties.length === 1 ? '' : 's'}
                 </p>
               </div>
             </div>
 
             {properties.length === 0 ? (
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-4 text-xs text-slate-500">
                 No properties yet. Use the form on the right to add your first
                 unit.
               </p>
@@ -280,118 +293,137 @@ export default function LandlordPropertiesPage() {
                   >
                     <div>
                       <p className="font-medium text-slate-100">
-                        {p.name || 'Property'}{' '}
-                        {p.unit_label ? `· ${p.unit_label}` : ''}
+                        {p.name || 'Untitled property'}
+                        {p.unit_label ? ` · ${p.unit_label}` : ''}
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        Status:{' '}
-                        <span className="text-slate-200">
-                          {p.status || 'Unknown'}
-                        </span>{' '}
-                        • Rent:{' '}
-                        <span className="text-slate-200">
-                          {formatCurrency(p.monthly_rent)}
-                        </span>
+                        Rent {formatCurrency(p.monthly_rent)} •{' '}
+                        {p.status || 'Status unknown'}
                       </p>
                       {p.next_due_date && (
                         <p className="text-[11px] text-slate-500">
-                          Next due: {formatDate(p.next_due_date)}
+                          Next due {formatDate(p.next_due_date)}
                         </p>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteProperty(p.id)}
-                      className="text-[11px] px-2 py-1 rounded-full border border-rose-500/60 text-rose-200 hover:bg-rose-950/40"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => beginEdit(p)}
+                        className="rounded-full border border-slate-600 px-2 py-0.5 text-[10px] text-slate-100 hover:bg-slate-700"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(p.id)}
+                        className="rounded-full border border-rose-600 px-2 py-0.5 text-[10px] text-rose-100 hover:bg-rose-700"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </section>
 
-          {/* Right: add property */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
-            <p className="text-xs text-slate-500 uppercase tracking-wide">
-              Add property
+          {/* Form */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">
+              {editingId ? 'Edit property' : 'Add property'}
             </p>
-            <p className="text-[13px] text-slate-400">
-              Create a unit and set its rent and next due date.
+            <p className="text-[13px] text-slate-400 mb-4">
+              {editingId
+                ? 'Update unit details and rent.'
+                : 'Add each unit you manage so RentZentro can track rent and status.'}
             </p>
 
-            <div className="space-y-2 text-xs">
+            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
               <div className="space-y-1">
-                <label className="block text-slate-400">Property name</label>
+                <label className="block text-slate-300">Property name</label>
                 <input
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                  placeholder="123 Main St"
+                  placeholder="e.g. 123 Main St"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="block text-slate-400">Unit / label</label>
+                <label className="block text-slate-300">Unit / label</label>
                 <input
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                   value={unitLabel}
                   onChange={(e) => setUnitLabel(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                  placeholder="Apt 2B"
+                  placeholder="e.g. Apt 2B"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="block text-slate-400">Monthly rent</label>
+                  <label className="block text-slate-300">Monthly rent</label>
                   <input
+                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                     value={monthlyRent}
                     onChange={(e) => setMonthlyRent(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                    placeholder="1500"
+                    placeholder="e.g. 1500"
+                    inputMode="numeric"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-slate-400">Status</label>
+                  <label className="block text-slate-300">Status</label>
                   <select
+                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                     value={status}
-                    onChange={(e) =>
-                      setStatus(
-                        e.target.value as 'current' | 'vacant' | 'off-market'
-                      )
-                    }
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
+                    onChange={(e) => setStatus(e.target.value)}
                   >
-                    <option value="current">Current</option>
-                    <option value="vacant">Vacant</option>
-                    <option value="off-market">Off market</option>
+                    <option>Current</option>
+                    <option>Vacant</option>
+                    <option>Future</option>
+                    <option>Inactive</option>
                   </select>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="block text-slate-400">Next due date</label>
+                <label className="block text-slate-300">Next due date</label>
                 <input
                   type="date"
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                   value={nextDueDate}
                   onChange={(e) => setNextDueDate(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                 />
               </div>
 
-              <button
-                type="button"
-                onClick={handleCreateProperty}
-                disabled={saving}
-                className="mt-3 w-full rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
-              >
-                {saving ? 'Creating…' : 'Create property'}
-              </button>
-            </div>
-          </div>
-        </section>
+              <div className="mt-4 flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+                >
+                  {saving
+                    ? editingId
+                      ? 'Saving…'
+                      : 'Creating…'
+                    : editingId
+                    ? 'Save changes'
+                    : 'Create property'}
+                </button>
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="text-[11px] text-slate-400 hover:text-slate-200"
+                  >
+                    Cancel editing
+                  </button>
+                )}
+              </div>
+            </form>
+          </section>
+        </div>
       </div>
     </main>
   );
