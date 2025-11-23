@@ -11,10 +11,7 @@ type LandlordRow = {
   id: number;
   email: string;
   name: string | null;
-  stripe_customer_id: string | null;
-  stripe_subscription_id: string | null;
   subscription_status: string | null;
-  subscription_current_period_end: string | null;
 };
 
 type PropertyRow = {
@@ -95,79 +92,40 @@ const parseDueDate = (iso: string | null | undefined) => {
 export default function LandlordDashboardPage() {
   const router = useRouter();
 
-  const [checkingAccess, setCheckingAccess] = useState(true);
-  const [canViewDashboard, setCanViewDashboard] = useState(false);
-
   const [loading, setLoading] = useState(true);
+  const [landlord, setLandlord] = useState<LandlordRow | null>(null);
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
-  const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRow[]>([]);
+  const [maintenanceRequests, setMaintenanceRequests] = useState<
+    MaintenanceRow[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------- Access gate: must be logged in AND subscribed ----------
-
+  // ---------- Load data + landlord ----------
   useEffect(() => {
-    const checkAccess = async () => {
-      setCheckingAccess(true);
-      try {
-        const { data: auth } = await supabase.auth.getUser();
-        const email = auth.user?.email;
-
-        if (!email) {
-          router.push('/landlord/login');
-          return;
-        }
-
-        const { data: landlord, error: landlordError } = await supabase
-          .from('landlords')
-          .select(
-            'id, email, name, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_current_period_end'
-          )
-          .eq('email', email)
-          .maybeSingle();
-
-        if (landlordError) {
-          console.error('Error loading landlord for gate:', landlordError);
-          router.push('/landlord/login');
-          return;
-        }
-
-        if (!landlord) {
-          // No landlord row yet – send them to settings so we can guide them.
-          router.push('/landlord/settings?billing=required');
-          return;
-        }
-
-        const status = landlord.subscription_status?.toLowerCase() || '';
-
-        if (status === 'active') {
-          setCanViewDashboard(true);
-        } else {
-          // Not subscribed: send to billing screen.
-          router.push('/landlord/settings?billing=required');
-        }
-      } catch (err) {
-        console.error('Error in landlord access gate:', err);
-        router.push('/landlord/login');
-      } finally {
-        setCheckingAccess(false);
-      }
-    };
-
-    checkAccess();
-  }, [router]);
-
-  // ---------- Load data (only if access is allowed) ----------
-
-  useEffect(() => {
-    if (!canViewDashboard) return;
-
     const load = async () => {
       setLoading(true);
       setError(null);
 
       try {
+        // 1) Get logged-in landlord by email
+        const auth = await supabase.auth.getUser();
+        const email = auth.data.user?.email;
+        if (!email) throw new Error('Unable to load landlord account.');
+
+        const { data: landlordRow, error: landlordError } = await supabase
+          .from('landlords')
+          .select('id, email, name, subscription_status')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (landlordError) throw landlordError;
+        if (!landlordRow) throw new Error('Landlord record not found.');
+
+        setLandlord(landlordRow as LandlordRow);
+
+        // 2) Load dashboard data (properties, tenants, etc.)
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase.from('properties').select('*').order('created_at', {
             ascending: false,
@@ -204,10 +162,9 @@ export default function LandlordDashboardPage() {
     };
 
     load();
-  }, [canViewDashboard]);
+  }, []);
 
   // ---------- Metrics ----------
-
   const totalProperties = properties.length;
 
   const activeTenants = tenants.filter(
@@ -259,37 +216,90 @@ export default function LandlordDashboardPage() {
   ).length;
 
   // ---------- Actions ----------
-
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/landlord/login');
   };
 
-  // ---------- UI ----------
-
-  if (checkingAccess) {
+  // ---------- Loading / error states ----------
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
         <p className="text-sm text-slate-400">
-          Checking your landlord subscription…
+          Loading landlord dashboard…
         </p>
       </div>
     );
   }
 
-  // If they’re not allowed, we already redirected. Just render nothing.
-  if (!canViewDashboard) {
-    return null;
-  }
-
-  if (loading) {
+  if (!landlord) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-50 p-6">
-        <p>Loading landlord dashboard…</p>
+      <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
+        <p className="text-sm text-red-400">
+          {error || 'Unable to load landlord account.'}
+        </p>
       </div>
     );
   }
 
+  const isSubscribed =
+    landlord.subscription_status &&
+    landlord.subscription_status.toLowerCase() === 'active';
+
+  // ---------- Gate: subscription required ----------
+  if (!isSubscribed) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
+        <div className="mx-auto max-w-xl space-y-4">
+          <h1 className="text-xl font-semibold text-slate-50">
+            Subscription required
+          </h1>
+          <p className="text-sm text-slate-400">
+            You need an active{' '}
+            <span className="font-semibold text-slate-100">
+              RentZentro Landlord Plan
+            </span>{' '}
+            to access the landlord dashboard and tools.
+          </p>
+
+          <div className="rounded-2xl border border-amber-500/70 bg-amber-950/40 px-4 py-3 text-xs text-amber-100">
+            <p className="font-semibold">
+              Next step: start your subscription from Account settings.
+            </p>
+            <p className="mt-1">
+              Click the button below to open your Account settings page and
+              start the $29.95/mo landlord subscription via Stripe Checkout.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link
+              href="/landlord/settings"
+              className="flex-1 inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+            >
+              Go to Account settings
+            </Link>
+            <Link
+              href="/"
+              className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-800"
+            >
+              Back to homepage
+            </Link>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="mt-4 text-xs text-slate-500 hover:text-emerald-300"
+          >
+            Log out
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // ---------- Main dashboard UI (subscribed) ----------
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -312,13 +322,15 @@ export default function LandlordDashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
+            {/* Settings (account + subscription) */}
             <Link
               href="/landlord/settings"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
             >
-              Subscription
+              Settings
             </Link>
 
+            {/* Documents */}
             <Link
               href="/landlord/documents"
               className="text-xs px-3 py-2 rounded-full border border-emerald-600 bg-slate-900 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
@@ -326,6 +338,7 @@ export default function LandlordDashboardPage() {
               Documents
             </Link>
 
+            {/* Maintenance with badge */}
             <Link
               href="/landlord/maintenance"
               className="relative flex items-center gap-1 text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
@@ -338,6 +351,7 @@ export default function LandlordDashboardPage() {
               )}
             </Link>
 
+            {/* Sign out */}
             <button
               type="button"
               onClick={handleSignOut}
@@ -346,24 +360,6 @@ export default function LandlordDashboardPage() {
               Log out
             </button>
           </div>
-        </div>
-
-        {/* Pricing banner (platform fee) */}
-        <div className="mb-4 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-3 text-xs text-emerald-100">
-          <p className="font-medium">
-            Current RentZentro pricing:{' '}
-            <span className="font-semibold">
-              2.5% platform fee per successful card payment.
-            </span>
-          </p>
-          <p className="mt-1 text-[11px] text-emerald-200/80">
-            The platform fee is charged to the landlord and is in addition to
-            Stripe&apos;s processing fees. See our{' '}
-            <Link href="/terms" className="underline">
-              Terms of Service
-            </Link>{' '}
-            for details.
-          </p>
         </div>
 
         {/* Error */}
@@ -412,7 +408,7 @@ export default function LandlordDashboardPage() {
           </div>
         </div>
 
-        {/* Rent status */}
+        {/* Rent status: overdue / upcoming / not due yet */}
         <section className="mb-6 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div>

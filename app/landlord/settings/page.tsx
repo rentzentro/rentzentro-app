@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
+import Link from 'next/link';
 
 // ---------- Types ----------
 type LandlordRow = {
@@ -49,14 +49,16 @@ export default function LandlordSettingsPage() {
 
         const { data, error: landlordError } = await supabase
           .from('landlords')
-          .select('*')
+          .select(
+            'id, email, name, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_current_period_end'
+          )
           .eq('email', email)
           .maybeSingle();
 
         if (landlordError) throw landlordError;
         if (!data) throw new Error('Landlord record not found.');
 
-        setLandlord(data);
+        setLandlord(data as LandlordRow);
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Unable to load settings.');
@@ -77,7 +79,6 @@ export default function LandlordSettingsPage() {
     try {
       const res = await fetch('/api/subscription/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ landlordId: landlord.id }),
       });
 
@@ -124,6 +125,10 @@ export default function LandlordSettingsPage() {
     );
   }
 
+  const isSubscribed =
+    landlord.subscription_status &&
+    landlord.subscription_status.toLowerCase() === 'active';
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto max-w-3xl space-y-6">
@@ -143,10 +148,10 @@ export default function LandlordSettingsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold text-slate-50">
-              Account Settings
+              Account settings
             </h1>
             <p className="text-slate-400 text-xs">
-              Manage your subscription & account preferences.
+              Manage your account details and subscription.
             </p>
           </div>
 
@@ -158,64 +163,108 @@ export default function LandlordSettingsPage() {
           </button>
         </div>
 
-        {/* Subscription Status */}
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm space-y-3">
+        {/* Subscription warning – ONLY when not subscribed */}
+        {!isSubscribed && (
+          <div className="rounded-2xl border border-amber-500/70 bg-amber-950/40 px-4 py-3 text-xs text-amber-100">
+            <p className="font-semibold">
+              Subscription required to use RentZentro landlord tools.
+            </p>
+            <p className="mt-1">
+              Click <span className="font-semibold">“Subscribe for $29.95/mo”</span>{' '}
+              below to start your RentZentro Landlord Plan and unlock the full
+              landlord dashboard.
+            </p>
+          </div>
+        )}
+
+        {/* ACCOUNT CARD */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm space-y-2">
+          <p className="text-xs text-slate-500 uppercase tracking-wide">
+            Account
+          </p>
+
+          <div className="mt-1 flex flex-col gap-1 text-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] text-slate-500">Landlord profile</p>
+                <p className="text-sm font-medium text-slate-50">
+                  {landlord.name || 'Default Landlord'}
+                </p>
+              </div>
+              <div className="mt-2 sm:mt-0 text-left sm:text-right">
+                <p className="text-[11px] text-slate-500">Email</p>
+                <p className="text-sm font-medium text-slate-50">
+                  {landlord.email}
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-3 text-[11px] text-slate-500">
+              In a future update you&apos;ll be able to change your profile
+              info and add additional team members from this screen.
+            </p>
+          </div>
+        </section>
+
+        {/* SUBSCRIPTION CARD */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm space-y-3">
           <p className="text-xs text-slate-500 uppercase tracking-wide">
             Subscription
           </p>
 
-          {landlord.subscription_status ? (
-            <div className="space-y-2">
-              <p className="text-sm text-slate-50 font-medium">
+          {isSubscribed ? (
+            <>
+              <p className="text-sm">
                 Status:{' '}
-                <span className="text-emerald-300">
-                  {landlord.subscription_status}
-                </span>
+                <span className="font-semibold text-emerald-300">active</span>
               </p>
-
               <p className="text-xs text-slate-400">
                 Next billing date:{' '}
                 <span className="text-slate-200">
                   {formatDate(landlord.subscription_current_period_end)}
                 </span>
               </p>
-
               <p className="text-xs text-slate-500">
-                You&apos;re subscribed to the RentZentro Landlord Plan
-                ($29.95/mo).
+                You&apos;re subscribed to the{' '}
+                <span className="font-medium">
+                  RentZentro Landlord Plan ($29.95/mo)
+                </span>
+                . Manage billing details in your Stripe customer portal if
+                enabled, or contact support to make changes.
               </p>
-            </div>
+            </>
           ) : (
-            <div className="space-y-2">
-              <p className="text-sm text-slate-400">
-                You are not subscribed yet.
+            <>
+              <p className="text-sm text-slate-50">
+                Status:{' '}
+                <span className="font-semibold text-amber-300">
+                  not subscribed
+                </span>
               </p>
-
               <button
                 onClick={handleStartSubscription}
                 disabled={startingCheckout}
-                className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-emerald-400 disabled:opacity-60"
+                className="mt-3 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-emerald-400 disabled:opacity-60"
               >
                 {startingCheckout
                   ? 'Starting checkout…'
                   : 'Subscribe for $29.95/mo'}
               </button>
-
-              <p className="text-xs text-slate-500">
+              <p className="mt-2 text-xs text-slate-500">
                 Subscription unlocks full payment features, unlimited units,
-                tenant messaging, and more.
+                tenant messaging, maintenance tracking, and more.
               </p>
-            </div>
+            </>
           )}
         </section>
 
         {/* Back to portal */}
-        <div className="pt-4">
+        <div className="pt-2">
           <Link
             href="/landlord"
             className="text-xs text-slate-500 hover:text-emerald-300"
           >
-            ← Back to portal
+            ← Back to landlord dashboard
           </Link>
         </div>
       </div>
