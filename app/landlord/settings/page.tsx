@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
+import Link from 'next/link';
 
 // ---------- Types ----------
 type LandlordRow = {
@@ -28,15 +27,20 @@ const formatDate = (iso: string | null) => {
   });
 };
 
+const isActiveStatus = (status: string | null) => {
+  if (!status) return false;
+  const s = status.toLowerCase();
+  return s === 'active' || s === 'trialing';
+};
+
 // ---------- Component ----------
 export default function LandlordSettingsPage() {
-  const router = useRouter();
-
   const [loading, setLoading] = useState(true);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // Load logged-in landlord
   useEffect(() => {
@@ -59,7 +63,7 @@ export default function LandlordSettingsPage() {
         if (landlordError) throw landlordError;
         if (!data) throw new Error('Landlord record not found.');
 
-        setLandlord(data as LandlordRow);
+        setLandlord(data);
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Unable to load settings.');
@@ -80,6 +84,7 @@ export default function LandlordSettingsPage() {
     try {
       const res = await fetch('/api/subscription/checkout', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ landlordId: landlord.id }),
       });
 
@@ -102,11 +107,48 @@ export default function LandlordSettingsPage() {
     }
   };
 
-  const handleLogOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/landlord/login');
+  const handleCancelSubscription = async () => {
+    if (!landlord) return;
+    setCancelling(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const res = await fetch('/api/subscription/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ landlordId: landlord.id }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          data?.error || 'Unable to cancel subscription at this time.'
+        );
+      }
+
+      await res.json(); // not strictly needed, but here if we want it
+
+      setSuccess(
+        'Your subscription will be cancelled at the end of your current billing period. You will keep access until that date.'
+      );
+    } catch (err: any) {
+      console.error(err);
+      setError(
+        err.message ||
+          'Something went wrong while trying to cancel your subscription.'
+      );
+    } finally {
+      setCancelling(false);
+    }
   };
 
+  const handleLogOut = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/landlord/login';
+  };
+
+  // ---------- Render ----------
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
@@ -118,22 +160,14 @@ export default function LandlordSettingsPage() {
   if (!landlord) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-800 px-5 py-4">
-          <p className="text-xs text-red-400">
-            {error || 'Unable to load landlord account.'}
-          </p>
-          <button
-            onClick={handleLogOut}
-            className="mt-3 text-xs text-emerald-300 hover:text-emerald-200"
-          >
-            Back to login
-          </button>
-        </div>
+        <p className="text-red-400 text-sm">
+          {error || 'Unable to load account.'}
+        </p>
       </main>
     );
   }
 
-  const isActive = landlord.subscription_status === 'active';
+  const active = isActiveStatus(landlord.subscription_status);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -154,74 +188,99 @@ export default function LandlordSettingsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold text-slate-50">
-              Account settings
+              Account Settings
             </h1>
             <p className="text-slate-400 text-xs">
-              Manage your account details and subscription.
+              Manage your subscription & account preferences.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/landlord"
-              className="text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
-            >
-              ← Back to dashboard
-            </Link>
-            <button
-              onClick={handleLogOut}
-              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
-            >
-              Log out
-            </button>
-          </div>
+          <button
+            onClick={handleLogOut}
+            className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+          >
+            Log out
+          </button>
         </div>
 
-        {/* Subscription status */}
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm space-y-3">
+        {/* Subscription Status */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 shadow-sm space-y-3">
           <p className="text-xs text-slate-500 uppercase tracking-wide">
             Subscription
           </p>
 
-          {isActive ? (
-            <div className="space-y-2">
+          {active ? (
+            <div className="space-y-3">
               <p className="text-sm text-slate-50 font-medium">
                 Status:{' '}
                 <span className="text-emerald-300">
-                  Active RentZentro landlord plan
+                  {landlord.subscription_status}
                 </span>
               </p>
+
               <p className="text-xs text-slate-400">
                 Next billing date:{' '}
                 <span className="text-slate-200">
                   {formatDate(landlord.subscription_current_period_end)}
                 </span>
               </p>
+
               <p className="text-xs text-slate-500">
-                Your subscription is active. You can access your full landlord
-                dashboard, properties, tenants, and payments.
+                You&apos;re subscribed to the RentZentro Landlord Plan
+                ($29.95/mo).
+              </p>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  onClick={handleCancelSubscription}
+                  disabled={cancelling}
+                  className="rounded-full border border-rose-500/60 bg-rose-950/40 px-4 py-2 text-xs font-semibold text-rose-100 hover:bg-rose-900/70 disabled:opacity-60"
+                >
+                  {cancelling
+                    ? 'Cancelling subscription…'
+                    : 'Cancel subscription at period end'}
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-500">
+                When you cancel, your subscription will remain active until the
+                end of your current billing period. After that, access to the
+                landlord portal will be disabled unless you subscribe again.
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-sm text-slate-400">
-                You are currently not subscribed.
-              </p>
-              <p className="text-xs text-slate-500">
-                Start your RentZentro landlord plan to unlock your dashboard,
-                properties, tenants, rent tracking, and maintenance tools.
+                You are not currently subscribed.
               </p>
 
               <button
                 onClick={handleStartSubscription}
                 disabled={startingCheckout}
-                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+                className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-emerald-400 disabled:opacity-60"
               >
-                {startingCheckout ? 'Starting subscription…' : 'Subscribe & continue'}
+                {startingCheckout
+                  ? 'Starting checkout…'
+                  : 'Subscribe for $29.95/mo'}
               </button>
+
+              <p className="text-xs text-slate-500">
+                Subscription unlocks full payment features, unlimited units,
+                tenant messaging, and more.
+              </p>
             </div>
           )}
         </section>
+
+        {/* Back to portal */}
+        <div className="pt-4">
+          <Link
+            href="/landlord"
+            className="text-xs text-slate-500 hover:text-emerald-300"
+          >
+            ← Back to portal
+          </Link>
+        </div>
       </div>
     </main>
   );
