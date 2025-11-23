@@ -1,57 +1,74 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
 export default function LandlordSignupPage() {
   const router = useRouter();
-  const [fullName, setFullName] = useState('');
+
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!email || !password) {
+      setError('Email and password are required.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      if (!email || !password) {
-        throw new Error('Email and password are required.');
-      }
-
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      // 1) Create auth user
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
       });
 
-      if (signUpError) throw signUpError;
-
-      const userEmail = signUpData.user?.email || email;
-
-      // Create landlord row if it doesn't exist yet
-      const { error: landlordError } = await supabase
-        .from('landlords')
-        .insert({
-          email: userEmail,
-          name: fullName || null,
-        })
-        .select('id')
-        .single();
-
-      // If duplicate email or similar, just log and continue.
-      if (landlordError) {
-        console.warn('Landlord insert error (may already exist):', landlordError);
+      if (signUpError) {
+        console.error('signUp error', signUpError);
+        setError(signUpError.message || 'Unable to create account.');
+        setLoading(false);
+        return;
       }
 
-      // Go to landlord dashboard; gate will handle subscription redirect.
+      // 2) Make sure we have a session (if email confirmation is off this will succeed)
+      await supabase.auth.signInWithPassword({ email, password }).catch(() => {
+        // If this fails but user already has a session, we can still continue.
+      });
+
+      // 3) Insert landlord row for this user.
+      //    RLS will ensure email must match auth.jwt()->>email.
+      const { error: insertError } = await supabase
+        .from('landlords')
+        .insert({
+          name: name || null,
+          email,
+        });
+
+      // If a row already exists for this email, Postgres sends a unique-violation
+      // error (code 23505). In that case we can safely ignore and continue.
+      if (insertError && (insertError as any).code !== '23505') {
+        console.error('insert landlord error', insertError);
+        setError(
+          insertError.message || 'Unable to create landlord account record.'
+        );
+        setLoading(false);
+        return;
+      }
+
+      // 4) Go to landlord dashboard
       router.push('/landlord');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to create landlord account.');
+      setError(err?.message || 'Unexpected error creating account.');
     } finally {
       setLoading(false);
     }
@@ -59,96 +76,96 @@ export default function LandlordSignupPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl space-y-5">
-        <div className="space-y-2">
-          <button
-            type="button"
-            className="text-[11px] text-slate-500 hover:text-emerald-300"
-            onClick={() => router.push('/')}
-          >
-            ← Back to homepage
-          </button>
-          <h1 className="text-lg font-semibold text-slate-50">
+      <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/70 px-6 py-7 shadow-lg">
+        {/* Back link */}
+        <Link
+          href="/"
+          className="text-[11px] text-slate-400 hover:text-emerald-300"
+        >
+          ← Back to homepage
+        </Link>
+
+        {/* Header */}
+        <div className="mt-3 mb-5">
+          <h1 className="text-xl font-semibold text-slate-50">
             Create your landlord account
           </h1>
-          <p className="text-[12px] text-slate-400">
+          <p className="mt-1 text-xs text-slate-400">
             This account lets you log in to the RentZentro landlord dashboard.
-            You&apos;ll set up your subscription from inside the app after
+            You&apos;ll start your subscription from inside the app after
             you&apos;re signed in.
           </p>
         </div>
 
+        {/* Error */}
         {error && (
-          <div className="rounded-xl border border-rose-500/60 bg-rose-500/10 px-3 py-2 text-[12px] text-rose-100">
+          <div className="mb-4 rounded-xl border border-rose-500/60 bg-rose-950/40 px-3 py-2 text-xs text-rose-100">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1 text-sm">
-            <label className="block text-slate-200" htmlFor="fullName">
-              Name (optional)
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs text-slate-300">
+              Name <span className="text-slate-500">(optional)</span>
             </label>
             <input
-              id="fullName"
               type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-400"
               placeholder="Default Landlord"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
             />
           </div>
 
-          <div className="space-y-1 text-sm">
-            <label className="block text-slate-200" htmlFor="email">
-              Email
-            </label>
+          <div className="space-y-1">
+            <label className="text-xs text-slate-300">Email</label>
             <input
-              id="email"
               type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              placeholder="you@example.com"
               required
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value.trim())}
             />
           </div>
 
-          <div className="space-y-1 text-sm">
-            <label className="block text-slate-200" htmlFor="password">
-              Password
-            </label>
+          <div className="space-y-1">
+            <label className="text-xs text-slate-300">Password</label>
             <input
-              id="password"
               type="password"
-              autoComplete="new-password"
+              required
+              minLength={6}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+              placeholder="Choose a secure password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              placeholder="Create a password"
-              required
             />
+            <p className="text-[11px] text-slate-500">
+              At least 6 characters. You&apos;ll use this to log in to your
+              landlord dashboard.
+            </p>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="mt-2 w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
           >
             {loading ? 'Creating account…' : 'Create landlord account'}
           </button>
         </form>
 
-        <p className="text-[11px] text-slate-500">
+        {/* Footer */}
+        <p className="mt-4 text-[11px] text-slate-500">
           Already have an account?{' '}
           <Link
             href="/landlord/login"
-            className="text-emerald-400 hover:text-emerald-300"
+            className="text-emerald-300 hover:text-emerald-200"
           >
-            Log in
+            Log in.
           </Link>
-          .
         </p>
       </div>
     </main>
