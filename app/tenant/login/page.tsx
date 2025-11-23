@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
 
+// Production site URL. Reads from env, falls back to live domain.
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || 'https://www.rentzentro.com';
+
 export default function TenantLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -18,31 +21,24 @@ export default function TenantLoginPage() {
     setError(null);
 
     try {
-      if (!email.trim()) {
-        setError('Please enter your email address.');
-        return;
-      }
+      // TENANTS SHOULD ALWAYS LAND HERE AFTER EMAIL LINK
+      const redirectTo = `${SITE_URL}/tenant/signup`;
 
-      const redirectTo =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/tenant/portal`
-          : undefined;
-
-      const { error: signInError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
+      const { error: sendError } = await supabase.auth.signInWithOtp({
+        email,
         options: {
           emailRedirectTo: redirectTo,
         },
       });
 
-      if (signInError) {
-        console.error('Tenant magic link error:', signInError);
-        setError(signInError.message || 'Unable to send login link.');
+      if (sendError) {
+        console.error('Tenant magic link error:', sendError);
+        setError(sendError.message || 'Failed to send login link.');
         return;
       }
 
       setMessage(
-        'Check your email for a login link. Open it on this device to access your tenant portal.'
+        'Check your email — we sent you a secure link to continue signing up.'
       );
     } catch (err: any) {
       console.error(err);
@@ -54,66 +50,64 @@ export default function TenantLoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl">
-        <button
-          type="button"
-          onClick={() => router.push('/')}
-          className="text-[11px] text-slate-400 hover:text-emerald-300 mb-4"
+      <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950/80 p-6 shadow-xl shadow-black/40">
+        <Link
+          href="/"
+          className="text-xs text-slate-400 hover:text-emerald-400"
         >
           ← Back to homepage
-        </button>
+        </Link>
 
-        <h1 className="text-xl font-semibold text-slate-50 mb-1">
-          Tenant login
+        <h1 className="mt-3 text-xl font-semibold text-slate-50">
+          Tenant Login / Signup
         </h1>
-        <p className="text-sm text-slate-400 mb-4">
-          Enter the email your landlord used for your account. We&apos;ll send
-          you a secure login link to access your tenant portal.
+
+        <p className="mt-1 text-sm text-slate-400">
+          Enter your email. We will send you a link to finish signing up to access your tenant portal.
         </p>
 
-        <form onSubmit={handleSendLink} className="space-y-4">
-          <div>
+        <form onSubmit={handleSendLink} className="mt-5 space-y-4">
+          <div className="space-y-1">
             <label
               htmlFor="email"
-              className="block text-xs font-medium text-slate-300 mb-1"
+              className="block text-xs font-medium text-slate-300"
             >
               Email address
             </label>
             <input
               id="email"
               type="email"
-              autoComplete="email"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
               placeholder="you@example.com"
             />
           </div>
 
-          {error && (
-            <div className="rounded-xl border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-xs text-rose-100">
-              {error}
-            </div>
-          )}
-
-          {message && (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-100">
-              {message}
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={sending}
-            className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {sending ? 'Sending link…' : 'Email me a login link'}
+            {sending ? 'Sending...' : 'Send signup link'}
           </button>
         </form>
 
-        <p className="mt-4 text-[11px] text-slate-500">
-          If you don&apos;t see the email, check your spam or promotions
-          folder. The link will expire after a short time.
+        {message && (
+          <p className="mt-4 text-xs text-emerald-300 bg-emerald-950/30 border border-emerald-700/60 rounded-2xl px-3 py-2">
+            {message}
+          </p>
+        )}
+
+        {error && (
+          <p className="mt-4 text-xs text-rose-300 bg-rose-950/30 border border-rose-700/60 rounded-2xl px-3 py-2">
+            {error}
+          </p>
+        )}
+
+        <p className="mt-6 text-[11px] text-slate-500">
+          If you weren’t expecting this, ignore the email.
         </p>
       </div>
     </div>
