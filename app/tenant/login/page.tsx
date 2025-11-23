@@ -2,54 +2,45 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
-// Production site URL. Reads from env, falls back to live domain.
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || 'https://www.rentzentro.com';
-
 export default function TenantLoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
-  const [sending, setSending] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSendLink = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSending(true);
-    setMessage(null);
     setError(null);
+    setLoading(true);
 
     try {
-      // TENANTS SHOULD ALWAYS LAND HERE AFTER EMAIL LINK
-      const redirectTo = `${SITE_URL}/tenant/signup`;
-
-      const { error: sendError } = await supabase.auth.signInWithOtp({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
-        options: {
-          emailRedirectTo: redirectTo,
-        },
+        password,
       });
 
-      if (sendError) {
-        console.error('Tenant magic link error:', sendError);
-        setError(sendError.message || 'Failed to send login link.');
+      if (signInError) {
+        console.error('Tenant login error:', signInError);
+        setError(signInError.message || 'Unable to log in.');
         return;
       }
 
-      setMessage(
-        'Check your email — we sent you a secure link to continue signing up.'
-      );
+      router.push('/tenant/portal');
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || 'Unexpected error sending login link.');
+      setError(err?.message || 'Unexpected error while logging in.');
     } finally {
-      setSending(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
+    <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4 py-6">
       <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950/80 p-6 shadow-xl shadow-black/40">
         <Link
           href="/"
@@ -59,14 +50,20 @@ export default function TenantLoginPage() {
         </Link>
 
         <h1 className="mt-3 text-xl font-semibold text-slate-50">
-          Tenant Login / Signup
+          Tenant login
         </h1>
-
         <p className="mt-1 text-sm text-slate-400">
-          Enter your email. We will send you a link to finish signing up to access your tenant portal.
+          Log in with the email and password you used when creating your
+          RentZentro tenant account.
         </p>
 
-        <form onSubmit={handleSendLink} className="mt-5 space-y-4">
+        {error && (
+          <div className="mt-4 rounded-xl border border-rose-500/60 bg-rose-950/50 px-3 py-2 text-xs text-rose-100">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleLogin} className="mt-4 space-y-4">
           <div className="space-y-1">
             <label
               htmlFor="email"
@@ -85,31 +82,53 @@ export default function TenantLoginPage() {
             />
           </div>
 
+          <div className="space-y-1">
+            <label
+              htmlFor="password"
+              className="block text-xs font-medium text-slate-300"
+            >
+              Password
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 pr-10 text-sm text-slate-50 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                placeholder="Your password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-[11px] text-slate-400 hover:text-slate-200"
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </div>
+
           <button
             type="submit"
-            disabled={sending}
+            disabled={loading}
             className="w-full rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {sending ? 'Sending...' : 'Send signup link'}
+            {loading ? 'Signing in…' : 'Log in'}
           </button>
         </form>
 
-        {message && (
-          <p className="mt-4 text-xs text-emerald-300 bg-emerald-950/30 border border-emerald-700/60 rounded-2xl px-3 py-2">
-            {message}
-          </p>
-        )}
-
-        {error && (
-          <p className="mt-4 text-xs text-rose-300 bg-rose-950/30 border border-rose-700/60 rounded-2xl px-3 py-2">
-            {error}
-          </p>
-        )}
-
-        <p className="mt-6 text-[11px] text-slate-500">
-          If you weren’t expecting this, ignore the email.
+        <p className="mt-4 text-[11px] text-slate-500">
+          First time here?{' '}
+          <Link
+            href="/tenant/signup"
+            className="text-emerald-400 hover:text-emerald-300"
+          >
+            Create a tenant account
+          </Link>
+          .
         </p>
       </div>
-    </div>
+    </main>
   );
 }

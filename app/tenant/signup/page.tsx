@@ -1,165 +1,195 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
 
 export default function TenantSignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
+  // Prefill email from invite link
+  useEffect(() => {
+    const invitedEmail = searchParams.get('email');
+    if (invitedEmail) {
+      setEmail(invitedEmail);
+    }
+  }, [searchParams]);
+
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setInfo(null);
+    setSuccess(null);
 
-    if (!email || !password || !confirm) {
-      setError('Please complete all fields.');
+    if (!email) {
+      setError('Please enter your email.');
       return;
     }
-
-    if (password !== confirm) {
+    if (!password || password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (password !== passwordConfirm) {
       setError('Passwords do not match.');
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password should be at least 6 characters.');
-      return;
-    }
-
     setLoading(true);
-
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email: email.trim(),
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
         password,
       });
 
       if (signUpError) {
-        console.error('Tenant signup error:', signUpError);
-        setError(signUpError.message);
-        setLoading(false);
+        console.error('Tenant sign-up error:', signUpError);
+        setError(signUpError.message || 'Unable to complete signup.');
         return;
       }
 
-      setInfo(
-        'Account created. Use this email to log in. If your landlord has not added you yet, ask them to add your email in RentZentro.'
-      );
+      // If email confirmation is disabled, Supabase may return a session here
+      console.log('Tenant signup data:', data);
 
+      setSuccess('Account created! Redirecting to your tenant portal...');
+      // Short delay then go to tenant portal
       setTimeout(() => {
-        router.push('/tenant/login');
-      }, 1500);
+        router.push('/tenant/portal');
+      }, 1200);
     } catch (err: any) {
-      console.error('Unexpected signup error:', err);
-      setError('Something went wrong. Please try again.');
+      console.error(err);
+      setError(err?.message || 'Unexpected error during signup.');
+    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md space-y-8">
-        {/* Back link */}
-        <div>
-          <Link
-            href="/"
-            className="text-xs text-slate-400 hover:text-slate-200 inline-flex items-center gap-1"
+    <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4 py-6">
+      <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950/80 p-6 shadow-xl shadow-black/40">
+        <Link
+          href="/"
+          className="text-xs text-slate-400 hover:text-emerald-400"
+        >
+          ← Back to homepage
+        </Link>
+
+        <h1 className="mt-3 text-xl font-semibold text-slate-50">
+          Tenant signup
+        </h1>
+        <p className="mt-1 text-sm text-slate-400">
+          Create a password to access your RentZentro tenant portal. Use the
+          same email address your landlord used when they invited you.
+        </p>
+
+        {(error || success) && (
+          <div
+            className={`mt-4 rounded-xl border px-3 py-2 text-xs ${
+              error
+                ? 'border-rose-500/60 bg-rose-950/50 text-rose-100'
+                : 'border-emerald-500/60 bg-emerald-950/40 text-emerald-100'
+            }`}
           >
-            <span>←</span> Back to home
-          </Link>
-        </div>
-
-        {/* Header */}
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.2em] text-sky-400">
-            Tenant portal
-          </p>
-          <h1 className="text-2xl font-semibold">Create your tenant account</h1>
-          <p className="text-xs text-slate-400">
-            Use the same email your landlord entered for you in RentZentro so your
-            login can be linked to your rental.
-          </p>
-        </div>
-
-        {/* Messages */}
-        {error && (
-          <div className="rounded-xl border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs text-red-200">
-            {error}
+            {error || success}
           </div>
         )}
 
-        {info && (
-          <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-200">
-            {info}
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSignup} className="mt-4 space-y-4">
           <div className="space-y-1">
-            <label className="text-xs text-slate-300">Email</label>
+            <label
+              htmlFor="email"
+              className="block text-xs font-medium text-slate-300"
+            >
+              Email address
+            </label>
             <input
+              id="email"
               type="email"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-sky-400"
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
               placeholder="you@example.com"
-              autoComplete="email"
-              required
             />
+            <p className="text-[11px] text-slate-500">
+              This must match the email your landlord used for your invite.
+            </p>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-slate-300">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-sky-400"
-              placeholder="••••••••"
-              autoComplete="new-password"
-              required
-            />
+            <label
+              htmlFor="password"
+              className="block text-xs font-medium text-slate-300"
+            >
+              Create a password
+            </label>
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 pr-10 text-sm text-slate-50 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                placeholder="At least 6 characters"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-[11px] text-slate-400 hover:text-slate-200"
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-slate-300">Confirm password</label>
+            <label
+              htmlFor="passwordConfirm"
+              className="block text-xs font-medium text-slate-300"
+            >
+              Confirm password
+            </label>
             <input
-              type="password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-sky-400"
-              placeholder="••••••••"
-              autoComplete="new-password"
+              id="passwordConfirm"
+              type={showPassword ? 'text' : 'password'}
               required
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              placeholder="Re-enter password"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-sky-500 hover:bg-sky-400 disabled:opacity-60 disabled:cursor-not-allowed text-slate-950 text-sm font-medium py-2 mt-2"
+            className="w-full rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {loading ? 'Creating account…' : 'Create account'}
           </button>
         </form>
 
-        <p className="text-[11px] text-slate-500">
-          Already have an account?{' '}
-          <Link href="/tenant/login" className="text-sky-400 hover:text-sky-300">
-            Log in
+        <p className="mt-4 text-[11px] text-slate-500">
+          Already created your account?{' '}
+          <Link
+            href="/tenant/login"
+            className="text-emerald-400 hover:text-emerald-300"
+          >
+            Log in here
           </Link>
+          .
         </p>
       </div>
     </main>
   );
 }
-
