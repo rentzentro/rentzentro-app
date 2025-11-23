@@ -1,50 +1,78 @@
-import { NextRequest, NextResponse } from 'next/server';
+// app/api/checkout/route.ts
+import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripeSecret = process.env.STRIPE_SECRET_KEY;
-
-if (!stripeSecret) {
-  console.error('❌ Missing STRIPE_SECRET_KEY');
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+if (!stripeSecretKey) {
+  throw new Error('Missing STRIPE_SECRET_KEY environment variable');
 }
 
-const stripe = new Stripe(stripeSecret!); // ← NO apiVersion override
+// No apiVersion here so TypeScript stops complaining
+const stripe = new Stripe(stripeSecretKey as string);
 
-export async function POST(req: NextRequest) {
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  'http://localhost:3000';
+
+export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { amount, tenantId, propertyId } = body;
+    const body = await req.json().catch(() => ({}));
+    const { amount, description, tenantId, propertyId } = body as {
+      amount?: number;
+      description?: string;
+      tenantId?: number;
+      propertyId?: number | null;
+    };
 
-    if (!amount || !tenantId || !propertyId) {
-      console.log("❌ Missing checkout body fields");
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
+    if (!amount || amount <= 0) {
+      return NextResponse.json(
+        { error: 'Missing or invalid amount for payment.' },
+        { status: 400 }
+      );
     }
 
+    if (!tenantId) {
+      return NextResponse.json(
+        { error: 'Missing tenantId for payment.' },
+        { status: 400 }
+      );
+    }
+
+    // Create a one-time payment Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
       mode: 'payment',
+      payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: 'Rent Payment',
+              name: description || 'Rent payment',
             },
-            unit_amount: Math.round(amount * 100),
+            unit_amount: Math.round(amount * 100), // dollars -> cents
           },
           quantity: 1,
         },
       ],
       metadata: {
-        tenant_id: tenantId.toString(),
-        property_id: propertyId.toString(),
+        tenantId: String(tenantId),
+        propertyId: propertyId != null ? String(propertyId) : '',
       },
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/payment-success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/tenant/payment-cancelled`,
+      success_url: `${APP_URL}/tenant/payment-success`,
+      cancel_url: `${APP_URL}/tenant/portal`,
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (err: any) {
-    console.error('❌ Stripe checkout error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('Error creating rent checkout session:', err);
+    return NextResponse.json(
+      {
+        error:
+          err?.message ||
+          'Something went wrong while creating the rent payment session.',
+      },
+      { status: 500 }
+    );
   }
 }
