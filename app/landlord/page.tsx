@@ -38,7 +38,6 @@ type PaymentRow = {
   paid_on: string | null;
   method: string | null;
   note: string | null;
-  owner_id: string | null;
 };
 
 type MaintenanceRow = {
@@ -122,7 +121,7 @@ export default function LandlordDashboardPage() {
 
         const ownerId = user.id;
 
-        // Load all landlord-owned data in parallel
+        // Load landlord-owned data in parallel
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase
             .from('properties')
@@ -141,9 +140,8 @@ export default function LandlordDashboardPage() {
           supabase
             .from('payments')
             .select(
-              'id, created_at, tenant_id, property_id, amount, paid_on, method, note, owner_id'
+              'id, created_at, tenant_id, property_id, amount, paid_on, method, note'
             )
-            .eq('owner_id', ownerId)
             .order('paid_on', { ascending: false })
             .limit(10),
           supabase
@@ -164,9 +162,7 @@ export default function LandlordDashboardPage() {
         setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
       } catch (err: any) {
         console.error(err);
-        setError(
-          err.message || 'Failed to load landlord dashboard data.'
-        );
+        setError(err.message || 'Failed to load landlord dashboard data.');
       } finally {
         setLoading(false);
       }
@@ -269,20 +265,12 @@ export default function LandlordDashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
-            {/* Settings */}
+            {/* Settings (also where subscription lives) */}
             <Link
               href="/landlord/settings"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
             >
-              Settings
-            </Link>
-
-            {/* Subscription */}
-            <Link
-              href="/landlord/subscription"
-              className="text-xs px-3 py-2 rounded-full border border-emerald-600 bg-slate-900 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
-            >
-              Subscription
+              Subscription & settings
             </Link>
 
             {/* Documents */}
