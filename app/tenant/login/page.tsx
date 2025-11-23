@@ -2,168 +2,119 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
 
 export default function TenantLoginPage() {
   const router = useRouter();
-
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-
-  const [loading, setLoading] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
 
-  const handleSignIn = async (e: React.FormEvent) => {
+  const handleSendLink = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSending(true);
+    setMessage(null);
     setError(null);
-    setInfo(null);
 
-    if (!email || !password) {
-      setError('Please enter your email and password.');
-      return;
-    }
-
-    setLoading(true);
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      if (!email.trim()) {
+        setError('Please enter your email address.');
+        return;
+      }
+
+      const redirectTo =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/tenant/portal`
+          : undefined;
+
+      const { error: signInError } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          emailRedirectTo: redirectTo,
+        },
       });
 
-      if (signInError) throw signInError;
+      if (signInError) {
+        console.error('Tenant magic link error:', signInError);
+        setError(signInError.message || 'Unable to send login link.');
+        return;
+      }
 
-      router.push('/tenant/portal');
+      setMessage(
+        'Check your email for a login link. Open it on this device to access your tenant portal.'
+      );
     } catch (err: any) {
       console.error(err);
-      setError(
-        err?.message || 'Unable to sign in. Please check your details.'
-      );
+      setError(err?.message || 'Unexpected error sending login link.');
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePasswordReset = async () => {
-    setError(null);
-    setInfo(null);
-
-    if (!email) {
-      setError('Enter your email above first, then click "Forgot password?".');
-      return;
-    }
-
-    setResetLoading(true);
-    try {
-      const redirectTo = `${window.location.origin}/auth/update-password`;
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-        email,
-        { redirectTo }
-      );
-
-      if (resetError) throw resetError;
-
-      setInfo('Password reset email sent. Check your inbox.');
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.message ||
-          'Unable to start password reset. Please try again in a moment.'
-      );
-    } finally {
-      setResetLoading(false);
+      setSending(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/80 p-6 shadow-sm">
-        <div className="mb-4">
-          <Link
-            href="/"
-            className="text-[11px] text-slate-500 hover:text-emerald-400"
-          >
-            ← Back to homepage
-          </Link>
-        </div>
+      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl">
+        <button
+          type="button"
+          onClick={() => router.push('/')}
+          className="text-[11px] text-slate-400 hover:text-emerald-300 mb-4"
+        >
+          ← Back to homepage
+        </button>
 
-        <h1 className="text-lg font-semibold text-slate-50 mb-1">
+        <h1 className="text-xl font-semibold text-slate-50 mb-1">
           Tenant login
         </h1>
-        <p className="text-xs text-slate-400 mb-4">
-          Sign in to view your rent amount, due date, payment history, and
-          documents shared by your landlord.
+        <p className="text-sm text-slate-400 mb-4">
+          Enter the email your landlord used for your account. We&apos;ll send
+          you a secure login link to access your tenant portal.
         </p>
 
-        {error && (
-          <div className="mb-3 rounded-xl bg-rose-950/40 border border-rose-500/40 px-3 py-2 text-xs text-rose-100">
-            {error}
-          </div>
-        )}
-        {info && (
-          <div className="mb-3 rounded-xl bg-emerald-950/30 border border-emerald-500/40 px-3 py-2 text-xs text-emerald-100">
-            {info}
-          </div>
-        )}
-
-        <form onSubmit={handleSignIn} className="space-y-3 text-sm">
+        <form onSubmit={handleSendLink} className="space-y-4">
           <div>
-            <label className="block text-[11px] text-slate-400 mb-1">
-              Email
+            <label
+              htmlFor="email"
+              className="block text-xs font-medium text-slate-300 mb-1"
+            >
+              Email address
             </label>
             <input
+              id="email"
               type="email"
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-50 focus:ring-emerald-500"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              placeholder="you@example.com"
             />
           </div>
 
-          <div>
-            <label className="block text-[11px] text-slate-400 mb-1">
-              Password
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 pr-16 text-sm text-slate-50 focus:ring-emerald-500"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute inset-y-0 right-2 flex items-center text-[11px] text-slate-400 hover:text-slate-200"
-              >
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
+          {error && (
+            <div className="rounded-xl border border-rose-500/50 bg-rose-950/40 px-3 py-2 text-xs text-rose-100">
+              {error}
             </div>
-          </div>
+          )}
 
-          <div className="flex items-center justify-between text-[11px] mt-1">
-            <button
-              type="button"
-              onClick={handlePasswordReset}
-              disabled={resetLoading}
-              className="text-emerald-300 hover:text-emerald-200 underline-offset-2 hover:underline disabled:opacity-60"
-            >
-              {resetLoading ? 'Sending reset email…' : 'Forgot password?'}
-            </button>
-          </div>
+          {message && (
+            <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-100">
+              {message}
+            </div>
+          )}
 
           <button
             type="submit"
-            disabled={loading}
-            className="mt-3 w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+            disabled={sending}
+            className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading ? 'Signing in…' : 'Sign in as tenant'}
+            {sending ? 'Sending link…' : 'Email me a login link'}
           </button>
         </form>
+
+        <p className="mt-4 text-[11px] text-slate-500">
+          If you don&apos;t see the email, check your spam or promotions
+          folder. The link will expire after a short time.
+        </p>
       </div>
     </div>
   );
