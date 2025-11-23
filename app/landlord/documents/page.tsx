@@ -339,7 +339,7 @@ export default function LandlordDocumentsPage() {
           )}
 
           <p className="mt-3 text-[11px] text-slate-500">
-            Future upgrade: Tenants will be able to view lease documents assigned
+            Tenants will be able to view documents assigned
             to their unit.
           </p>
         </section>
