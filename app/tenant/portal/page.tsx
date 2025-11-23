@@ -17,6 +17,7 @@ type TenantRow = {
   monthly_rent: number | null;
   lease_start: string | null;
   lease_end: string | null;
+  user_id?: string | null;
 };
 
 type PropertyRow = {
@@ -54,7 +55,7 @@ type MaintenanceRow = {
   status: string | null;
   priority: string | null;
   created_at: string;
-  resolution_note: string | null; // 👈 landlord note
+  resolution_note: string | null;
 };
 
 // ---------- Helpers ----------
@@ -153,67 +154,67 @@ export default function TenantPortalPage() {
         if (authError) throw authError;
 
         const user = authData.user;
-        if (!user) {
-          // Not logged in → go to tenant login
-          router.push('/tenant/login');
-          return;
+        const email = user?.email || null;
+        const userId = user?.id || null;
+
+        if (!email || !userId) {
+          throw new Error('Unable to load tenant: missing login information.');
         }
 
-        const email = user.email;
-        if (!email) {
-          throw new Error('Unable to load tenant: missing email.');
+        // 1) Ask backend to link this auth user to the tenant row (if not already linked)
+        try {
+          await fetch('/api/tenant-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, email }),
+          });
+        } catch (linkErr) {
+          console.warn('tenant-link call failed (non-fatal):', linkErr);
         }
 
-        // 1) Try to find an existing tenant row by email
-        const { data: tenantRows, error: tenantError } = await supabase
+        // 2) Try to find tenant by user_id first
+        let tenantRow: TenantRow | null = null;
+
+        const { data: tByUser, error: tUserError } = await supabase
           .from('tenants')
           .select('*')
-          .eq('email', email)
+          .eq('user_id', userId)
           .limit(1);
 
-        if (tenantError) throw tenantError;
+        if (tUserError) throw tUserError;
 
-        let t = (tenantRows && tenantRows[0]) as TenantRow | undefined;
-
-        // 2) If none exists, auto-create a minimal tenant row for this user
-        if (!t) {
-          const { data: insertedTenant, error: insertError } = await supabase
-            .from('tenants')
-            .insert({
-              email,
-              name:
-                (user.user_metadata &&
-                  (user.user_metadata.full_name ||
-                    user.user_metadata.name)) ||
-                null,
-              phone: null,
-              status: 'current',
-              property_id: null,
-              monthly_rent: null,
-              lease_start: null,
-              lease_end: null,
-            })
-            .select('*')
-            .single();
-
-          if (insertError) {
-            console.error('Error auto-creating tenant row:', insertError);
-            throw new Error(
-              'We could not find a tenant record linked to this account. Please contact your landlord so they can check your email and tenant setup.'
-            );
-          }
-
-          t = insertedTenant as TenantRow;
+        if (tByUser && tByUser.length > 0) {
+          tenantRow = tByUser[0] as TenantRow;
         }
 
-        setTenant(t);
+        // 3) Fallback: find by email if not linked yet
+        if (!tenantRow) {
+          const { data: tByEmail, error: tEmailError } = await supabase
+            .from('tenants')
+            .select('*')
+            .eq('email', email)
+            .limit(1);
 
-        // Property
-        if (t.property_id) {
+          if (tEmailError) throw tEmailError;
+          if (tByEmail && tByEmail.length > 0) {
+            tenantRow = tByEmail[0] as TenantRow;
+          }
+        }
+
+        if (!tenantRow) {
+          throw new Error(
+            'We could not find a tenant record linked to this account. Please contact your landlord so they can check your email and tenant setup.'
+          );
+        }
+
+        setTenant(tenantRow);
+
+        // 4) Property
+        if (tenantRow.property_id) {
           const { data: propRow, error: propError } = await supabase
             .from('properties')
             .select('*')
-            .eq('id', t.property_id)
+            .eq('id', tenantRow.property_id)
             .single();
 
           if (propError) throw propError;
@@ -222,23 +223,23 @@ export default function TenantPortalPage() {
           setProperty(null);
         }
 
-        // Payments
+        // 5) Payments
         const { data: payRows, error: payError } = await supabase
           .from('payments')
           .select('*')
-          .eq('tenant_id', t.id)
+          .eq('tenant_id', tenantRow.id)
           .order('paid_on', { ascending: false })
           .limit(10);
 
         if (payError) throw payError;
         setPayments((payRows || []) as PaymentRow[]);
 
-        // Documents
-        if (t.property_id) {
+        // 6) Documents
+        if (tenantRow.property_id) {
           const { data: docRows, error: docError } = await supabase
             .from('documents')
             .select('id, created_at, title, file_url, property_id')
-            .eq('property_id', t.property_id)
+            .eq('property_id', tenantRow.property_id)
             .order('created_at', { ascending: false });
 
           if (docError) throw docError;
@@ -247,11 +248,11 @@ export default function TenantPortalPage() {
           setDocuments([]);
         }
 
-        // Recent maintenance (only a few)
+        // 7) Recent maintenance
         const { data: maintRows, error: maintError } = await supabase
           .from('maintenance_requests')
           .select('*')
-          .eq('tenant_id', t.id)
+          .eq('tenant_id', tenantRow.id)
           .order('created_at', { ascending: false })
           .limit(4);
 
@@ -269,7 +270,7 @@ export default function TenantPortalPage() {
     };
 
     load();
-  }, [router]);
+  }, []);
 
   // ---------- Actions ----------
 
@@ -286,9 +287,7 @@ export default function TenantPortalPage() {
     if (!tenant) return;
 
     const amount =
-      property?.monthly_rent ??
-      tenant.monthly_rent ??
-      0;
+      property?.monthly_rent ?? tenant.monthly_rent ?? 0;
 
     if (!amount || amount <= 0) {
       setError(
@@ -373,9 +372,7 @@ export default function TenantPortalPage() {
   }
 
   const currentRent =
-    property?.monthly_rent ??
-    tenant.monthly_rent ??
-    null;
+    property?.monthly_rent ?? tenant.monthly_rent ?? null;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -465,7 +462,9 @@ export default function TenantPortalPage() {
               </div>
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Card payments are processed securely by Stripe.
+                Card payments are processed securely by Stripe. For any
+                questions about charges, contact your landlord or property
+                manager.
               </p>
             </section>
 
@@ -634,7 +633,6 @@ export default function TenantPortalPage() {
                 first, then contact your landlord or property manager directly.
               </p>
 
-              {/* Recent requests */}
               {maintenance.length === 0 ? (
                 <p className="mt-3 text-[11px] text-slate-500">
                   You haven&apos;t submitted any maintenance requests yet.
@@ -683,7 +681,6 @@ export default function TenantPortalPage() {
                 </div>
               )}
 
-              {/* Buttons */}
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Link
                   href="/tenant/maintenance"
