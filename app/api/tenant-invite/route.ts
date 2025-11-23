@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { resend } from '../../lib/resend';
 
-const RENTZENTRO_FROM_EMAIL = 'RentZentro <notifications@rentzentro.com>';
+const RENTZENTRO_FROM_EMAIL = 'RentZentro <no-reply@rentzentro.com>';
 const RENTZENTRO_REPLY_TO = 'rentzentro@gmail.com';
 
 export async function POST(req: Request) {
