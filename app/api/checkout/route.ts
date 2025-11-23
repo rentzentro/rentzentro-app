@@ -2,44 +2,42 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-if (!stripeSecretKey) {
-  throw new Error('Missing STRIPE_SECRET_KEY environment variable');
-}
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: '2024-06-20' as any,
+});
 
-// No apiVersion here so TypeScript stops complaining
-const stripe = new Stripe(stripeSecretKey as string);
-
-const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ||
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  'http://localhost:3000';
+// Use your live site URL for redirects
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || 'https://www.rentzentro.com';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const { amount, description, tenantId, propertyId } = body as {
-      amount?: number;
-      description?: string;
-      tenantId?: number;
-      propertyId?: number | null;
-    };
+    const body = await req.json();
+
+    const amount = Number(body.amount);
+    const description =
+      (body.description as string | undefined) || 'Rent payment';
+    const tenantId = body.tenantId as number | null | undefined;
+    const propertyId = body.propertyId as number | null | undefined;
 
     if (!amount || amount <= 0) {
       return NextResponse.json(
-        { error: 'Missing or invalid amount for payment.' },
+        { error: 'Invalid payment amount.' },
         { status: 400 }
       );
     }
 
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: 'Missing tenantId for payment.' },
-        { status: 400 }
-      );
-    }
+    // Amount in cents for Stripe
+    const amountInCents = Math.round(amount * 100);
 
-    // Create a one-time payment Checkout Session
+    // 👇 These metadata keys MUST match what webhook expects
+    const metadata: Record<string, string> = {
+      description,
+    };
+
+    if (tenantId != null) metadata.tenantId = String(tenantId);
+    if (propertyId != null) metadata.propertyId = String(propertyId);
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -47,30 +45,34 @@ export async function POST(req: Request) {
         {
           price_data: {
             currency: 'usd',
+            unit_amount: amountInCents,
             product_data: {
-              name: description || 'Rent payment',
+              name: description,
             },
-            unit_amount: Math.round(amount * 100), // dollars -> cents
           },
           quantity: 1,
         },
       ],
-      metadata: {
-        tenantId: String(tenantId),
-        propertyId: propertyId != null ? String(propertyId) : '',
-      },
-      success_url: `${APP_URL}/tenant/payment-success`,
-      cancel_url: `${APP_URL}/tenant/portal`,
+      success_url: `${SITE_URL}/tenant/payment-success`,
+      cancel_url: `${SITE_URL}/tenant/payment-cancelled`,
+      metadata,
     });
+
+    if (!session.url) {
+      return NextResponse.json(
+        { error: 'Stripe session did not return a redirect URL.' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (err: any) {
-    console.error('Error creating rent checkout session:', err);
+    console.error('Error creating Stripe checkout session:', err);
     return NextResponse.json(
       {
         error:
           err?.message ||
-          'Something went wrong while creating the rent payment session.',
+          'Unexpected error while creating Stripe checkout session.',
       },
       { status: 500 }
     );
