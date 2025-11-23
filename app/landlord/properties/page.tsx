@@ -50,7 +50,6 @@ export default function LandlordPropertiesPage() {
 
   const [properties, setProperties] = useState<PropertyRow[]>([]);
 
-  // form
   const [name, setName] = useState('');
   const [unitLabel, setUnitLabel] = useState('');
   const [monthlyRent, setMonthlyRent] = useState('');
@@ -71,7 +70,7 @@ export default function LandlordPropertiesPage() {
       } = await supabase.auth.getUser();
 
       if (authError || !user) {
-        console.error('Auth error or no user', authError);
+        console.error('Auth error / no user:', authError);
         router.push('/landlord/login');
         return;
       }
@@ -107,6 +106,17 @@ export default function LandlordPropertiesPage() {
     router.push('/landlord/login');
   };
 
+  const reloadProperties = async (uid: string) => {
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('owner_id', uid)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    setProperties((data || []) as PropertyRow[]);
+  };
+
   const handleCreateProperty = async () => {
     if (!userId) {
       setError('Missing landlord account. Please log in again.');
@@ -124,7 +134,7 @@ export default function LandlordPropertiesPage() {
         monthly_rent: monthlyRent ? Number(monthlyRent) : null,
         status,
         next_due_date: nextDueDate || null,
-        owner_id: userId, // 🔑 matches properties RLS
+        owner_id: userId, // 🔑 matches RLS
         landlord_email: userEmail,
       });
 
@@ -141,19 +151,43 @@ export default function LandlordPropertiesPage() {
       setStatus('current');
       setNextDueDate('');
 
-      const { data, error: reloadError } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('owner_id', userId)
-        .order('created_at', { ascending: true });
-
-      if (reloadError) throw reloadError;
-      setProperties((data || []) as PropertyRow[]);
+      await reloadProperties(userId);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Unexpected error creating property.');
+      return;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteProperty = async (propertyId: number) => {
+    if (!userId) return;
+
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const { error } = await supabase
+        .from('properties')
+        .delete()
+        .eq('id', propertyId)
+        .eq('owner_id', userId);
+
+      if (error) {
+        console.error('Delete property error:', error);
+        setError(
+          error.message ||
+            'Failed to delete property (check tenants/payments linked).'
+        );
+        return;
+      }
+
+      setSuccess('Property deleted.');
+      await reloadProperties(userId);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Unexpected error deleting property.');
     }
   };
 
@@ -242,27 +276,36 @@ export default function LandlordPropertiesPage() {
                 {properties.map((p) => (
                   <div
                     key={p.id}
-                    className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs"
                   >
-                    <p className="font-medium text-slate-100">
-                      {p.name || 'Property'}{' '}
-                      {p.unit_label ? `· ${p.unit_label}` : ''}
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Status:{' '}
-                      <span className="text-slate-200">
-                        {p.status || 'Unknown'}
-                      </span>{' '}
-                      • Rent:{' '}
-                      <span className="text-slate-200">
-                        {formatCurrency(p.monthly_rent)}
-                      </span>
-                    </p>
-                    {p.next_due_date && (
-                      <p className="text-[11px] text-slate-500">
-                        Next due: {formatDate(p.next_due_date)}
+                    <div>
+                      <p className="font-medium text-slate-100">
+                        {p.name || 'Property'}{' '}
+                        {p.unit_label ? `· ${p.unit_label}` : ''}
                       </p>
-                    )}
+                      <p className="text-[11px] text-slate-400">
+                        Status:{' '}
+                        <span className="text-slate-200">
+                          {p.status || 'Unknown'}
+                        </span>{' '}
+                        • Rent:{' '}
+                        <span className="text-slate-200">
+                          {formatCurrency(p.monthly_rent)}
+                        </span>
+                      </p>
+                      {p.next_due_date && (
+                        <p className="text-[11px] text-slate-500">
+                          Next due: {formatDate(p.next_due_date)}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteProperty(p.id)}
+                      className="text-[11px] px-2 py-1 rounded-full border border-rose-500/60 text-rose-200 hover:bg-rose-950/40"
+                    >
+                      Delete
+                    </button>
                   </div>
                 ))}
               </div>

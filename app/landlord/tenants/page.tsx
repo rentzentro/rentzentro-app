@@ -63,7 +63,7 @@ export default function LandlordTenantsPage() {
   const [leaseStart, setLeaseStart] = useState('');
   const [leaseEnd, setLeaseEnd] = useState('');
 
-  // ---------- Load logged-in landlord + data ----------
+  // ---------- Load landlord + data ----------
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -76,19 +76,17 @@ export default function LandlordTenantsPage() {
       } = await supabase.auth.getUser();
 
       if (authError || !user) {
-        console.error('Auth error or no user', authError);
+        console.error('Auth error / no user:', authError);
         router.push('/landlord/login');
         return;
       }
 
       const uid = user.id;
       const email = user.email ?? null;
-
       setUserId(uid);
       setUserEmail(email);
 
       try {
-        // Only load rows that belong to this landlord
         const [tenantRes, propertyRes] = await Promise.all([
           supabase
             .from('tenants')
@@ -124,6 +122,17 @@ export default function LandlordTenantsPage() {
     router.push('/landlord/login');
   };
 
+  const reloadTenants = async (uid: string) => {
+    const { data, error } = await supabase
+      .from('tenants')
+      .select('*')
+      .eq('owner_id', uid)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    setTenants((data || []) as TenantRow[]);
+  };
+
   const handleCreateTenant = async () => {
     if (!userId) {
       setError('Missing landlord account. Please log in again.');
@@ -142,10 +151,10 @@ export default function LandlordTenantsPage() {
         property_id:
           typeof propertyId === 'number' ? propertyId : (null as any),
         monthly_rent: monthlyRent ? Number(monthlyRent) : null,
-        status: status,
+        status,
         lease_start: leaseStart || null,
         lease_end: leaseEnd || null,
-        owner_id: userId, // 🔑 matches RLS policy
+        owner_id: userId, // 🔑 critical for RLS
       });
 
       if (insertError) {
@@ -164,20 +173,39 @@ export default function LandlordTenantsPage() {
       setLeaseStart('');
       setLeaseEnd('');
 
-      // Reload list
-      const { data, error: reloadError } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('owner_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (reloadError) throw reloadError;
-      setTenants((data || []) as TenantRow[]);
+      await reloadTenants(userId);
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Unexpected error creating tenant.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteTenant = async (tenantId: number) => {
+    if (!userId) return;
+
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .delete()
+        .eq('id', tenantId)
+        .eq('owner_id', userId);
+
+      if (error) {
+        console.error('Delete tenant error:', error);
+        setError(error.message || 'Failed to delete tenant.');
+        return;
+      }
+
+      setSuccess('Tenant deleted.');
+      await reloadTenants(userId);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Unexpected error deleting tenant.');
     }
   };
 
@@ -207,8 +235,7 @@ export default function LandlordTenantsPage() {
               Tenants
             </h1>
             <p className="text-[13px] text-slate-400">
-              Manage who lives in each unit, their contact details, and rent
-              amounts.
+              Manage who lives in each unit, their contact details, and rent.
             </p>
           </div>
 
@@ -252,8 +279,7 @@ export default function LandlordTenantsPage() {
                   Current tenants
                 </p>
                 <p className="mt-1 text-sm font-medium text-slate-50">
-                  {tenants.length} record
-                  {tenants.length === 1 ? '' : 's'}
+                  {tenants.length} record{tenants.length === 1 ? '' : 's'}
                 </p>
               </div>
             </div>
@@ -268,25 +294,34 @@ export default function LandlordTenantsPage() {
                 {tenants.map((t) => (
                   <div
                     key={t.id}
-                    className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs"
                   >
-                    <p className="font-medium text-slate-100">
-                      {t.name || t.email}
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      {t.email}
-                      {t.phone ? ` • ${t.phone}` : ''}
-                    </p>
-                    <p className="text-[11px] text-slate-500">
-                      Status:{' '}
-                      <span className="text-slate-200">
-                        {t.status || 'Unknown'}
-                      </span>{' '}
-                      • Rent:{' '}
-                      <span className="text-slate-200">
-                        {formatCurrency(t.monthly_rent)}
-                      </span>
-                    </p>
+                    <div>
+                      <p className="font-medium text-slate-100">
+                        {t.name || t.email}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        {t.email}
+                        {t.phone ? ` • ${t.phone}` : ''}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Status:{' '}
+                        <span className="text-slate-200">
+                          {t.status || 'Unknown'}
+                        </span>{' '}
+                        • Rent:{' '}
+                        <span className="text-slate-200">
+                          {formatCurrency(t.monthly_rent)}
+                        </span>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTenant(t.id)}
+                      className="text-[11px] px-2 py-1 rounded-full border border-rose-500/60 text-rose-200 hover:bg-rose-950/40"
+                    >
+                      Delete
+                    </button>
                   </div>
                 ))}
               </div>
@@ -299,7 +334,8 @@ export default function LandlordTenantsPage() {
               Add tenant
             </p>
             <p className="text-[13px] text-slate-400">
-              Create a new tenant record and optionally link them to a property.
+              Create a new tenant record and optionally link them to a
+              property.
             </p>
 
             <div className="space-y-2 text-xs">
@@ -315,7 +351,7 @@ export default function LandlordTenantsPage() {
 
               <div className="space-y-1">
                 <label className="block text-slate-400">
-                  Email (login, if using tenant portal later)
+                  Email (tenant login in future)
                 </label>
                 <input
                   value={tenantEmail}
@@ -341,7 +377,9 @@ export default function LandlordTenantsPage() {
                   <select
                     value={status}
                     onChange={(e) =>
-                      setStatus(e.target.value as 'Current' | 'Past' | 'Prospect')
+                      setStatus(
+                        e.target.value as 'Current' | 'Past' | 'Prospect'
+                      )
                     }
                     className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                   >
@@ -370,7 +408,7 @@ export default function LandlordTenantsPage() {
                   value={propertyId}
                   onChange={(e) =>
                     setPropertyId(
-                      e.target.value ? Number(e.target.value) : ('') as any
+                      e.target.value ? Number(e.target.value) : ('' as any)
                     )
                   }
                   className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
