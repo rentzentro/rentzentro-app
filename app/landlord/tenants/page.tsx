@@ -1,17 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
-
-// ---------- Types ----------
-
-type PropertyRow = {
-  id: number;
-  name: string | null;
-  unit_label: string | null;
-};
 
 type TenantRow = {
   id: number;
@@ -19,15 +10,23 @@ type TenantRow = {
   name: string | null;
   email: string;
   phone: string | null;
-  property_id: number | null;
-  monthly_rent: number | null;
   status: string | null;
+  property_id: number | null;
   lease_start: string | null;
   lease_end: string | null;
   owner_id: string | null;
 };
 
-// ---------- Helpers ----------
+type PropertyRow = {
+  id: number;
+  created_at: string | null;
+  name: string | null;
+  unit_label: string | null;
+  monthly_rent: number | null;
+  status: string | null;
+  next_due_date: string | null;
+  owner_id: string | null;
+};
 
 const formatCurrency = (v: number | null | undefined) =>
   v == null || isNaN(v)
@@ -35,13 +34,12 @@ const formatCurrency = (v: number | null | undefined) =>
     : v.toLocaleString('en-US', {
         style: 'currency',
         currency: 'USD',
-        maximumFractionDigits: 2,
       });
 
 const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '-';
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return '-';
+  if (Number.isNaN(d.getTime())) return '-';
   return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -49,39 +47,50 @@ const formatDate = (iso: string | null | undefined) => {
   });
 };
 
-// ---------- Component ----------
-
 export default function LandlordTenantsPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-
-  const [tenants, setTenants] = useState<TenantRow[]>([]);
-  const [properties, setProperties] = useState<PropertyRow[]>([]);
-
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // form state
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [propertyId, setPropertyId] = useState<number | null>(null);
-  const [monthlyRent, setMonthlyRent] = useState<string>('');
-  const [status, setStatus] = useState('Current');
-  const [leaseStart, setLeaseStart] = useState('');
-  const [leaseEnd, setLeaseEnd] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // future use if you ever add tenant login
+  const [properties, setProperties] = useState<PropertyRow[]>([]);
+  const [tenants, setTenants] = useState<TenantRow[]>([]);
 
-  // ---------- Load user + data ----------
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+
+  // new tenant form
+  const [newTenant, setNewTenant] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    status: 'Current',
+    property_id: '' as string | '',
+    lease_start: '',
+    lease_end: '',
+  });
+
+  // edit tenant
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    status: '',
+    property_id: '' as string | '',
+    lease_start: '',
+    lease_end: '',
+  });
+
+  // ---------- Load landlord + data ----------
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setSuccess(null);
+
       try {
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
@@ -91,29 +100,37 @@ export default function LandlordTenantsPage() {
           router.push('/landlord/login');
           return;
         }
-        setUserId(user.id);
+        const uid = user.id;
+        setOwnerId(uid);
 
-        // Load properties + tenants owned by this landlord
-        const [propsRes, tenantsRes] = await Promise.all([
-          supabase
-            .from('properties')
-            .select('id, name, unit_label')
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('tenants')
-            .select('*')
-            .order('created_at', { ascending: false }),
-        ]);
+        // Properties for this landlord
+        const { data: props, error: propError } = await supabase
+          .from('properties')
+          .select(
+            'id, created_at, name, unit_label, monthly_rent, status, next_due_date, owner_id'
+          )
+          .eq('owner_id', uid)
+          .order('created_at', { ascending: true });
 
-        if (propsRes.error) throw propsRes.error;
-        if (tenantsRes.error) throw tenantsRes.error;
+        if (propError) throw propError;
+        setProperties((props || []) as PropertyRow[]);
 
-        setProperties((propsRes.data || []) as PropertyRow[]);
-        setTenants((tenantsRes.data || []) as TenantRow[]);
+        // Tenants for this landlord
+        const { data: tenantRows, error: tenantError } = await supabase
+          .from('tenants')
+          .select(
+            'id, created_at, name, email, phone, status, property_id, lease_start, lease_end, owner_id'
+          )
+          .eq('owner_id', uid)
+          .order('created_at', { ascending: true });
+
+        if (tenantError) throw tenantError;
+        setTenants((tenantRows || []) as TenantRow[]);
       } catch (err: any) {
         console.error(err);
         setError(
-          err?.message || 'Failed to load tenants. Please refresh and try again.'
+          err?.message ||
+            'Failed to load tenants. Please refresh the page and try again.'
         );
       } finally {
         setLoading(false);
@@ -123,72 +140,158 @@ export default function LandlordTenantsPage() {
     load();
   }, [router]);
 
-  // ---------- Helpers ----------
+  const propertyMap = new Map<number, PropertyRow>();
+  for (const p of properties) {
+    propertyMap.set(p.id, p);
+  }
 
-  const resetForm = () => {
-    setEditingId(null);
-    setFullName('');
-    setEmail('');
-    setPhone('');
-    setPropertyId(null);
-    setMonthlyRent('');
-    setStatus('Current');
-    setLeaseStart('');
-    setLeaseEnd('');
+  // ---------- Handlers ----------
+
+  const handleNewChange = (
+    field: keyof typeof newTenant,
+    value: string
+  ) => {
+    setNewTenant((prev) => ({ ...prev, [field]: value }));
   };
 
-  const beginEdit = (tenant: TenantRow) => {
-    setEditingId(tenant.id);
-    setFullName(tenant.name || '');
-    setEmail(tenant.email || '');
-    setPhone(tenant.phone || '');
-    setPropertyId(tenant.property_id);
-    setMonthlyRent(
-      tenant.monthly_rent != null ? String(tenant.monthly_rent) : ''
-    );
-    setStatus(tenant.status || 'Current');
-    setLeaseStart(tenant.lease_start || '');
-    setLeaseEnd(tenant.lease_end || '');
-    setSuccess(null);
-    setError(null);
+  const handleEditChange = (
+    field: keyof typeof editForm,
+    value: string
+  ) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleDelete = async (tenantId: number) => {
-    if (!confirm('Delete this tenant? This cannot be undone.')) return;
+  const handleCreateTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ownerId) return;
+
+    setSaving(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const { error: delError } = await supabase
-        .from('tenants')
-        .delete()
-        .eq('id', tenantId);
-
-      if (delError) throw delError;
-
-      setTenants((prev) => prev.filter((t) => t.id !== tenantId));
-      if (editingId === tenantId) {
-        resetForm();
+      if (!newTenant.email.trim()) {
+        throw new Error('Tenant email is required.');
       }
-      setSuccess('Tenant deleted.');
+
+      const propertyId =
+        newTenant.property_id === ''
+          ? null
+          : Number(newTenant.property_id);
+
+      const { data, error: insertError } = await supabase
+        .from('tenants')
+        .insert({
+          name: newTenant.name || null,
+          email: newTenant.email.trim(),
+          phone: newTenant.phone || null,
+          status: newTenant.status || null,
+          property_id: propertyId,
+          lease_start: newTenant.lease_start || null,
+          lease_end: newTenant.lease_end || null,
+          owner_id: ownerId,
+        })
+        .select('*')
+        .single();
+
+      if (insertError) throw insertError;
+
+      setTenants((prev) => [...prev, data as TenantRow]);
+      setSuccess('Tenant added. Don’t forget to send their invite email.');
+      setNewTenant({
+        name: '',
+        email: '',
+        phone: '',
+        status: 'Current',
+        property_id: '',
+        lease_start: '',
+        lease_end: '',
+      });
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || 'Failed to delete tenant.');
+      setError(
+        err?.message ||
+          'Failed to create tenant. Please double-check the details and try again.'
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ---------- Submit (create or update) ----------
+  const startEdit = (t: TenantRow) => {
+    setEditingId(t.id);
+    setEditForm({
+      name: t.name || '',
+      email: t.email,
+      phone: t.phone || '',
+      status: t.status || '',
+      property_id: t.property_id ? String(t.property_id) : '',
+      lease_start: t.lease_start || '',
+      lease_end: t.lease_end || '',
+    });
+    setSuccess(null);
+    setError(null);
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userId) {
-      setError('Not logged in.');
-      return;
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm({
+      name: '',
+      email: '',
+      phone: '',
+      status: '',
+      property_id: '',
+      lease_start: '',
+      lease_end: '',
+    });
+  };
+
+  const saveEdit = async (id: number) => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const propertyId =
+        editForm.property_id === ''
+          ? null
+          : Number(editForm.property_id);
+
+      const { data, error: updateError } = await supabase
+        .from('tenants')
+        .update({
+          name: editForm.name || null,
+          email: editForm.email.trim(),
+          phone: editForm.phone || null,
+          status: editForm.status || null,
+          property_id: propertyId,
+          lease_start: editForm.lease_start || null,
+          lease_end: editForm.lease_end || null,
+        })
+        .eq('id', id)
+        .select('*')
+        .single();
+
+      if (updateError) throw updateError;
+
+      setTenants((prev) =>
+        prev.map((t) => (t.id === id ? (data as TenantRow) : t))
+      );
+      setSuccess('Tenant updated.');
+      cancelEdit();
+    } catch (err: any) {
+      console.error(err);
+      setError(
+        err?.message ||
+          'Failed to update tenant. Please review the details and try again.'
+      );
+    } finally {
+      setSaving(false);
     }
+  };
 
-    // basic client-side check
-    if (!email.trim()) {
-      setError('Email is required.');
+  const deleteTenant = async (id: number) => {
+    if (!window.confirm('Delete this tenant record? This cannot be undone.')) {
       return;
     }
 
@@ -197,190 +300,289 @@ export default function LandlordTenantsPage() {
     setSuccess(null);
 
     try {
-      const payload: Partial<TenantRow> = {
-        name: fullName.trim() || null,
-        email: email.trim(),
-        phone: phone.trim() || null,
-        property_id: propertyId,
-        monthly_rent: monthlyRent ? Number(monthlyRent) : null,
-        status: status.trim() || null,
-        lease_start: leaseStart || null,
-        lease_end: leaseEnd || null,
-      };
+      const { error: deleteError } = await supabase
+        .from('tenants')
+        .delete()
+        .eq('id', id);
 
-      if (editingId == null) {
-        // CREATE
-        const { data, error: insertError } = await supabase
-          .from('tenants')
-          .insert([{ ...payload, owner_id: userId }])
-          .select('*')
-          .single();
+      if (deleteError) throw deleteError;
 
-        if (insertError) throw insertError;
-
-        setTenants((prev) => [data as TenantRow, ...prev]);
-        resetForm();
-        setSuccess('Tenant created.');
-      } else {
-        // UPDATE (RLS will ensure owner_id matches auth user)
-        const { data, error: updateError } = await supabase
-          .from('tenants')
-          .update(payload)
-          .eq('id', editingId)
-          .select('*')
-          .single();
-
-        if (updateError) throw updateError;
-
-        setTenants((prev) =>
-          prev.map((t) => (t.id === editingId ? (data as TenantRow) : t))
-        );
-        resetForm();
-        setSuccess('Tenant updated.');
-      }
+      setTenants((prev) => prev.filter((t) => t.id !== id));
+      setSuccess('Tenant deleted.');
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || 'Failed to save tenant.');
+      setError(
+        err?.message ||
+          'Failed to delete tenant. Please try again in a moment.'
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/landlord/login');
-  };
-
-  // ---------- UI ----------
+  // ---------- Render ----------
 
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <p className="text-sm text-slate-400">Loading tenants…</p>
+        <p className="text-sm text-slate-400">
+          Loading your tenants…
+        </p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-8">
-        {/* Header / breadcrumb */}
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <header className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-xs text-slate-500 flex gap-2">
-              <Link href="/landlord" className="hover:text-emerald-400">
-                Landlord
-              </Link>
-              <span>/</span>
-              <span className="text-slate-300">Tenants</span>
-            </div>
-            <h1 className="mt-1 text-xl font-semibold text-slate-50">
+            <h1 className="text-lg font-semibold text-slate-50">
               Tenants
             </h1>
-            <p className="text-[13px] text-slate-400">
-              Manage who lives in each unit, their contact details, and rent.
+            <p className="text-[11px] text-slate-400">
+              Manage who lives in each unit, their contact details, and their
+              linked rent. Rent is controlled on the property.
             </p>
           </div>
+        </header>
 
-          <div className="flex flex-wrap gap-2 md:justify-end">
-            <Link
-              href="/landlord"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
-            >
-              Back to dashboard
-            </Link>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
-            >
-              Log out
-            </button>
-          </div>
-        </div>
-
-        {/* Alerts */}
         {(error || success) && (
           <div
-            className={`mb-4 rounded-2xl border px-4 py-2 text-sm ${
+            className={`rounded-xl border px-4 py-2 text-sm ${
               error
-                ? 'border-rose-500/60 bg-rose-950/40 text-rose-100'
-                : 'border-emerald-500/60 bg-emerald-950/40 text-emerald-100'
+                ? 'border-red-500/60 bg-red-500/10 text-red-200'
+                : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200'
             }`}
           >
             {error || success}
           </div>
         )}
 
-        {/* Layout: list + form */}
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.2fr)]">
-          {/* Tenants list */}
-          <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <div className="flex items-center justify-between mb-3">
+        {/* Grid: current tenants + add form */}
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start">
+          {/* Current tenants */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wide">
                   Current tenants
                 </p>
                 <p className="mt-1 text-sm font-medium text-slate-50">
-                  {tenants.length} record{tenants.length === 1 ? '' : 's'}
+                  {tenants.length === 0
+                    ? 'No tenants yet'
+                    : `${tenants.length} tenant${
+                        tenants.length === 1 ? '' : 's'
+                      }`}
                 </p>
               </div>
             </div>
 
             {tenants.length === 0 ? (
-              <p className="mt-4 text-xs text-slate-500">
-                No tenants yet. Use the form on the right to create your first
-                record.
+              <p className="mt-3 text-xs text-slate-500">
+                No tenants on file yet. Add your first tenant using the form on
+                the right.
               </p>
             ) : (
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden">
                 {tenants.map((t) => {
-                  const prop = properties.find((p) => p.id === t.property_id);
+                  const prop = t.property_id
+                    ? propertyMap.get(t.property_id)
+                    : undefined;
+                  const isEditing = editingId === t.id;
+
                   return (
                     <div
                       key={t.id}
-                      className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs flex items-start justify-between gap-3"
+                      className="px-3 py-3 bg-slate-950/60 flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
                     >
-                      <div>
-                        <p className="font-medium text-slate-100">
-                          {t.name || t.email}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {t.email}
-                          {t.phone ? ` • ${t.phone}` : ''}
-                        </p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          {prop
-                            ? `${prop.name || 'Property'}${
-                                prop.unit_label ? ` · ${prop.unit_label}` : ''
-                              }`
-                            : 'Unassigned'}
-                          {' • '}
-                          {formatCurrency(t.monthly_rent)}
-                        </p>
-                        {t.lease_start && (
-                          <p className="text-[11px] text-slate-500">
-                            Lease:{' '}
-                            {formatDate(t.lease_start)}{' '}
-                            {t.lease_end ? `– ${formatDate(t.lease_end)}` : ''}
-                          </p>
+                      <div className="space-y-1 text-xs md:flex-1">
+                        {isEditing ? (
+                          <>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <input
+                                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                                placeholder="Full name"
+                                value={editForm.name}
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    'name',
+                                    e.target.value
+                                  )
+                                }
+                              />
+                              <input
+                                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                                placeholder="Email"
+                                value={editForm.email}
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    'email',
+                                    e.target.value
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="mt-1 flex flex-col sm:flex-row gap-2">
+                              <input
+                                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                                placeholder="Phone"
+                                value={editForm.phone}
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    'phone',
+                                    e.target.value
+                                  )
+                                }
+                              />
+                              <select
+                                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                                value={editForm.status}
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    'status',
+                                    e.target.value
+                                  )
+                                }
+                              >
+                                <option value="">Status not set</option>
+                                <option value="Current">Current</option>
+                                <option value="Former">Former</option>
+                                <option value="Prospect">
+                                  Prospect
+                                </option>
+                              </select>
+                            </div>
+                            <div className="mt-1 flex flex-col sm:flex-row gap-2">
+                              <select
+                                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                                value={editForm.property_id}
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    'property_id',
+                                    e.target.value
+                                  )
+                                }
+                              >
+                                <option value="">
+                                  Not assigned to a unit
+                                </option>
+                                {properties.map((p) => (
+                                  <option
+                                    key={p.id}
+                                    value={String(p.id)}
+                                  >
+                                    {p.name || 'Property'}{' '}
+                                    {p.unit_label
+                                      ? `· ${p.unit_label}`
+                                      : ''}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                type="date"
+                                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                                value={editForm.lease_start}
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    'lease_start',
+                                    e.target.value
+                                  )
+                                }
+                              />
+                              <input
+                                type="date"
+                                className="w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100"
+                                value={editForm.lease_end}
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    'lease_end',
+                                    e.target.value
+                                  )
+                                }
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-medium text-slate-50 text-[13px]">
+                              {t.name || 'Unnamed tenant'}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {t.email}
+                              {t.phone
+                                ? ` • ${t.phone}`
+                                : ''}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              Unit:{' '}
+                              <span className="text-slate-100">
+                                {prop
+                                  ? `${prop.name || 'Property'}${
+                                      prop.unit_label
+                                        ? ` · ${prop.unit_label}`
+                                        : ''
+                                    }`
+                                  : 'Not assigned'}
+                              </span>
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              Rent (from property):{' '}
+                              <span className="text-slate-100">
+                                {prop
+                                  ? formatCurrency(
+                                      prop.monthly_rent
+                                    )
+                                  : '-'}
+                              </span>
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              Lease:{' '}
+                              <span className="text-slate-100">
+                                {formatDate(t.lease_start)} –{' '}
+                                {formatDate(t.lease_end)}
+                              </span>
+                            </p>
+                          </>
                         )}
                       </div>
-                      <div className="flex flex-col gap-1">
-                        <button
-                          type="button"
-                          onClick={() => beginEdit(t)}
-                          className="rounded-full border border-slate-600 px-2 py-0.5 text-[10px] text-slate-100 hover:bg-slate-700"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(t.id)}
-                          className="rounded-full border border-rose-600 px-2 py-0.5 text-[10px] text-rose-100 hover:bg-rose-700"
-                        >
-                          Delete
-                        </button>
+
+                      <div className="flex items-center gap-2 text-[11px] mt-2 md:mt-0">
+                        {isEditing ? (
+                          <>
+                            <button
+                              onClick={() => saveEdit(t.id)}
+                              disabled={saving}
+                              className="rounded-full bg-emerald-500 px-3 py-1 font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 font-medium text-slate-100 hover:bg-slate-800"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] text-slate-200">
+                              {t.status || 'Status not set'}
+                            </span>
+                            <button
+                              onClick={() => startEdit(t)}
+                              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 font-medium text-slate-100 hover:bg-slate-800"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteTenant(t.id)}
+                              className="rounded-full border border-red-500/60 bg-red-500/10 px-3 py-1 font-medium text-red-100 hover:bg-red-500/20"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -389,149 +591,139 @@ export default function LandlordTenantsPage() {
             )}
           </section>
 
-          {/* Form */}
-          <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-            <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">
-              {editingId ? 'Edit tenant' : 'Add tenant'}
+          {/* Add tenant */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
+            <p className="text-xs text-slate-500 uppercase tracking-wide">
+              Add tenant
             </p>
-            <p className="text-[13px] text-slate-400 mb-4">
-              {editingId
-                ? 'Update tenant details and rent.'
-                : 'Create a tenant record for each person renting a unit.'}
+            <p className="mt-1 text-sm font-medium text-slate-50">
+              Create a new tenant record
+            </p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              After adding a tenant, send them an invite email so they can
+              activate their tenant portal account.
             </p>
 
-            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
-              <div className="space-y-1">
-                <label className="block text-slate-300">Full name</label>
+            <form
+              onSubmit={handleCreateTenant}
+              className="mt-3 space-y-3 text-xs"
+            >
+              <div className="flex flex-col gap-2">
                 <input
-                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Bob Tenant"
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+                  placeholder="Full name (optional)"
+                  value={newTenant.name}
+                  onChange={(e) =>
+                    handleNewChange('name', e.target.value)
+                  }
                 />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-slate-300">Email (login)</label>
                 <input
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+                  placeholder="Email (login)"
                   type="email"
+                  value={newTenant.email}
+                  onChange={(e) =>
+                    handleNewChange('email', e.target.value)
+                  }
                   required
-                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="tenant@example.com"
                 />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-slate-300">Phone</label>
                 <input
-                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="optional"
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+                  placeholder="Phone (optional)"
+                  value={newTenant.phone}
+                  onChange={(e) =>
+                    handleNewChange('phone', e.target.value)
+                  }
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="block text-slate-300">Property / Unit</label>
-                  <select
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                    value={propertyId ?? ''}
-                    onChange={(e) =>
-                      setPropertyId(
-                        e.target.value ? Number(e.target.value) : null
-                      )
-                    }
-                  >
-                    <option value="">Unassigned</option>
-                    {properties.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name || 'Property'}
-                        {p.unit_label ? ` · ${p.unit_label}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-slate-300">
-                    Monthly rent (override)
-                  </label>
-                  <input
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                    value={monthlyRent}
-                    onChange={(e) => setMonthlyRent(e.target.value)}
-                    placeholder="e.g. 1500"
-                    inputMode="numeric"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="block text-slate-300">Status</label>
-                  <select
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                  >
-                    <option>Current</option>
-                    <option>Future</option>
-                    <option>Past</option>
-                  </select>
-                </div>
-
-                <div />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="block text-slate-300">Lease start</label>
-                  <input
-                    type="date"
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                    value={leaseStart}
-                    onChange={(e) => setLeaseStart(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-slate-300">Lease end</label>
-                  <input
-                    type="date"
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
-                    value={leaseEnd}
-                    onChange={(e) => setLeaseEnd(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center gap-3">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+              <div className="flex flex-col gap-2">
+                <select
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+                  value={newTenant.status}
+                  onChange={(e) =>
+                    handleNewChange('status', e.target.value)
+                  }
                 >
-                  {saving
-                    ? editingId
-                      ? 'Saving…'
-                      : 'Creating…'
-                    : editingId
-                    ? 'Save changes'
-                    : 'Create tenant'}
-                </button>
-                {editingId && (
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="text-[11px] text-slate-400 hover:text-slate-200"
-                  >
-                    Cancel editing
-                  </button>
-                )}
+                  <option value="Current">Current</option>
+                  <option value="Former">Former</option>
+                  <option value="Prospect">Prospect</option>
+                </select>
+
+                <select
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+                  value={newTenant.property_id}
+                  onChange={(e) =>
+                    handleNewChange('property_id', e.target.value)
+                  }
+                >
+                  <option value="">
+                    Not assigned to a unit yet
+                  </option>
+                  {properties.map((p) => (
+                    <option key={p.id} value={String(p.id)}>
+                      {p.name || 'Property'}
+                      {p.unit_label ? ` · ${p.unit_label}` : ''}{' '}
+                      {p.monthly_rent != null
+                        ? ` (${formatCurrency(
+                            p.monthly_rent
+                          )})`
+                        : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-[10px] text-slate-500">
+                      Lease start
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+                      value={newTenant.lease_start}
+                      onChange={(e) =>
+                        handleNewChange(
+                          'lease_start',
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-[10px] text-slate-500">
+                      Lease end
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100"
+                      value={newTenant.lease_end}
+                      onChange={(e) =>
+                        handleNewChange(
+                          'lease_end',
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="mt-2 inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving…' : 'Create tenant'}
+              </button>
             </form>
+
+            <p className="mt-3 text-[11px] text-slate-500">
+              Rent amount is controlled on the property, and tenants inherit
+              that rent automatically in their portal and online payments.
+            </p>
           </section>
         </div>
       </div>
