@@ -1,11 +1,14 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
+// ---------- Types ----------
 type TenantRow = {
   id: number;
+  created_at: string | null;
   name: string | null;
   email: string;
   phone: string | null;
@@ -14,38 +17,16 @@ type TenantRow = {
   status: string | null;
   lease_start: string | null;
   lease_end: string | null;
-  created_at?: string;
+  owner_id: string | null;
 };
 
 type PropertyRow = {
   id: number;
   name: string | null;
   unit_label: string | null;
-  monthly_rent: number | null;
 };
 
-type FormState = {
-  name: string;
-  email: string;
-  phone: string;
-  propertyId: string;
-  monthlyRent: string;
-  status: 'current' | 'late' | 'notice' | 'inactive';
-  leaseStart: string;
-  leaseEnd: string;
-};
-
-const emptyForm: FormState = {
-  name: '',
-  email: '',
-  phone: '',
-  propertyId: '',
-  monthlyRent: '',
-  status: 'current',
-  leaseStart: '',
-  leaseEnd: '',
-};
-
+// ---------- Helpers ----------
 const formatCurrency = (v: number | null | undefined) =>
   v == null || isNaN(v)
     ? '-'
@@ -55,55 +36,77 @@ const formatCurrency = (v: number | null | undefined) =>
         maximumFractionDigits: 2,
       });
 
-const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '-';
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
-
+// ---------- Component ----------
 export default function LandlordTenantsPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [tenants, setTenants] = useState<TenantRow[]>([]);
-  const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [form, setForm] = useState<FormState>(emptyForm);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  const formRef = useRef<HTMLDivElement | null>(null);
+  const [tenants, setTenants] = useState<TenantRow[]>([]);
+  const [properties, setProperties] = useState<PropertyRow[]>([]);
 
-  // ---------- Load tenants + properties ----------
+  // form state
+  const [fullName, setFullName] = useState('');
+  const [tenantEmail, setTenantEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [status, setStatus] = useState<'Current' | 'Past' | 'Prospect'>(
+    'Current'
+  );
+  const [propertyId, setPropertyId] = useState<number | ''>('');
+  const [monthlyRent, setMonthlyRent] = useState<string>('');
+  const [leaseStart, setLeaseStart] = useState('');
+  const [leaseEnd, setLeaseEnd] = useState('');
+
+  // ---------- Load logged-in landlord + data ----------
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setSuccess(null);
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        console.error('Auth error or no user', authError);
+        router.push('/landlord/login');
+        return;
+      }
+
+      const uid = user.id;
+      const email = user.email ?? null;
+
+      setUserId(uid);
+      setUserEmail(email);
 
       try {
-        const [tenantRes, propRes] = await Promise.all([
+        // Only load rows that belong to this landlord
+        const [tenantRes, propertyRes] = await Promise.all([
           supabase
             .from('tenants')
             .select('*')
+            .eq('owner_id', uid)
             .order('created_at', { ascending: false }),
           supabase
             .from('properties')
-            .select('id, name, unit_label, monthly_rent')
-            .order('id'),
+            .select('id, name, unit_label')
+            .eq('owner_id', uid)
+            .order('created_at', { ascending: true }),
         ]);
 
         if (tenantRes.error) throw tenantRes.error;
-        if (propRes.error) throw propRes.error;
+        if (propertyRes.error) throw propertyRes.error;
 
         setTenants((tenantRes.data || []) as TenantRow[]);
-        setProperties((propRes.data || []) as PropertyRow[]);
+        setProperties((propertyRes.data || []) as PropertyRow[]);
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Failed to load tenants.');
@@ -113,467 +116,308 @@ export default function LandlordTenantsPage() {
     };
 
     load();
-  }, []);
+  }, [router]);
 
-  // ---------- Helpers ----------
-  const resetForm = () => {
-    setForm(emptyForm);
-    setEditingId(null);
+  // ---------- Actions ----------
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/landlord/login');
   };
 
-  const scrollToForm = () => {
-    if (formRef.current) {
-      formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const handleFieldChange = (field: keyof FormState, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleCancelEdit = () => {
-    resetForm();
-    setError(null);
-    setSuccess(null);
-    scrollToForm();
-  };
-
-  // ---------- Save (create/update) ----------
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    if (!form.name.trim() || !form.email.trim()) {
-      setError('Name and email are required.');
+  const handleCreateTenant = async () => {
+    if (!userId) {
+      setError('Missing landlord account. Please log in again.');
       return;
     }
 
     setSaving(true);
-
-    const property_id =
-      form.propertyId.trim() === '' ? null : Number(form.propertyId);
-    const monthly_rent =
-      form.monthlyRent.trim() === '' ? null : Number(form.monthlyRent);
+    setError(null);
+    setSuccess(null);
 
     try {
-      if (editingId) {
-        const { data, error: updateError } = await supabase
-          .from('tenants')
-          .update({
-            name: form.name.trim(),
-            email: form.email.trim().toLowerCase(),
-            phone: form.phone.trim() || null,
-            property_id,
-            monthly_rent,
-            status: form.status,
-            lease_start: form.leaseStart || null,
-            lease_end: form.leaseEnd || null,
-          })
-          .eq('id', editingId)
-          .select()
-          .single();
+      const { error: insertError } = await supabase.from('tenants').insert({
+        name: fullName || null,
+        email: tenantEmail || userEmail || '',
+        phone: phone || null,
+        property_id:
+          typeof propertyId === 'number' ? propertyId : (null as any),
+        monthly_rent: monthlyRent ? Number(monthlyRent) : null,
+        status: status,
+        lease_start: leaseStart || null,
+        lease_end: leaseEnd || null,
+        owner_id: userId, // 🔑 matches RLS policy
+      });
 
-        if (updateError) throw updateError;
-
-        setTenants((prev) =>
-          prev.map((t) => (t.id === editingId ? (data as TenantRow) : t))
-        );
-        setSuccess('Tenant updated.');
-      } else {
-        const { data, error: insertError } = await supabase
-          .from('tenants')
-          .insert({
-            name: form.name.trim(),
-            email: form.email.trim().toLowerCase(),
-            phone: form.phone.trim() || null,
-            property_id,
-            monthly_rent,
-            status: form.status,
-            lease_start: form.leaseStart || null,
-            lease_end: form.leaseEnd || null,
-          })
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-
-        setTenants((prev) => [data as TenantRow, ...prev]);
-        setSuccess('Tenant created.');
+      if (insertError) {
+        console.error('Insert tenant error:', insertError);
+        setError(insertError.message || 'Failed to create tenant.');
+        return;
       }
 
-      resetForm();
+      setSuccess('Tenant created.');
+      setFullName('');
+      setTenantEmail('');
+      setPhone('');
+      setStatus('Current');
+      setPropertyId('');
+      setMonthlyRent('');
+      setLeaseStart('');
+      setLeaseEnd('');
+
+      // Reload list
+      const { data, error: reloadError } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('owner_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (reloadError) throw reloadError;
+      setTenants((data || []) as TenantRow[]);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to save tenant.');
+      setError(err.message || 'Unexpected error creating tenant.');
     } finally {
       setSaving(false);
     }
   };
 
-  // ---------- Edit ----------
-  const handleEdit = (tenant: TenantRow) => {
-    setEditingId(tenant.id);
-    setForm({
-      name: tenant.name || '',
-      email: tenant.email || '',
-      phone: tenant.phone || '',
-      propertyId: tenant.property_id ? String(tenant.property_id) : '',
-      monthlyRent: tenant.monthly_rent ? String(tenant.monthly_rent) : '',
-      status: (tenant.status as FormState['status']) || 'current',
-      leaseStart: tenant.lease_start ? tenant.lease_start.slice(0, 10) : '',
-      leaseEnd: tenant.lease_end ? tenant.lease_end.slice(0, 10) : '',
-    });
-    setError(null);
-    setSuccess(null);
-    scrollToForm();
-  };
-
-  // ---------- Delete ----------
-  const handleDelete = async (tenant: TenantRow) => {
-    const ok = window.confirm(
-      `Delete tenant "${tenant.name || tenant.email}"? This cannot be undone.`
-    );
-    if (!ok) return;
-
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const { error: deleteError } = await supabase
-        .from('tenants')
-        .delete()
-        .eq('id', tenant.id);
-
-      if (deleteError) throw deleteError;
-
-      setTenants((prev) => prev.filter((t) => t.id !== tenant.id));
-      setSuccess('Tenant deleted.');
-      if (editingId === tenant.id) resetForm();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to delete tenant.');
-    }
-  };
-
-  const currentTenants = tenants;
-
   // ---------- UI ----------
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
+        <p className="text-sm text-slate-400">Loading tenants…</p>
+      </main>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-8">
+    <main className="min-h-screen bg-slate-950 text-slate-50">
+      <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="text-xs text-slate-500 flex gap-2">
-              <button
-                type="button"
-                onClick={() => router.push('/landlord')}
-                className="hover:text-emerald-400"
-              >
+              <Link href="/landlord" className="hover:text-emerald-400">
                 Landlord
-              </button>
+              </Link>
               <span>/</span>
               <span className="text-slate-300">Tenants</span>
             </div>
-            <h1 className="text-xl font-semibold mt-1">Tenants</h1>
+            <h1 className="mt-1 text-xl font-semibold text-slate-50">
+              Tenants
+            </h1>
             <p className="text-[13px] text-slate-400">
-              Manage who lives in each unit, their contact details, and rent.
+              Manage who lives in each unit, their contact details, and rent
+              amounts.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => router.push('/landlord')}
-            className="text-xs px-4 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
-          >
-            Back to dashboard
-          </button>
-        </div>
+          <div className="flex flex-wrap gap-2 md:justify-end">
+            <Link
+              href="/landlord"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
+            >
+              Back to dashboard
+            </Link>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-100"
+            >
+              Log out
+            </button>
+          </div>
+        </header>
 
+        {/* Alerts */}
         {(error || success) && (
-          <div className="mb-4 space-y-2 text-sm">
-            {error && (
-              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-100">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-100">
-                {success}
-              </div>
-            )}
+          <div
+            className={`rounded-2xl border px-4 py-2 text-sm ${
+              error
+                ? 'border-rose-500/60 bg-rose-500/10 text-rose-100'
+                : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-100'
+            }`}
+          >
+            {error || success}
           </div>
         )}
 
-        {/* Two-column layout */}
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)]">
-          {/* LEFT: list */}
-          <section className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
+        {/* Content */}
+        <section className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.1fr)]">
+          {/* Left: tenants list */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wide">
                   Current tenants
                 </p>
                 <p className="mt-1 text-sm font-medium text-slate-50">
-                  {currentTenants.length} record
-                  {currentTenants.length === 1 ? '' : 's'}
+                  {tenants.length} record
+                  {tenants.length === 1 ? '' : 's'}
                 </p>
               </div>
             </div>
 
-            {loading ? (
-              <p className="text-xs text-slate-500 mt-2">Loading tenants…</p>
-            ) : currentTenants.length === 0 ? (
-              <p className="text-xs text-slate-500 mt-2">
+            {tenants.length === 0 ? (
+              <p className="mt-2 text-xs text-slate-500">
                 No tenants yet. Use the form on the right to create your first
                 record.
               </p>
             ) : (
-              <div className="space-y-2 mt-3">
-                {currentTenants.map((t) => {
-                  const property = t.property_id
-                    ? properties.find((p) => p.id === t.property_id)
-                    : null;
-
-                  const status = t.status?.toLowerCase() || 'current';
-                  const badgeClasses =
-                    status === 'current'
-                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                      : status === 'late'
-                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
-                      : 'bg-slate-500/15 text-slate-300 border-slate-500/40';
-
-                  const effectiveRent =
-                    t.monthly_rent ??
-                    (property ? property.monthly_rent : null);
-
-                  return (
-                    <div
-                      key={t.id}
-                      className="flex items-center justify-between px-4 py-3 rounded-2xl bg-slate-950 border border-slate-800 text-xs"
-                    >
-                      <div>
-                        <p className="font-semibold text-slate-50">
-                          {t.name || t.email}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {t.email}
-                          {t.phone ? ` • ${t.phone}` : ''}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {property ? (
-                            <>
-                              {property.name}
-                              {property.unit_label
-                                ? ` · ${property.unit_label}`
-                                : ''}
-                            </>
-                          ) : (
-                            'No unit assigned'
-                          )}{' '}
-                          • Rent:{' '}
-                          <span className="text-slate-100">
-                            {formatCurrency(effectiveRent)}
-                          </span>
-                        </p>
-                        {(t.lease_start || t.lease_end) && (
-                          <p className="text-[11px] text-slate-500">
-                            Lease:{' '}
-                            {t.lease_start ? formatDate(t.lease_start) : '?'}{' '}
-                            – {t.lease_end ? formatDate(t.lease_end) : '?'}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2">
-                        <span
-                          className={`px-3 py-0.5 rounded-full border text-[11px] ${badgeClasses}`}
-                        >
-                          {t.status || 'current'}
-                        </span>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(t)}
-                            className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(t)}
-                            className="text-[11px] px-3 py-1 rounded-full border border-rose-500/60 text-rose-200 bg-rose-950/40 hover:bg-rose-950/70"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="mt-3 space-y-2">
+                {tenants.map((t) => (
+                  <div
+                    key={t.id}
+                    className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs"
+                  >
+                    <p className="font-medium text-slate-100">
+                      {t.name || t.email}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      {t.email}
+                      {t.phone ? ` • ${t.phone}` : ''}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Status:{' '}
+                      <span className="text-slate-200">
+                        {t.status || 'Unknown'}
+                      </span>{' '}
+                      • Rent:{' '}
+                      <span className="text-slate-200">
+                        {formatCurrency(t.monthly_rent)}
+                      </span>
+                    </p>
+                  </div>
+                ))}
               </div>
             )}
-          </section>
+          </div>
 
-          {/* RIGHT: form */}
-          <section
-            ref={formRef}
-            className="p-4 rounded-2xl bg-slate-900 border border-slate-800"
-          >
-            <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">
-              {editingId ? 'Edit tenant' : 'Add tenant'}
+          {/* Right: add tenant */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
+            <p className="text-xs text-slate-500 uppercase tracking-wide">
+              Add tenant
             </p>
-            <h2 className="text-sm font-medium text-slate-50 mb-3">
-              {editingId
-                ? 'Update tenant details'
-                : 'Create a new tenant record'}
-            </h2>
+            <p className="text-[13px] text-slate-400">
+              Create a new tenant record and optionally link them to a property.
+            </p>
 
-            <form className="space-y-3" onSubmit={handleSubmit}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Full name</label>
-                  <input
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.name}
-                    onChange={(e) => handleFieldChange('name', e.target.value)}
-                    placeholder="Jane Tenant"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Email (login)</label>
-                  <input
-                    type="email"
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.email}
-                    onChange={(e) => handleFieldChange('email', e.target.value)}
-                    placeholder="tenant@example.com"
-                  />
-                </div>
+            <div className="space-y-2 text-xs">
+              <div className="space-y-1">
+                <label className="block text-slate-400">Full name</label>
+                <input
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
+                  placeholder="Jane Doe"
+                />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Phone</label>
-                  <input
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.phone}
-                    onChange={(e) => handleFieldChange('phone', e.target.value)}
-                    placeholder="(401) 555-1234"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Status</label>
-                  <select
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.status}
-                    onChange={(e) =>
-                      handleFieldChange(
-                        'status',
-                        e.target.value as FormState['status']
-                      )
-                    }
-                  >
-                    <option value="current">Current</option>
-                    <option value="late">Late</option>
-                    <option value="notice">Notice given</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
+              <div className="space-y-1">
+                <label className="block text-slate-400">
+                  Email (login, if using tenant portal later)
+                </label>
+                <input
+                  value={tenantEmail}
+                  onChange={(e) => setTenantEmail(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
+                  placeholder="tenant@example.com"
+                />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-slate-400">Phone</label>
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
+                  placeholder="Optional"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">
-                    Property / Unit
-                  </label>
+                  <label className="block text-slate-400">Status</label>
                   <select
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.propertyId}
+                    value={status}
                     onChange={(e) =>
-                      handleFieldChange('propertyId', e.target.value)
+                      setStatus(e.target.value as 'Current' | 'Past' | 'Prospect')
                     }
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                   >
-                    <option value="">Unassigned</option>
-                    {properties.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name || 'Property'}
-                        {p.unit_label ? ` · ${p.unit_label}` : ''}
-                      </option>
-                    ))}
+                    <option value="Current">Current</option>
+                    <option value="Past">Past</option>
+                    <option value="Prospect">Prospect</option>
                   </select>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">
-                    Monthly rent (optional override)
+                  <label className="block text-slate-400">
+                    Monthly rent (override)
                   </label>
                   <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.monthlyRent}
-                    onChange={(e) =>
-                      handleFieldChange('monthlyRent', e.target.value)
-                    }
-                    placeholder="e.g. 1500"
+                    value={monthlyRent}
+                    onChange={(e) => setMonthlyRent(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
+                    placeholder="Optional"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Lease start</label>
-                  <input
-                    type="date"
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.leaseStart}
-                    onChange={(e) =>
-                      handleFieldChange('leaseStart', e.target.value)
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Lease end</label>
-                  <input
-                    type="date"
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.leaseEnd}
-                    onChange={(e) =>
-                      handleFieldChange('leaseEnd', e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-semibold hover:bg-emerald-400 disabled:opacity-60"
+              <div className="space-y-1">
+                <label className="block text-slate-400">Property / unit</label>
+                <select
+                  value={propertyId}
+                  onChange={(e) =>
+                    setPropertyId(
+                      e.target.value ? Number(e.target.value) : ('') as any
+                    )
+                  }
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                 >
-                  {saving
-                    ? 'Saving…'
-                    : editingId
-                    ? 'Save changes'
-                    : 'Create tenant'}
-                </button>
-                {editingId && (
-                  <button
-                    type="button"
-                    onClick={handleCancelEdit}
-                    className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-900 text-xs hover:bg-slate-800"
-                  >
-                    Cancel edit
-                  </button>
-                )}
+                  <option value="">Unassigned</option>
+                  {properties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name || 'Property'}{' '}
+                      {p.unit_label ? `· ${p.unit_label}` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </form>
-          </section>
-        </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="block text-slate-400">Lease start</label>
+                  <input
+                    type="date"
+                    value={leaseStart}
+                    onChange={(e) => setLeaseStart(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-slate-400">Lease end</label>
+                  <input
+                    type="date"
+                    value={leaseEnd}
+                    onChange={(e) => setLeaseEnd(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCreateTenant}
+                disabled={saving}
+                className="mt-3 w-full rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+              >
+                {saving ? 'Creating…' : 'Create tenant'}
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }

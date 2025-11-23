@@ -1,33 +1,20 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
 type PropertyRow = {
   id: number;
+  created_at: string | null;
   name: string | null;
   unit_label: string | null;
   monthly_rent: number | null;
   status: string | null;
   next_due_date: string | null;
-  created_at?: string;
-};
-
-type FormState = {
-  name: string;
-  unitLabel: string;
-  monthlyRent: string;
-  status: 'current' | 'vacant' | 'notice' | 'inactive';
-  nextDueDate: string;
-};
-
-const emptyForm: FormState = {
-  name: '',
-  unitLabel: '',
-  monthlyRent: '',
-  status: 'current',
-  nextDueDate: '',
+  owner_id: string | null;
+  landlord_email: string | null;
 };
 
 const formatCurrency = (v: number | null | undefined) =>
@@ -40,13 +27,13 @@ const formatCurrency = (v: number | null | undefined) =>
       });
 
 const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '-';
+  if (!iso) return '';
   const d = new Date(iso);
-  if (isNaN(d.getTime())) return '-';
+  if (isNaN(d.getTime())) return '';
   return d.toLocaleDateString('en-US', {
+    year: 'numeric',
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
   });
 };
 
@@ -55,28 +42,53 @@ export default function LandlordPropertiesPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [form, setForm] = useState<FormState>(emptyForm);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  const formRef = useRef<HTMLDivElement | null>(null);
+  const [properties, setProperties] = useState<PropertyRow[]>([]);
 
-  // ---------- Load properties ----------
+  // form
+  const [name, setName] = useState('');
+  const [unitLabel, setUnitLabel] = useState('');
+  const [monthlyRent, setMonthlyRent] = useState('');
+  const [status, setStatus] = useState<'current' | 'vacant' | 'off-market'>(
+    'current'
+  );
+  const [nextDueDate, setNextDueDate] = useState('');
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setSuccess(null);
+
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        console.error('Auth error or no user', authError);
+        router.push('/landlord/login');
+        return;
+      }
+
+      const uid = user.id;
+      const email = user.email ?? null;
+      setUserId(uid);
+      setUserEmail(email);
 
       try {
-        const { data, error: loadError } = await supabase
+        const { data, error: propError } = await supabase
           .from('properties')
           .select('*')
-          .order('created_at', { ascending: false });
+          .eq('owner_id', uid)
+          .order('created_at', { ascending: true });
 
-        if (loadError) throw loadError;
+        if (propError) throw propError;
 
         setProperties((data || []) as PropertyRow[]);
       } catch (err: any) {
@@ -88,413 +100,256 @@ export default function LandlordPropertiesPage() {
     };
 
     load();
-  }, []);
+  }, [router]);
 
-  // ---------- Helpers ----------
-  const resetForm = () => {
-    setForm(emptyForm);
-    setEditingId(null);
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/landlord/login');
   };
 
-  const scrollToForm = () => {
-    if (formRef.current) {
-      formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const handleFieldChange = (field: keyof FormState, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleCancelEdit = () => {
-    resetForm();
-    setError(null);
-    setSuccess(null);
-    scrollToForm();
-  };
-
-  // ---------- Save (create/update) ----------
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-
-    if (!form.name.trim()) {
-      setError('Property name is required.');
+  const handleCreateProperty = async () => {
+    if (!userId) {
+      setError('Missing landlord account. Please log in again.');
       return;
     }
 
     setSaving(true);
-
-    const monthly_rent =
-      form.monthlyRent.trim() === '' ? null : Number(form.monthlyRent);
+    setError(null);
+    setSuccess(null);
 
     try {
-      if (editingId) {
-        const { data, error: updateError } = await supabase
-          .from('properties')
-          .update({
-            name: form.name.trim(),
-            unit_label: form.unitLabel.trim() || null,
-            monthly_rent,
-            status: form.status,
-            next_due_date: form.nextDueDate || null,
-          })
-          .eq('id', editingId)
-          .select()
-          .single();
+      const { error: insertError } = await supabase.from('properties').insert({
+        name: name || null,
+        unit_label: unitLabel || null,
+        monthly_rent: monthlyRent ? Number(monthlyRent) : null,
+        status,
+        next_due_date: nextDueDate || null,
+        owner_id: userId, // 🔑 matches properties RLS
+        landlord_email: userEmail,
+      });
 
-        if (updateError) throw updateError;
-
-        setProperties((prev) =>
-          prev.map((p) => (p.id === editingId ? (data as PropertyRow) : p))
-        );
-        setSuccess('Property updated.');
-      } else {
-        const { data, error: insertError } = await supabase
-          .from('properties')
-          .insert({
-            name: form.name.trim(),
-            unit_label: form.unitLabel.trim() || null,
-            monthly_rent,
-            status: form.status,
-            next_due_date: form.nextDueDate || null,
-          })
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-
-        setProperties((prev) => [data as PropertyRow, ...prev]);
-        setSuccess('Property created.');
+      if (insertError) {
+        console.error('Insert property error:', insertError);
+        setError(insertError.message || 'Failed to create property.');
+        return;
       }
 
-      resetForm();
+      setSuccess('Property created.');
+      setName('');
+      setUnitLabel('');
+      setMonthlyRent('');
+      setStatus('current');
+      setNextDueDate('');
+
+      const { data, error: reloadError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('owner_id', userId)
+        .order('created_at', { ascending: true });
+
+      if (reloadError) throw reloadError;
+      setProperties((data || []) as PropertyRow[]);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to save property.');
+      setError(err.message || 'Unexpected error creating property.');
     } finally {
       setSaving(false);
     }
   };
 
-  // ---------- Edit ----------
-  const handleEdit = (property: PropertyRow) => {
-    setEditingId(property.id);
-    setForm({
-      name: property.name || '',
-      unitLabel: property.unit_label || '',
-      monthlyRent: property.monthly_rent ? String(property.monthly_rent) : '',
-      status: (property.status as FormState['status']) || 'current',
-      nextDueDate: property.next_due_date
-        ? property.next_due_date.slice(0, 10)
-        : '',
-    });
-    setError(null);
-    setSuccess(null);
-    scrollToForm();
-  };
-
-  // ---------- Delete ----------
-  const handleDelete = async (property: PropertyRow) => {
-    const ok = window.confirm(
-      `Delete property "${property.name || 'Property'}${
-        property.unit_label ? ' · ' + property.unit_label : ''
-      }"? This cannot be undone.`
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
+        <p className="text-sm text-slate-400">Loading properties…</p>
+      </main>
     );
-    if (!ok) return;
+  }
 
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const { error: deleteError } = await supabase
-        .from('properties')
-        .delete()
-        .eq('id', property.id);
-
-      if (deleteError) {
-        if (
-          typeof deleteError.message === 'string' &&
-          deleteError.message.toLowerCase().includes('foreign key')
-        ) {
-          throw new Error(
-            'Cannot delete a property that has tenants or payments linked to it. Move or delete those first.'
-          );
-        }
-        throw deleteError;
-      }
-
-      setProperties((prev) => prev.filter((p) => p.id !== property.id));
-      setSuccess('Property deleted.');
-      if (editingId === property.id) resetForm();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Failed to delete property.');
-    }
-  };
-
-  // ---------- UI ----------
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-8">
+    <main className="min-h-screen bg-slate-950 text-slate-50">
+      <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="text-xs text-slate-500 flex gap-2">
-              <button
-                type="button"
-                onClick={() => router.push('/landlord')}
-                className="hover:text-emerald-400"
-              >
+              <Link href="/landlord" className="hover:text-emerald-400">
                 Landlord
-              </button>
+              </Link>
               <span>/</span>
               <span className="text-slate-300">Properties</span>
             </div>
-            <h1 className="text-xl font-semibold mt-1">Properties</h1>
+            <h1 className="mt-1 text-xl font-semibold text-slate-50">
+              Properties
+            </h1>
             <p className="text-[13px] text-slate-400">
-              Manage units, rent amounts, and next due dates. This data powers
-              your dashboard and tenant portal.
+              Add and manage the units you collect rent for.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => router.push('/landlord')}
-            className="text-xs px-4 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
-          >
-            Back to dashboard
-          </button>
-        </div>
+          <div className="flex flex-wrap gap-2 md:justify-end">
+            <Link
+              href="/landlord"
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
+            >
+              Back to dashboard
+            </Link>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-100"
+            >
+              Log out
+            </button>
+          </div>
+        </header>
 
+        {/* Alerts */}
         {(error || success) && (
-          <div className="mb-4 space-y-2 text-sm">
-            {error && (
-              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-100">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-100">
-                {success}
-              </div>
-            )}
+          <div
+            className={`rounded-2xl border px-4 py-2 text-sm ${
+              error
+                ? 'border-rose-500/60 bg-rose-500/10 text-rose-100'
+                : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-100'
+            }`}
+          >
+            {error || success}
           </div>
         )}
 
-        {/* Two-column layout */}
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)]">
-          {/* LEFT: list */}
-          <section className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
+        {/* Content */}
+        <section className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.1fr)]">
+          {/* Left: list */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wide">
-                  Units
+                  Your properties
                 </p>
                 <p className="mt-1 text-sm font-medium text-slate-50">
-                  {properties.length} record
+                  {properties.length} unit
                   {properties.length === 1 ? '' : 's'}
                 </p>
               </div>
             </div>
 
-            {loading ? (
-              <p className="text-xs text-slate-500 mt-2">
-                Loading properties…
-              </p>
-            ) : properties.length === 0 ? (
-              <p className="text-xs text-slate-500 mt-2">
-                No properties yet. Use the form on the right to create your
-                first one.
+            {properties.length === 0 ? (
+              <p className="mt-2 text-xs text-slate-500">
+                No properties yet. Use the form on the right to add your first
+                unit.
               </p>
             ) : (
-              <div className="space-y-2 mt-3">
-                {properties.map((p) => {
-                  const status = p.status?.toLowerCase() || 'current';
-                  const badgeClasses =
-                    status === 'current'
-                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                      : status === 'vacant'
-                      ? 'bg-slate-500/15 text-slate-300 border-slate-500/40'
-                      : status === 'notice'
-                      ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
-                      : 'bg-slate-700/20 text-slate-300 border-slate-600/40';
-
-                  return (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between px-4 py-3 rounded-2xl bg-slate-950 border border-slate-800 text-xs"
-                    >
-                      <div>
-                        <p className="font-semibold text-slate-50">
-                          {p.name || 'Untitled property'}
-                          {p.unit_label ? ` · ${p.unit_label}` : ''}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          Rent:{' '}
-                          <span className="text-slate-100">
-                            {formatCurrency(p.monthly_rent)}
-                          </span>
-                        </p>
-                        {p.next_due_date && (
-                          <p className="text-[11px] text-slate-500">
-                            Next due: {formatDate(p.next_due_date)}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col items-end gap-2">
-                        <span
-                          className={`px-3 py-0.5 rounded-full border text-[11px] ${badgeClasses}`}
-                        >
-                          {p.status || 'current'}
-                        </span>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(p)}
-                            className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(p)}
-                            className="text-[11px] px-3 py-1 rounded-full border border-rose-500/60 text-rose-200 bg-rose-950/40 hover:bg-rose-950/70"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="mt-3 space-y-2">
+                {properties.map((p) => (
+                  <div
+                    key={p.id}
+                    className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs"
+                  >
+                    <p className="font-medium text-slate-100">
+                      {p.name || 'Property'}{' '}
+                      {p.unit_label ? `· ${p.unit_label}` : ''}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Status:{' '}
+                      <span className="text-slate-200">
+                        {p.status || 'Unknown'}
+                      </span>{' '}
+                      • Rent:{' '}
+                      <span className="text-slate-200">
+                        {formatCurrency(p.monthly_rent)}
+                      </span>
+                    </p>
+                    {p.next_due_date && (
+                      <p className="text-[11px] text-slate-500">
+                        Next due: {formatDate(p.next_due_date)}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
-          </section>
+          </div>
 
-          {/* RIGHT: form */}
-          <section
-            ref={formRef}
-            className="p-4 rounded-2xl bg-slate-900 border border-slate-800"
-          >
-            <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">
-              {editingId ? 'Edit unit' : 'Add unit'}
+          {/* Right: add property */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
+            <p className="text-xs text-slate-500 uppercase tracking-wide">
+              Add property
             </p>
-            <h2 className="text-sm font-medium text-slate-50 mb-3">
-              {editingId
-                ? 'Update property details'
-                : 'Create a new property / unit'}
-            </h2>
+            <p className="text-[13px] text-slate-400">
+              Create a unit and set its rent and next due date.
+            </p>
 
-            <form className="space-y-3" onSubmit={handleSubmit}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Property name</label>
-                  <input
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.name}
-                    onChange={(e) =>
-                      handleFieldChange('name', e.target.value)
-                    }
-                    placeholder="Main"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Unit label</label>
-                  <input
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.unitLabel}
-                    onChange={(e) =>
-                      handleFieldChange('unitLabel', e.target.value)
-                    }
-                    placeholder="1A, 2B, Apt 3, etc."
-                  />
-                </div>
+            <div className="space-y-2 text-xs">
+              <div className="space-y-1">
+                <label className="block text-slate-400">Property name</label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
+                  placeholder="123 Main St"
+                />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="block text-slate-400">Unit / label</label>
+                <input
+                  value={unitLabel}
+                  onChange={(e) => setUnitLabel(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
+                  placeholder="Apt 2B"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">
-                    Monthly rent
-                  </label>
+                  <label className="block text-slate-400">Monthly rent</label>
                   <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.monthlyRent}
-                    onChange={(e) =>
-                      handleFieldChange('monthlyRent', e.target.value)
-                    }
-                    placeholder="e.g. 2000"
+                    value={monthlyRent}
+                    onChange={(e) => setMonthlyRent(e.target.value)}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
+                    placeholder="1500"
                   />
                 </div>
+
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Status</label>
+                  <label className="block text-slate-400">Status</label>
                   <select
-                    className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                    value={form.status}
+                    value={status}
                     onChange={(e) =>
-                      handleFieldChange(
-                        'status',
-                        e.target.value as FormState['status']
+                      setStatus(
+                        e.target.value as 'current' | 'vacant' | 'off-market'
                       )
                     }
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                   >
-                    <option value="current">Current (occupied)</option>
+                    <option value="current">Current</option>
                     <option value="vacant">Vacant</option>
-                    <option value="notice">Notice given</option>
-                    <option value="inactive">Inactive / off-market</option>
+                    <option value="off-market">Off market</option>
                   </select>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-slate-400">
-                  Next rent due date
-                </label>
+                <label className="block text-slate-400">Next due date</label>
                 <input
                   type="date"
-                  className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm outline-none focus:border-emerald-400"
-                  value={form.nextDueDate}
-                  onChange={(e) =>
-                    handleFieldChange('nextDueDate', e.target.value)
-                  }
+                  value={nextDueDate}
+                  onChange={(e) => setNextDueDate(e.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 outline-none focus:border-emerald-500"
                 />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  This powers the &quot;Overdue / Upcoming 7 days / Not due
-                  yet&quot; cards on your dashboard.
-                </p>
               </div>
 
-              <div className="pt-2 flex items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 text-sm font-semibold hover:bg-emerald-400 disabled:opacity-60"
-                >
-                  {saving
-                    ? 'Saving…'
-                    : editingId
-                    ? 'Save changes'
-                    : 'Create property'}
-                </button>
-                {editingId && (
-                  <button
-                    type="button"
-                    onClick={handleCancelEdit}
-                    className="px-3 py-2 rounded-xl border border-slate-700 bg-slate-900 text-xs hover:bg-slate-800"
-                  >
-                    Cancel edit
-                  </button>
-                )}
-              </div>
-            </form>
-          </section>
-        </div>
+              <button
+                type="button"
+                onClick={handleCreateProperty}
+                disabled={saving}
+                className="mt-3 w-full rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+              >
+                {saving ? 'Creating…' : 'Create property'}
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
