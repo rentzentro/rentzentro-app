@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import {
+  resend,
+  RENTZENTRO_FROM_EMAIL,
+  RENTZENTRO_REPLY_TO,
+} from '../../lib/resend';
 
-const RESEND_KEY = process.env.RESEND_API_KEY || '';
-const FROM_ENV = process.env.RENTZENTRO_FROM_EMAIL; // e.g. "RentZentro <no-reply@rentzentro.com>"
-const NOTIFY_ENV = process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL; // default landlord inbox
-const PUBLIC_FALLBACK = process.env.NEXT_PUBLIC_FALLBACK_EMAIL; // last-resort fallback
-
-const resend = new Resend(RESEND_KEY);
+const MAINTENANCE_NOTIFY =
+  process.env.RENTZENTRO_MAINTENANCE_NOTIFY_EMAIL || '';
+const PUBLIC_FALLBACK = process.env.NEXT_PUBLIC_FALLBACK_EMAIL || '';
 
 export async function POST(req: Request) {
   try {
@@ -25,38 +26,32 @@ export async function POST(req: Request) {
 
     // ----- Compute from / to -----
 
-    const from =
-      (FROM_ENV && FROM_ENV.trim().length > 0
-        ? FROM_ENV
-        : 'RentZentro <onboarding@resend.dev>');
+    const from = RENTZENTRO_FROM_EMAIL;
 
     const to =
-      (landlordEmail && landlordEmail.trim().length > 0
-        ? landlordEmail
-        : NOTIFY_ENV && NOTIFY_ENV.trim().length > 0
-        ? NOTIFY_ENV
-        : PUBLIC_FALLBACK && PUBLIC_FALLBACK.trim().length > 0
-        ? PUBLIC_FALLBACK
-        : '');
+      (landlordEmail && landlordEmail.trim()) ||
+      (MAINTENANCE_NOTIFY && MAINTENANCE_NOTIFY.trim()) ||
+      (RENTZENTRO_REPLY_TO && RENTZENTRO_REPLY_TO.trim()) ||
+      (PUBLIC_FALLBACK && PUBLIC_FALLBACK.trim()) ||
+      '';
 
     const debugEnv = {
-      hasResendKey: !!RESEND_KEY,
-      fromEnv: FROM_ENV,
-      notifyEnv: NOTIFY_ENV,
-      publicFallback: PUBLIC_FALLBACK,
-      computedFrom: from,
-      computedTo: to,
+      from,
+      to,
+      landlordEmail,
+      MAINTENANCE_NOTIFY,
+      PUBLIC_FALLBACK,
+      RENTZENTRO_REPLY_TO,
     };
 
-    if (!RESEND_KEY || !to) {
-      console.error('Maintenance email config missing:', debugEnv);
+    if (!to) {
+      console.error('Maintenance email: no "to" address resolved', debugEnv);
       return NextResponse.json(
         {
           ok: false,
           emailSent: false,
-          debug: { env: debugEnv },
           error:
-            'Email configuration missing on server (RESEND_API_KEY or destination address).',
+            'No destination email configured for maintenance notifications.',
         },
         { status: 500 }
       );
@@ -114,9 +109,8 @@ export async function POST(req: Request) {
       </div>
     `;
 
-    // ----- Call Resend -----
+    // ----- Call Resend (same client as tenant-invite) -----
 
-    // Build options so we only add reply_to when we actually have an email.
     const emailOptions: {
       from: string;
       to: string;
@@ -131,10 +125,12 @@ export async function POST(req: Request) {
     };
 
     if (tenantEmail && tenantEmail.trim().length > 0) {
-      emailOptions.reply_to = tenantEmail;
+      emailOptions.reply_to = tenantEmail.trim();
+    } else if (RENTZENTRO_REPLY_TO) {
+      emailOptions.reply_to = RENTZENTRO_REPLY_TO;
     }
 
-    const { data, error } = await resend.emails.send(emailOptions);
+    const { data, error } = await resend.emails.send(emailOptions as any);
 
     const debugResend = { data, error };
 
@@ -144,7 +140,6 @@ export async function POST(req: Request) {
         {
           ok: false,
           emailSent: false,
-          debug: { env: debugEnv, resend: debugResend },
           error:
             (error as any)?.message ||
             (error as any)?.name ||
@@ -153,6 +148,13 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
+
+    console.log(
+      'Maintenance email sent:',
+      (data as any)?.id || data || 'no-id',
+      'to:',
+      to
+    );
 
     return NextResponse.json({
       ok: true,
