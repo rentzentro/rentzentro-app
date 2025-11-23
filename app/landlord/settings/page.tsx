@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '../../supabaseClient';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../supabaseClient';
 
 // ---------- Types ----------
 type LandlordRow = {
@@ -29,6 +30,8 @@ const formatDate = (iso: string | null) => {
 
 // ---------- Component ----------
 export default function LandlordSettingsPage() {
+  const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,9 +52,7 @@ export default function LandlordSettingsPage() {
 
         const { data, error: landlordError } = await supabase
           .from('landlords')
-          .select(
-            'id, email, name, stripe_customer_id, stripe_subscription_id, subscription_status, subscription_current_period_end'
-          )
+          .select('*')
           .eq('email', email)
           .maybeSingle();
 
@@ -103,10 +104,9 @@ export default function LandlordSettingsPage() {
 
   const handleLogOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = '/landlord/login';
+    router.push('/landlord/login');
   };
 
-  // ---------- Render ----------
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
@@ -118,16 +118,22 @@ export default function LandlordSettingsPage() {
   if (!landlord) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <p className="text-red-400 text-sm">
-          {error || 'Unable to load account.'}
-        </p>
+        <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-800 px-5 py-4">
+          <p className="text-xs text-red-400">
+            {error || 'Unable to load landlord account.'}
+          </p>
+          <button
+            onClick={handleLogOut}
+            className="mt-3 text-xs text-emerald-300 hover:text-emerald-200"
+          >
+            Back to login
+          </button>
+        </div>
       </main>
     );
   }
 
-  const isSubscribed =
-    landlord.subscription_status &&
-    landlord.subscription_status.toLowerCase() === 'active';
+  const isActive = landlord.subscription_status === 'active';
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -155,68 +161,35 @@ export default function LandlordSettingsPage() {
             </p>
           </div>
 
-          <button
-            onClick={handleLogOut}
-            className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
-          >
-            Log out
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/landlord"
+              className="text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            >
+              ← Back to dashboard
+            </Link>
+            <button
+              onClick={handleLogOut}
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+            >
+              Log out
+            </button>
+          </div>
         </div>
 
-        {/* Subscription warning – ONLY when not subscribed */}
-        {!isSubscribed && (
-          <div className="rounded-2xl border border-amber-500/70 bg-amber-950/40 px-4 py-3 text-xs text-amber-100">
-            <p className="font-semibold">
-              Subscription required to use RentZentro landlord tools.
-            </p>
-            <p className="mt-1">
-              Click <span className="font-semibold">“Subscribe for $29.95/mo”</span>{' '}
-              below to start your RentZentro Landlord Plan and unlock the full
-              landlord dashboard.
-            </p>
-          </div>
-        )}
-
-        {/* ACCOUNT CARD */}
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm space-y-2">
-          <p className="text-xs text-slate-500 uppercase tracking-wide">
-            Account
-          </p>
-
-          <div className="mt-1 flex flex-col gap-1 text-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[11px] text-slate-500">Landlord profile</p>
-                <p className="text-sm font-medium text-slate-50">
-                  {landlord.name || 'Default Landlord'}
-                </p>
-              </div>
-              <div className="mt-2 sm:mt-0 text-left sm:text-right">
-                <p className="text-[11px] text-slate-500">Email</p>
-                <p className="text-sm font-medium text-slate-50">
-                  {landlord.email}
-                </p>
-              </div>
-            </div>
-
-            <p className="mt-3 text-[11px] text-slate-500">
-              In a future update you&apos;ll be able to change your profile
-              info and add additional team members from this screen.
-            </p>
-          </div>
-        </section>
-
-        {/* SUBSCRIPTION CARD */}
+        {/* Subscription status */}
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm space-y-3">
           <p className="text-xs text-slate-500 uppercase tracking-wide">
             Subscription
           </p>
 
-          {isSubscribed ? (
-            <>
-              <p className="text-sm">
+          {isActive ? (
+            <div className="space-y-2">
+              <p className="text-sm text-slate-50 font-medium">
                 Status:{' '}
-                <span className="font-semibold text-emerald-300">active</span>
+                <span className="text-emerald-300">
+                  Active RentZentro landlord plan
+                </span>
               </p>
               <p className="text-xs text-slate-400">
                 Next billing date:{' '}
@@ -225,48 +198,30 @@ export default function LandlordSettingsPage() {
                 </span>
               </p>
               <p className="text-xs text-slate-500">
-                You&apos;re subscribed to the{' '}
-                <span className="font-medium">
-                  RentZentro Landlord Plan ($29.95/mo)
-                </span>
-                . Manage billing details in your Stripe customer portal if
-                enabled, or contact support to make changes.
+                Your subscription is active. You can access your full landlord
+                dashboard, properties, tenants, and payments.
               </p>
-            </>
+            </div>
           ) : (
-            <>
-              <p className="text-sm text-slate-50">
-                Status:{' '}
-                <span className="font-semibold text-amber-300">
-                  not subscribed
-                </span>
+            <div className="space-y-2">
+              <p className="text-sm text-slate-400">
+                You are currently not subscribed.
               </p>
+              <p className="text-xs text-slate-500">
+                Start your RentZentro landlord plan to unlock your dashboard,
+                properties, tenants, rent tracking, and maintenance tools.
+              </p>
+
               <button
                 onClick={handleStartSubscription}
                 disabled={startingCheckout}
-                className="mt-3 rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-emerald-400 disabled:opacity-60"
+                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
               >
-                {startingCheckout
-                  ? 'Starting checkout…'
-                  : 'Subscribe for $29.95/mo'}
+                {startingCheckout ? 'Starting subscription…' : 'Subscribe & continue'}
               </button>
-              <p className="mt-2 text-xs text-slate-500">
-                Subscription unlocks full payment features, unlimited units,
-                tenant messaging, maintenance tracking, and more.
-              </p>
-            </>
+            </div>
           )}
         </section>
-
-        {/* Back to portal */}
-        <div className="pt-2">
-          <Link
-            href="/landlord"
-            className="text-xs text-slate-500 hover:text-emerald-300"
-          >
-            ← Back to landlord dashboard
-          </Link>
-        </div>
       </div>
     </main>
   );

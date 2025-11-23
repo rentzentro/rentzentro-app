@@ -4,8 +4,8 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
 // --- Stripe client ---
-// Cast apiVersion to avoid TypeScript complaining about the literal string.
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  // Cast apiVersion so TypeScript stops underlining it in red
   apiVersion: '2024-06-20' as any,
 });
 
@@ -15,6 +15,7 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 const SUBSCRIPTION_PRICE_ID = process.env
   .STRIPE_SUBSCRIPTION_PRICE_ID as string;
 
+// Base URL for redirects
 const APP_URL =
   process.env.NEXT_PUBLIC_SITE_URL ||
   process.env.NEXT_PUBLIC_APP_URL ||
@@ -54,7 +55,10 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (landlordError) {
-      console.error('Error fetching landlord in subscription checkout:', landlordError);
+      console.error(
+        'Error fetching landlord in subscription checkout:',
+        landlordError
+      );
       return NextResponse.json(
         { error: 'Unable to load landlord for subscription.' },
         { status: 500 }
@@ -110,8 +114,8 @@ export async function POST(req: Request) {
       },
       // ✅ After success, send them to the landlord dashboard
       success_url: `${APP_URL}/landlord?subscribed=1&session_id={CHECKOUT_SESSION_ID}`,
-      // If they cancel Checkout, send them back to the subscription gate page
-      cancel_url: `${APP_URL}/landlord/subscription?canceled=1`,
+      // If they cancel Checkout, send them back to the settings/subscription screen
+      cancel_url: `${APP_URL}/landlord/settings?billing=cancelled`,
     });
 
     if (!session.url) {
