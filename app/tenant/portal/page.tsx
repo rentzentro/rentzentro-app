@@ -151,12 +151,20 @@ export default function TenantPortalPage() {
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
         if (authError) throw authError;
-        const email = authData.user?.email;
+
+        const user = authData.user;
+        if (!user) {
+          // Not logged in → go to tenant login
+          router.push('/tenant/login');
+          return;
+        }
+
+        const email = user.email;
         if (!email) {
           throw new Error('Unable to load tenant: missing email.');
         }
 
-        // Tenant
+        // Tenant (by email, matches landlord-created row)
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select('*')
@@ -232,7 +240,7 @@ export default function TenantPortalPage() {
     };
 
     load();
-  }, []);
+  }, [router]);
 
   // ---------- Actions ----------
 
@@ -425,19 +433,10 @@ export default function TenantPortalPage() {
                 >
                   {paying ? 'Starting payment…' : 'Pay rent securely with card'}
                 </button>
-
-                <Link
-                  href="/tenant/payment-success"
-                  className="w-full text-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-800"
-                >
-                  Mark rent as paid (manual)
-                </Link>
               </div>
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Card payments are processed securely by Stripe. Manual payments
-                are only for recording rent you already paid outside of
-                RentZentro.
+                Card payments are processed securely by Stripe.
               </p>
             </section>
 
@@ -600,11 +599,12 @@ export default function TenantPortalPage() {
                 requests are sent to your landlord and tracked for your records.
               </p>
               <p className="mt-1 text-[10px] text-amber-300 flex items-start gap-1">
-  <span className="text-amber-300 text-xs mt-[1px]">⚠️</span>
-  For true emergencies (fire, active flooding, gas smells, or anything
-  life-threatening), call your local emergency services first, then
-  contact your landlord or property manager directly.
-</p>
+                <span className="text-amber-300 text-xs mt-[1px]">⚠️</span>
+                For true emergencies (fire, active flooding, gas smells, or
+                anything life-threatening), call your local emergency services
+                first, then contact your landlord or property manager directly.
+              </p>
+
               {/* Recent requests */}
               {maintenance.length === 0 ? (
                 <p className="mt-3 text-[11px] text-slate-500">
