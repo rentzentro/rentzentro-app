@@ -164,7 +164,7 @@ export default function TenantPortalPage() {
           throw new Error('Unable to load tenant: missing email.');
         }
 
-        // Tenant (by email, matches landlord-created row)
+        // 1) Try to find an existing tenant row by email
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select('*')
@@ -172,9 +172,38 @@ export default function TenantPortalPage() {
           .limit(1);
 
         if (tenantError) throw tenantError;
-        const t = (tenantRows && tenantRows[0]) as TenantRow | undefined;
+
+        let t = (tenantRows && tenantRows[0]) as TenantRow | undefined;
+
+        // 2) If none exists, auto-create a minimal tenant row for this user
         if (!t) {
-          throw new Error('Tenant not found for logged-in user.');
+          const { data: insertedTenant, error: insertError } = await supabase
+            .from('tenants')
+            .insert({
+              email,
+              name:
+                (user.user_metadata &&
+                  (user.user_metadata.full_name ||
+                    user.user_metadata.name)) ||
+                null,
+              phone: null,
+              status: 'current',
+              property_id: null,
+              monthly_rent: null,
+              lease_start: null,
+              lease_end: null,
+            })
+            .select('*')
+            .single();
+
+          if (insertError) {
+            console.error('Error auto-creating tenant row:', insertError);
+            throw new Error(
+              'We could not find a tenant record linked to this account. Please contact your landlord so they can check your email and tenant setup.'
+            );
+          }
+
+          t = insertedTenant as TenantRow;
         }
 
         setTenant(t);
