@@ -15,7 +15,6 @@ type PropertyRow = {
   monthly_rent: number | null;
   status: string | null;
   next_due_date: string | null;
-  owner_id: string | null;
 };
 
 type TenantRow = {
@@ -26,7 +25,9 @@ type TenantRow = {
   phone: string | null;
   property_id: number | null;
   status: string | null;
-  owner_id: string | null;
+  monthly_rent: number | null;
+  lease_start: string | null;
+  lease_end: string | null;
 };
 
 type PaymentRow = {
@@ -44,7 +45,6 @@ type MaintenanceRow = {
   id: number;
   created_at: string | null;
   status: string | null;
-  owner_id: string | null;
 };
 
 // ---------- Helpers ----------
@@ -108,7 +108,7 @@ export default function LandlordDashboardPage() {
       setError(null);
 
       try {
-        // Get logged-in landlord
+        // Ensure landlord is logged in
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
         if (authError) throw authError;
@@ -119,23 +119,19 @@ export default function LandlordDashboardPage() {
           return;
         }
 
-        const ownerId = user.id;
-
-        // Load landlord-owned data in parallel
+        // Let RLS enforce ownership (no explicit owner_id filters)
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase
             .from('properties')
             .select(
-              'id, created_at, name, unit_label, monthly_rent, status, next_due_date, owner_id'
+              'id, created_at, name, unit_label, monthly_rent, status, next_due_date'
             )
-            .eq('owner_id', ownerId)
             .order('created_at', { ascending: false }),
           supabase
             .from('tenants')
             .select(
-              'id, created_at, name, email, phone, property_id, status, owner_id'
+              'id, created_at, name, email, phone, property_id, status, monthly_rent, lease_start, lease_end'
             )
-            .eq('owner_id', ownerId)
             .order('created_at', { ascending: false }),
           supabase
             .from('payments')
@@ -146,8 +142,7 @@ export default function LandlordDashboardPage() {
             .limit(10),
           supabase
             .from('maintenance_requests')
-            .select('id, created_at, status, owner_id')
-            .eq('owner_id', ownerId)
+            .select('id, created_at, status')
             .order('created_at', { ascending: false }),
         ]);
 
@@ -265,7 +260,7 @@ export default function LandlordDashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
-            {/* Settings (also where subscription lives) */}
+            {/* Settings + subscription */}
             <Link
               href="/landlord/settings"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"

@@ -14,7 +14,7 @@ type TenantRow = {
   phone: string | null;
   status: string | null;
   property_id: number | null;
-  monthly_rent: number | null; // no longer used, kept just for type compatibility
+  monthly_rent: number | null;
   lease_start: string | null;
   lease_end: string | null;
 };
@@ -43,6 +43,7 @@ type DocumentRow = {
   title: string;
   file_url: string;
   property_id: number | null;
+  tenant_id: number | null;
 };
 
 type MaintenanceRow = {
@@ -171,7 +172,7 @@ export default function TenantPortalPage() {
 
         setTenant(t);
 
-        // Property (single source of truth for rent)
+        // Property
         if (t.property_id) {
           const { data: propRow, error: propError } = await supabase
             .from('properties')
@@ -196,19 +197,23 @@ export default function TenantPortalPage() {
         if (payError) throw payError;
         setPayments((payRows || []) as PaymentRow[]);
 
-        // Documents
-        if (t.property_id) {
-          const { data: docRows, error: docError } = await supabase
-            .from('documents')
-            .select('id, created_at, title, file_url, property_id')
-            .eq('property_id', t.property_id)
-            .order('created_at', { ascending: false });
+        // Documents (by property OR tenant)
+        let docQuery = supabase
+          .from('documents')
+          .select('id, created_at, title, file_url, property_id, tenant_id')
+          .order('created_at', { ascending: false });
 
-          if (docError) throw docError;
-          setDocuments((docRows || []) as DocumentRow[]);
+        if (t.property_id) {
+          docQuery = docQuery.or(
+            `property_id.eq.${t.property_id},tenant_id.eq.${t.id}`
+          );
         } else {
-          setDocuments([]);
+          docQuery = docQuery.eq('tenant_id', t.id);
         }
+
+        const { data: docRows, error: docError } = await docQuery;
+        if (docError) throw docError;
+        setDocuments((docRows || []) as DocumentRow[]);
 
         // Recent maintenance (only a few)
         const { data: maintRows, error: maintError } = await supabase
@@ -248,8 +253,10 @@ export default function TenantPortalPage() {
   const handlePayWithCard = async () => {
     if (!tenant) return;
 
-    // ✅ Single source of truth for rent comes from the property
-    const amount = property?.monthly_rent ?? 0;
+    const amount =
+      property?.monthly_rent ??
+      tenant.monthly_rent ??
+      0;
 
     if (!amount || amount <= 0) {
       setError(
@@ -307,7 +314,9 @@ export default function TenantPortalPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <p className="text-sm text-slate-400">Loading your tenant portal…</p>
+        <p className="text-sm text-slate-400">
+          Loading your tenant portal…
+        </p>
       </main>
     );
   }
@@ -318,7 +327,7 @@ export default function TenantPortalPage() {
         <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-700 p-6 shadow-xl space-y-4">
           <p className="text-sm text-red-400">
             {error ||
-              'We could not find a tenant record linked to this account. Please contact your landlord so they can check your email and tenant setup.'}
+              'We could not find a tenant record for this account. Please reach out to your landlord.'}
           </p>
           <button
             onClick={handleLogOut}
@@ -331,7 +340,10 @@ export default function TenantPortalPage() {
     );
   }
 
-  const currentRent = property?.monthly_rent ?? null;
+  const currentRent =
+    property?.monthly_rent ??
+    tenant.monthly_rent ??
+    null;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -362,8 +374,7 @@ export default function TenantPortalPage() {
               Tenant portal
             </h1>
             <p className="text-[11px] text-slate-400">
-              View your rent details, lease info, documents, and payment
-              history.
+              View your rent details, lease info, documents, and payment history.
             </p>
           </div>
           <div className="flex flex-col items-end gap-2 text-right">
@@ -422,9 +433,8 @@ export default function TenantPortalPage() {
               </div>
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Card payments are processed securely by Stripe. If you pay by
-                cash, check, or another method, your landlord can record those
-                payments on their side.
+                Card payments are processed securely by Stripe. You&apos;ll get
+                a confirmation once your payment is completed.
               </p>
             </section>
 
