@@ -33,7 +33,7 @@ export default function TenantSignupPage() {
 
     setLoading(true);
     try {
-      // 1) Create the Supabase Auth user
+      // 1) Try to sign the tenant up
       const {
         data: signUpData,
         error: signUpError,
@@ -49,26 +49,47 @@ export default function TenantSignupPage() {
       });
 
       if (signUpError) {
-        // Friendly message if the user already exists
-        if (
-          signUpError.message
-            ?.toLowerCase()
-            .includes('user already registered')
-        ) {
+        const msg = signUpError.message?.toLowerCase() || '';
+
+        // Special handling: Supabase says this email is already registered
+        if (msg.includes('user already registered')) {
+          // 2) Try logging them in with the same credentials
+          const {
+            data: signInData,
+            error: signInError,
+          } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+
+          if (signInError) {
+            // Email exists from Supabase's perspective, but password didn't work
+            setError(
+              'This email is already registered. If you’ve used RentZentro before, please log in or reset your password on the tenant login page.'
+            );
+            return;
+          }
+
+          // Sign-in succeeded → send them to the portal
+          if (signInData.session && signInData.user) {
+            router.push('/tenant/portal');
+            return;
+          }
+
           setError(
-            'You already have a RentZentro tenant account. Please log in instead.'
+            'Your account exists, but we could not log you in. Please try the tenant login page.'
           );
           return;
         }
 
+        // Any other signup error
         setError(signUpError.message || 'Unable to sign up tenant.');
         return;
       }
 
       let session = signUpData.session;
 
-      // 2) If Supabase didn’t auto-log them in (e.g., email confirmation settings),
-      // try to sign in immediately with the same credentials.
+      // 3) If Supabase didn't auto-login (no session), try to sign in manually
       if (!session) {
         const {
           data: signInData,
@@ -89,16 +110,13 @@ export default function TenantSignupPage() {
         session = signInData.session;
       }
 
-      // 3) If we have a session, just send the tenant to their portal.
+      // 4) If we have a session now, send them to the tenant portal
       if (!session || !session.user) {
         setError(
           'Account created, but we could not establish a login session. Please log in and try again.'
         );
         return;
       }
-
-      // (Optional) We *don’t* try to edit the tenants table here to avoid RLS issues.
-      // The portal will look up the tenant row by email.
 
       router.push('/tenant/portal');
     } catch (err: any) {
