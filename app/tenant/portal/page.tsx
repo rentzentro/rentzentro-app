@@ -9,6 +9,7 @@ import { supabase } from '../../supabaseClient';
 
 type TenantRow = {
   id: number;
+  owner_id: string | null; // landlord's auth UID
   name: string | null;
   email: string;
   phone: string | null;
@@ -160,7 +161,9 @@ export default function TenantPortalPage() {
         // Tenant (lookup by email)
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
-          .select('*')
+          .select(
+            'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end'
+          )
           .eq('email', email)
           .limit(1);
 
@@ -169,7 +172,6 @@ export default function TenantPortalPage() {
         const t = (tenantRows && tenantRows[0]) as TenantRow | undefined;
 
         if (!t) {
-          // No tenant row found for this email
           setTenant(null);
           setProperty(null);
           setPayments([]);
@@ -185,58 +187,92 @@ export default function TenantPortalPage() {
 
         setTenant(t);
 
-        // Property
+        // -------- Property: try by property_id first --------
+        let prop: PropertyRow | null = null;
+
         if (t.property_id) {
           const { data: propRow, error: propError } = await supabase
             .from('properties')
-            .select('*')
+            .select('id, name, unit_label, monthly_rent, next_due_date')
             .eq('id', t.property_id)
-            .single();
+            .maybeSingle();
 
-          if (propError) throw propError;
-          setProperty(propRow as PropertyRow);
-        } else {
-          setProperty(null);
+          if (propError) {
+            console.error('Tenant portal property lookup (by id) error:', propError);
+          } else if (propRow) {
+            prop = propRow as PropertyRow;
+          }
         }
+
+        // -------- Fallback: first property for same landlord owner_id --------
+        if (!prop && t.owner_id) {
+          const { data: propRows2, error: propError2 } = await supabase
+            .from('properties')
+            .select('id, name, unit_label, monthly_rent, next_due_date, owner_id')
+            .eq('owner_id', t.owner_id)
+            .order('created_at', { ascending: true })
+            .limit(1);
+
+          if (propError2) {
+            console.error(
+              'Tenant portal property lookup (by owner_id) error:',
+              propError2
+            );
+          } else if (propRows2 && propRows2.length > 0) {
+            prop = propRows2[0] as PropertyRow;
+          }
+        }
+
+        setProperty(prop);
 
         // Payments
         const { data: payRows, error: payError } = await supabase
           .from('payments')
-          .select('*')
+          .select('id, tenant_id, property_id, amount, paid_on, method, note')
           .eq('tenant_id', t.id)
           .order('paid_on', { ascending: false })
           .limit(10);
 
-        if (payError) throw payError;
+        if (payError) {
+          console.error('Tenant portal payments error:', payError);
+        }
         setPayments((payRows || []) as PaymentRow[]);
 
         // Documents (by property OR tenant)
         let docQuery = supabase
           .from('documents')
-          .select('id, created_at, title, file_url, property_id, tenant_id')
+          .select(
+            'id, created_at, title, file_url, property_id, tenant_id'
+          )
           .order('created_at', { ascending: false });
 
-        if (t.property_id) {
+        if (prop?.id) {
           docQuery = docQuery.or(
-            `property_id.eq.${t.property_id},tenant_id.eq.${t.id}`
+            `property_id.eq.${prop.id},tenant_id.eq.${t.id}`
           );
         } else {
           docQuery = docQuery.eq('tenant_id', t.id);
         }
 
         const { data: docRows, error: docError } = await docQuery;
-        if (docError) throw docError;
+        if (docError) {
+          console.error('Tenant portal documents error:', docError);
+        }
         setDocuments((docRows || []) as DocumentRow[]);
 
         // Recent maintenance
         const { data: maintRows, error: maintError } = await supabase
           .from('maintenance_requests')
-          .select('*')
+          .select(
+            'id, tenant_id, property_id, title, description, status, priority, created_at, resolution_note'
+          )
           .eq('tenant_id', t.id)
           .order('created_at', { ascending: false })
           .limit(4);
 
-        if (maintError) throw maintError;
+        if (maintError) {
+          console.error('Tenant portal maintenance error:', maintError);
+        }
         setMaintenance((maintRows || []) as MaintenanceRow[]);
       } catch (err: any) {
         console.error(err);
