@@ -1,236 +1,179 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
+// ---------- Types ----------
 type LandlordRow = {
   id: number;
-  name: string | null;
   email: string;
-  user_id: string | null;
-  stripe_account_id?: string | null;
-  stripe_customer_id?: string | null;
-  stripe_subscription_id?: string | null;
-  subscription_status?: string | null;
-  subscription_current_period_end?: string | null;
+  name: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  subscription_status: string | null;
+  subscription_current_period_end: string | null;
 };
 
+// ---------- Helpers ----------
+const formatDate = (iso: string | null) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
+// ---------- Component ----------
 export default function LandlordSettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [managing, setManaging] = useState(false);
-  const [canceling, setCanceling] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+  const [startingCheckout, setStartingCheckout] = useState(false);
 
-  // ---------- Load landlord + auto-link old records ----------
-
+  // Load / create landlord record based on auth user
   useEffect(() => {
+    const billing = searchParams.get('billing');
+    if (billing === 'success') {
+      setInfo('Your subscription was updated. If it still shows as not subscribed, try refreshing status.');
+    } else if (billing === 'cancelled') {
+      setInfo('Subscription checkout was cancelled. You can try again anytime.');
+    }
+
     const load = async () => {
       setLoading(true);
       setError(null);
 
-      try {
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser();
+      // 1) Get auth user
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData?.user?.email) {
+        router.push('/landlord/login');
+        return;
+      }
 
-        if (authError) throw authError;
-        if (!user) {
-          throw new Error('You must be logged in to view landlord settings.');
-        }
+      const user = authData.user;
+      const email = user.email!;
 
-        // 1) Try landlord by user_id (new accounts)
-        const {
-          data: byUser,
-          error: byUserError,
-        } = await supabase
+      // 2) Try to find landlord by user_id
+      let { data: landlordRow, error: landlordError } = await supabase
+        .from('landlords')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (landlordError) {
+        console.error('Error loading landlord by user_id:', landlordError);
+        setError('Unable to load landlord account.');
+        setLoading(false);
+        return;
+      }
+
+      // 3) If still not found, try by email (for older rows)
+      if (!landlordRow) {
+        const byEmail = await supabase
           .from('landlords')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('email', email)
           .maybeSingle();
 
-        if (byUserError) throw byUserError;
-
-        let row = byUser as LandlordRow | null;
-
-        // 2) Fallback: old landlords created before user_id existed
-        if (!row && user.email) {
-          const {
-            data: byEmail,
-            error: byEmailError,
-          } = await supabase
-            .from('landlords')
-            .select('*')
-            .eq('email', user.email)
-            .maybeSingle();
-
-          if (byEmailError) throw byEmailError;
-
-          if (byEmail) {
-            let linked = byEmail as LandlordRow;
-
-            // If this row has no user_id yet, link it to the current user
-            if (!linked.user_id) {
-              const {
-                data: updated,
-                error: updateError,
-              } = await supabase
-                .from('landlords')
-                .update({ user_id: user.id })
-                .eq('id', linked.id)
-                .select('*')
-                .single();
-
-              if (updateError) throw updateError;
-              if (updated) {
-                linked = updated as LandlordRow;
-              }
-            }
-
-            row = linked;
-          }
-        }
-
-        if (!row) {
-          setLandlord(null);
-          setError(
-            'We could not find a landlord record linked to this account. If you already have a subscription, please contact support so we can link it.'
-          );
+        if (byEmail.error) {
+          console.error('Error loading landlord by email:', byEmail.error);
+          setError('Unable to load landlord account.');
+          setLoading(false);
           return;
         }
 
-        setLandlord(row);
-      } catch (err: any) {
-        console.error('Load landlord settings error:', err);
-        setError(
-          err?.message ||
-            'Something went wrong while loading your landlord settings.'
-        );
-      } finally {
-        setLoading(false);
+        landlordRow = byEmail.data as LandlordRow | null;
       }
+
+      // 4) If still none, create landlord row
+      if (!landlordRow) {
+        const { data: inserted, error: insertError } = await supabase
+          .from('landlords')
+          .insert({
+            email,
+            user_id: user.id,
+            name: null,
+            stripe_customer_id: null,
+            stripe_subscription_id: null,
+            subscription_status: null,
+            subscription_current_period_end: null,
+          })
+          .select('*')
+          .single();
+
+        if (insertError) {
+          console.error('Error creating landlord record:', insertError);
+          setError('Unable to create landlord account.');
+          setLoading(false);
+          return;
+        }
+
+        landlordRow = inserted as LandlordRow;
+      }
+
+      setLandlord(landlordRow);
+      setLoading(false);
     };
 
     load();
-  }, []);
+  }, [router, searchParams]);
 
-  // ---------- Derived subscription info ----------
-
-  const status = landlord?.subscription_status || 'none';
-  const isActive = status === 'active' || status === 'trialing';
-  const isCanceled =
-    status === 'canceled' ||
-    status === 'unpaid' ||
-    status === 'incomplete_expired';
-
-  const periodEnd = landlord?.subscription_current_period_end
-    ? new Date(landlord.subscription_current_period_end)
-    : null;
-
-  const formattedPeriodEnd =
-    periodEnd && !Number.isNaN(periodEnd.getTime())
-      ? periodEnd.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        })
-      : null;
-
-  // ---------- Actions ----------
-
-  const handleGoToDashboard = () => {
-    router.push('/landlord/dashboard');
-  };
-
-  const handleManageSubscription = async () => {
+  const handleStartSubscription = async () => {
     if (!landlord) return;
-    setManaging(true);
+    setStartingCheckout(true);
     setError(null);
+    setInfo(null);
 
     try {
       const res = await fetch('/api/subscription/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'manage', // your API route can treat this as "open customer portal"
-        }),
+        body: JSON.stringify({ landlordId: landlord.id }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(
-          data?.error ||
-            `Failed to open subscription management (status ${res.status}).`
+          data?.error || `Unable to start subscription checkout (status ${res.status}).`
         );
       }
 
       const data = await res.json();
-      if (!data?.url) {
-        throw new Error('Missing redirect URL from subscription endpoint.');
-      }
+      if (!data.url) throw new Error('Missing checkout URL from server.');
 
       window.location.href = data.url;
     } catch (err: any) {
-      console.error('Manage subscription error:', err);
+      console.error('Start subscription error:', err);
       setError(
-        err?.message ||
-          'Something went wrong while opening your subscription settings.'
+        err?.message || 'Failed to begin subscription checkout. Please try again.'
       );
     } finally {
-      setManaging(false);
+      setStartingCheckout(false);
     }
   };
 
-  const handleCancelSubscription = async () => {
-    if (!landlord) return;
-    setCanceling(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/subscription/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'cancel', // your API route can treat this as "cancel at period end"
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(
-          data?.error ||
-            `Failed to cancel subscription (status ${res.status}).`
-        );
-      }
-
-      // Optional: reload settings after cancel
-      window.location.reload();
-    } catch (err: any) {
-      console.error('Cancel subscription error:', err);
-      setError(
-        err?.message ||
-          'Something went wrong while requesting subscription cancellation.'
-      );
-    } finally {
-      setCanceling(false);
-    }
+  const handleRefreshStatus = async () => {
+    // Simple full reload so it re-runs the effect
+    window.location.href = '/landlord/settings';
   };
 
-  const handleLogout = async () => {
+  const handleLogOut = async () => {
     await supabase.auth.signOut();
-    router.push('/landlord/login');
+    window.location.href = '/landlord/login';
   };
-
-  // ---------- Render ----------
 
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <p className="text-sm text-slate-400">Loading your settings…</p>
+        <p className="text-slate-400 text-sm">Loading account settings…</p>
       </main>
     );
   }
@@ -238,17 +181,13 @@ export default function LandlordSettingsPage() {
   if (!landlord) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
-        <div className="max-w-md w-full rounded-2xl border border-slate-800 bg-slate-900/80 p-6 space-y-4">
-          <h1 className="text-lg font-semibold text-slate-50">
-            Landlord settings
-          </h1>
-          <p className="text-sm text-red-300">
-            {error ||
-              'We could not find a landlord record for this account.'}
+        <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-700 p-6 shadow-xl space-y-4">
+          <p className="text-sm text-red-400">
+            {error || 'Unable to load landlord account.'}
           </p>
           <button
-            onClick={handleLogout}
-            className="mt-2 inline-flex items-center justify-center rounded-md border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800"
+            onClick={handleLogOut}
+            className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
           >
             Back to login
           </button>
@@ -257,124 +196,115 @@ export default function LandlordSettingsPage() {
     );
   }
 
+  const isActive = landlord.subscription_status === 'active';
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
-      <div className="mx-auto max-w-3xl space-y-4">
-        <header className="flex items-center justify-between gap-4">
+      <div className="mx-auto max-w-3xl space-y-6">
+        {/* Top bar */}
+        <div className="flex items-center justify-between gap-2">
           <div>
-            <h1 className="text-lg font-semibold text-slate-50">
-              Subscription & settings
-            </h1>
-            <p className="mt-1 text-xs text-slate-400">
-              Manage your RentZentro landlord subscription.
-            </p>
-          </div>
-          <div className="text-right text-xs">
-            <p className="font-medium text-slate-100">
-              {landlord.name || 'Landlord account'}
-            </p>
-            <p className="text-slate-400">{landlord.email}</p>
             <button
-              onClick={handleLogout}
-              className="mt-2 inline-flex items-center justify-center rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] text-slate-100 hover:bg-slate-800"
+              type="button"
+              onClick={() => router.push('/')}
+              className="text-[11px] text-slate-500 hover:text-emerald-300"
             >
-              Log out
+              ← Back to homepage
             </button>
+            <h1 className="mt-1 text-xl font-semibold text-slate-50">
+              Account & subscription
+            </h1>
+            <p className="text-xs text-slate-400">
+              Manage your RentZentro landlord subscription and account status.
+            </p>
           </div>
-        </header>
+          <button
+            onClick={handleLogOut}
+            className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+          >
+            Log out
+          </button>
+        </div>
 
-        {error && (
-          <div className="rounded-xl border border-red-500/70 bg-red-500/10 px-4 py-2 text-sm text-red-100">
-            {error}
+        {/* Messages */}
+        {(info || error) && (
+          <div
+            className={`rounded-xl border px-4 py-2 text-sm ${
+              error
+                ? 'border-red-500/60 bg-red-500/10 text-red-200'
+                : 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200'
+            }`}
+          >
+            {error || info}
           </div>
         )}
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 space-y-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Subscription
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-50">
-                RentZentro Landlord Plan – $29.95/month
-              </p>
-              <p className="mt-1 text-xs text-slate-400">
-                Status:{' '}
-                <span
-                  className={
-                    isActive
-                      ? 'text-emerald-300 font-medium'
-                      : isCanceled
-                      ? 'text-amber-300 font-medium'
-                      : 'text-slate-200 font-medium'
-                  }
-                >
-                  {status || 'none'}
-                </span>
-                {formattedPeriodEnd && (
-                  <span className="text-slate-400">
-                    {' '}
-                    · Renews / ends on {formattedPeriodEnd}
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {isActive ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleGoToDashboard}
-                  className="flex-1 rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
-                >
-                  Go to landlord dashboard
-                </button>
-                <button
-                  type="button"
-                  onClick={handleManageSubscription}
-                  disabled={managing}
-                  className="flex-1 rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-800 disabled:opacity-60"
-                >
-                  {managing ? 'Opening Stripe…' : 'Manage billing in Stripe'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelSubscription}
-                  disabled={canceling}
-                  className="flex-1 rounded-full border border-red-500/70 bg-red-500/10 px-4 py-2.5 text-sm text-red-100 hover:bg-red-500/20 disabled:opacity-60"
-                >
-                  {canceling ? 'Requesting cancel…' : 'Cancel subscription'}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={handleManageSubscription}
-                  disabled={managing}
-                  className="flex-1 rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
-                >
-                  {managing
-                    ? 'Opening Stripe…'
-                    : 'Start your $29.95/mo subscription'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGoToDashboard}
-                  className="flex-1 rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-800"
-                >
-                  View dashboard (limited)
-                </button>
-              </>
-            )}
-          </div>
-
-          <p className="mt-1 text-[11px] text-slate-500">
-            Payments are processed securely by Stripe. You can cancel anytime in
-            Stripe or from this page.
+        {/* Plan summary */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-2">
+          <p className="text-xs text-slate-500 uppercase tracking-wide">
+            RentZentro landlord plan
           </p>
+          <p className="text-sm font-semibold text-slate-50">
+            $29.95 / month • Cancel anytime
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-slate-300">
+            <li>• Unlimited properties and units</li>
+            <li>• Secure card payments powered by Stripe</li>
+            <li>• Tenant portal, maintenance requests, and payment history</li>
+            <li>• Dashboard for overdue & upcoming rent</li>
+          </ul>
+        </section>
+
+        {/* Current status */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-300 space-y-2">
+          <p>
+            <span className="text-slate-500">Account email:</span>{' '}
+            <span className="text-slate-100">{landlord.email}</span>
+          </p>
+          <p>
+            <span className="text-slate-500">Subscription status:</span>{' '}
+            <span className={isActive ? 'text-emerald-300' : 'text-slate-100'}>
+              {landlord.subscription_status || 'Not subscribed'}
+            </span>
+          </p>
+          <p>
+            <span className="text-slate-500">Next billing date:</span>{' '}
+            <span className="text-slate-100">
+              {formatDate(landlord.subscription_current_period_end)}
+            </span>
+          </p>
+        </section>
+
+        {/* Actions */}
+        <section className="space-y-3">
+          {!isActive && (
+            <button
+              type="button"
+              onClick={handleStartSubscription}
+              disabled={startingCheckout}
+              className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {startingCheckout ? 'Starting subscription…' : 'Subscribe for $29.95/mo'}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleRefreshStatus}
+            className="w-full rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-800"
+          >
+            Refresh subscription status
+          </button>
+
+          {isActive && (
+            <button
+              type="button"
+              onClick={() => router.push('/landlord')}
+              className="w-full rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20"
+            >
+              Go to landlord dashboard
+            </button>
+          )}
         </section>
       </div>
     </main>

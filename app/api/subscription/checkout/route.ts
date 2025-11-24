@@ -1,45 +1,24 @@
-// app/api/subscription/checkout/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-// --- Stripe client ---
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  // Cast apiVersion so TypeScript stops underlining it in red
-  apiVersion: '2024-06-20' as any,
-});
-
-// --- Environment variables ---
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-const SUBSCRIPTION_PRICE_ID = process.env
-  .STRIPE_SUBSCRIPTION_PRICE_ID as string;
-
-// Base URL for redirects
+const SUBSCRIPTION_PRICE_ID = process.env.STRIPE_SUBSCRIPTION_PRICE_ID as string;
 const APP_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ||
   process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
   'http://localhost:3000';
 
-// Supabase admin client (service role – bypasses RLS)
+const stripe = new Stripe(STRIPE_SECRET_KEY);
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 export async function POST(req: Request) {
   try {
-    if (!SUBSCRIPTION_PRICE_ID) {
-      console.error('Missing STRIPE_SUBSCRIPTION_PRICE_ID env var');
-      return NextResponse.json(
-        { error: 'Subscription price not configured on server.' },
-        { status: 500 }
-      );
-    }
+    const body = await req.json().catch(() => ({}));
+    const { landlordId } = body as { landlordId?: number };
 
-    // Expect landlordId in the JSON body
-    const body = (await req.json().catch(() => null)) as
-      | { landlordId?: number }
-      | null;
-
-    const landlordId = body?.landlordId;
     if (!landlordId || typeof landlordId !== 'number') {
       return NextResponse.json(
         { error: 'Missing or invalid landlordId in request body.' },
@@ -47,7 +26,14 @@ export async function POST(req: Request) {
       );
     }
 
-    // Load landlord row so we have email + optional existing stripe_customer_id
+    if (!SUBSCRIPTION_PRICE_ID) {
+      return NextResponse.json(
+        { error: 'Subscription price not configured on server.' },
+        { status: 500 }
+      );
+    }
+
+    // 1) Load landlord row
     const { data: landlord, error: landlordError } = await supabaseAdmin
       .from('landlords')
       .select('id, email, stripe_customer_id')
@@ -55,37 +41,33 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (landlordError) {
-      console.error(
-        'Error fetching landlord in subscription checkout:',
-        landlordError
-      );
+      console.error('Error loading landlord in checkout route:', landlordError);
       return NextResponse.json(
-        { error: 'Unable to load landlord for subscription.' },
+        { error: 'Unable to load landlord account.' },
         { status: 500 }
       );
     }
 
     if (!landlord) {
       return NextResponse.json(
-        { error: 'Landlord not found for subscription.' },
+        { error: 'Landlord not found.' },
         { status: 404 }
       );
     }
 
+    // 2) Ensure Stripe customer
     let customerId = landlord.stripe_customer_id as string | null;
 
-    // Create Stripe customer if we don't have one yet
     if (!customerId) {
       const customer = await stripe.customers.create({
-        email: landlord.email || undefined,
+        email: landlord.email,
         metadata: {
-          landlordId: landlord.id.toString(),
+          landlordId: String(landlord.id),
         },
       });
 
       customerId = customer.id;
 
-      // Save stripe_customer_id back on landlord row
       const { error: updateError } = await supabaseAdmin
         .from('landlords')
         .update({ stripe_customer_id: customerId })
@@ -93,13 +75,13 @@ export async function POST(req: Request) {
 
       if (updateError) {
         console.error(
-          'Error updating landlord with new stripe_customer_id:',
+          'Error updating landlord with stripe_customer_id:',
           updateError
         );
       }
     }
 
-    // Create Checkout Session for subscription
+    // 3) Create subscription Checkout Session
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -109,21 +91,12 @@ export async function POST(req: Request) {
           quantity: 1,
         },
       ],
-      metadata: {
-        landlordId: landlord.id.toString(),
-      },
-      // ✅ After success, send them to the landlord dashboard
-      success_url: `${APP_URL}/landlord?subscribed=1&session_id={CHECKOUT_SESSION_ID}`,
-      // If they cancel Checkout, send them back to the settings/subscription screen
+      success_url: `${APP_URL}/landlord/settings?billing=success`,
       cancel_url: `${APP_URL}/landlord/settings?billing=cancelled`,
+      metadata: {
+        landlordId: String(landlord.id),
+      },
     });
-
-    if (!session.url) {
-      return NextResponse.json(
-        { error: 'Stripe did not return a checkout URL.' },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (err: any) {
