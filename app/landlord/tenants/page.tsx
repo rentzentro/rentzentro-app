@@ -10,12 +10,12 @@ import { supabase } from '../../supabaseClient';
 type LandlordRow = {
   id: number;
   email: string;
-  user_id: string | null;
+  user_id: string | null; // auth.users UUID
 };
 
 type PropertyRow = {
   id: number;
-  owner_id: number | null;
+  owner_id: string | null; // stored as landlord.user_id (UUID)
   name: string | null;
   unit_label: string | null;
   monthly_rent: number | null;
@@ -24,7 +24,7 @@ type PropertyRow = {
 
 type TenantRow = {
   id: number;
-  owner_id: number | null;
+  owner_id: string | null; // stored as landlord.user_id (UUID)
   name: string | null;
   email: string;
   phone: string | null;
@@ -119,7 +119,16 @@ export default function LandlordTenantsPage() {
           throw new Error('Landlord account not found.');
         }
 
+        if (!landlordRow.user_id) {
+          console.error('Landlord row missing user_id:', landlordRow);
+          throw new Error(
+            'Your landlord account is missing a user ID. Please contact support.'
+          );
+        }
+
         setLandlord(landlordRow);
+
+        const ownerUuid = landlordRow.user_id; // used as FK in properties/tenants
 
         // Properties for this landlord
         const { data: propRows, error: propError } = await supabase
@@ -127,7 +136,7 @@ export default function LandlordTenantsPage() {
           .select(
             'id, owner_id, name, unit_label, monthly_rent, status'
           )
-          .eq('owner_id', landlordRow.id)
+          .eq('owner_id', ownerUuid)
           .order('created_at', { ascending: false });
 
         if (propError) throw propError;
@@ -139,7 +148,7 @@ export default function LandlordTenantsPage() {
           .select(
             'id, owner_id, name, email, phone, property_id, status, monthly_rent'
           )
-          .eq('owner_id', landlordRow.id)
+          .eq('owner_id', ownerUuid)
           .order('created_at', { ascending: false });
 
         if (tenantError) throw tenantError;
@@ -168,7 +177,7 @@ export default function LandlordTenantsPage() {
 
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!landlord) return;
+    if (!landlord || !landlord.user_id) return;
 
     setSavingTenant(true);
     setError(null);
@@ -185,13 +194,13 @@ export default function LandlordTenantsPage() {
       const { data, error: insertError } = await supabase
         .from('tenants')
         .insert({
-          owner_id: landlord.id,
+          owner_id: landlord.user_id, // UUID FK
           name: formName.trim() || null,
           email: formEmail.trim(),
           phone: formPhone.trim() || null,
           property_id: formPropertyId,
           status: 'Current',
-          monthly_rent: null, // we now treat the property as the rent source of truth
+          monthly_rent: null, // property is source of truth for rent
         })
         .select('*')
         .single();
@@ -261,7 +270,7 @@ export default function LandlordTenantsPage() {
           tenantName: tenant.name,
           propertyName: property?.name,
           unitLabel: property?.unit_label,
-          landlordName: landlord?.email, // you can later switch this to a landlord name field if you add it
+          landlordName: landlord?.email, // you can switch to a landlord name field later
         }),
       });
 
