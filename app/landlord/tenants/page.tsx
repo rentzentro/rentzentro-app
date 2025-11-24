@@ -67,6 +67,14 @@ export default function LandlordTenantsPage() {
   // Invite state
   const [inviteLoadingId, setInviteLoadingId] = useState<number | null>(null);
 
+  // Edit-tenant state
+  const [editingTenant, setEditingTenant] = useState<TenantRow | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editPropertyId, setEditPropertyId] = useState<number | ''>('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   // ---------- Load landlord + data ----------
 
   useEffect(() => {
@@ -166,7 +174,7 @@ export default function LandlordTenantsPage() {
     load();
   }, [router]);
 
-  // ---------- Actions ----------
+  // ---------- Actions: Add tenant ----------
 
   const resetForm = () => {
     setFormName('');
@@ -223,6 +231,70 @@ export default function LandlordTenantsPage() {
     }
   };
 
+  // ---------- Actions: Edit tenant ----------
+
+  const startEditTenant = (t: TenantRow) => {
+    setEditingTenant(t);
+    setEditName(t.name || '');
+    setEditEmail(t.email || '');
+    setEditPhone(t.phone || '');
+    setEditPropertyId(t.property_id ?? '');
+    setError(null);
+    setSuccess(null);
+  };
+
+  const cancelEditTenant = () => {
+    setEditingTenant(null);
+    setEditName('');
+    setEditEmail('');
+    setEditPhone('');
+    setEditPropertyId('');
+    setSavingEdit(false);
+  };
+
+  const handleUpdateTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTenant) return;
+
+    setSavingEdit(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      if (!editEmail.trim()) {
+        throw new Error('Tenant email is required.');
+      }
+
+      const { data, error: updateError } = await supabase
+        .from('tenants')
+        .update({
+          name: editName.trim() || null,
+          email: editEmail.trim(),
+          phone: editPhone.trim() || null,
+          property_id: editPropertyId || null,
+        })
+        .eq('id', editingTenant.id)
+        .select('*')
+        .single();
+
+      if (updateError) {
+        console.error('Error updating tenant:', updateError);
+        throw new Error(updateError.message || 'Failed to update tenant.');
+      }
+
+      setTenants((prev) =>
+        prev.map((t) => (t.id === editingTenant.id ? (data as TenantRow) : t))
+      );
+      setSuccess('Tenant updated successfully.');
+      cancelEditTenant();
+    } catch (err: any) {
+      setError(err?.message || 'Error updating tenant. Please try again.');
+      setSavingEdit(false);
+    }
+  };
+
+  // ---------- Actions: Delete tenant ----------
+
   const handleDeleteTenant = async (tenantId: number) => {
     if (!window.confirm('Delete this tenant? This cannot be undone.')) return;
 
@@ -241,11 +313,17 @@ export default function LandlordTenantsPage() {
       }
 
       setTenants((prev) => prev.filter((t) => t.id !== tenantId));
+      // If we were editing this tenant, close the editor
+      if (editingTenant && editingTenant.id === tenantId) {
+        cancelEditTenant();
+      }
       setSuccess('Tenant deleted.');
     } catch (err: any) {
       setError(err?.message || 'Error deleting tenant.');
     }
   };
+
+  // ---------- Actions: Send invite ----------
 
   const handleSendInvite = async (
     tenant: TenantRow,
@@ -270,7 +348,7 @@ export default function LandlordTenantsPage() {
           tenantName: tenant.name,
           propertyName: property?.name,
           unitLabel: property?.unit_label,
-          landlordName: landlord?.email, // you can switch to a landlord name field later
+          landlordName: landlord?.email, // later can be a landlord name field
         }),
       });
 
@@ -345,8 +423,7 @@ export default function LandlordTenantsPage() {
               Manage tenants
             </h1>
             <p className="text-[13px] text-slate-400">
-              Add or remove tenants and link them to properties. Tenants with matching emails
-              can sign in to the tenant portal.
+              Add or remove tenants, link them to properties, and send portal invites.
             </p>
           </div>
 
@@ -485,6 +562,105 @@ export default function LandlordTenantsPage() {
           </section>
         )}
 
+        {/* Edit tenant form */}
+        {editingTenant && (
+          <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wide">
+                  Edit tenant
+                </p>
+                <p className="mt-1 text-sm text-slate-200">
+                  Update details for {editingTenant.name || editingTenant.email}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={cancelEditTenant}
+                className="text-[11px] text-slate-400 hover:text-slate-200"
+              >
+                Close
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleUpdateTenant}
+              className="grid gap-3 md:grid-cols-2 text-xs"
+            >
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">Tenant name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">
+                  Tenant email <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="name@example.com"
+                />
+              </div>
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">Tenant phone</label>
+                <input
+                  type="tel"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">Property</label>
+                <select
+                  value={editPropertyId === '' ? '' : String(editPropertyId)}
+                  onChange={(e) =>
+                    setEditPropertyId(
+                      e.target.value ? Number(e.target.value) : ''
+                    )
+                  }
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value="">Not linked</option>
+                  {properties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name || 'Unnamed property'}
+                      {p.unit_label ? ` · ${p.unit_label}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2 flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={cancelEditTenant}
+                  className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs text-slate-200 hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {savingEdit ? 'Saving changes…' : 'Save changes'}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
         {/* Tenants list */}
         <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
@@ -560,6 +736,13 @@ export default function LandlordTenantsPage() {
                           {inviteLoadingId === t.id
                             ? 'Sending…'
                             : 'Send portal invite'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => startEditTenant(t)}
+                          className="rounded-full border border-sky-500/60 bg-sky-500/10 px-3 py-1 text-[11px] text-sky-100 hover:bg-sky-500/20"
+                        >
+                          Edit
                         </button>
                         <button
                           type="button"
