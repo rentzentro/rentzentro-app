@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
 
 // ---------- Types ----------
@@ -13,6 +14,7 @@ type LandlordRow = {
   stripe_subscription_id: string | null;
   subscription_status: string | null;
   subscription_current_period_end: string | null;
+  user_id?: string | null;
 };
 
 // ---------- Helpers ----------
@@ -27,22 +29,35 @@ const formatDate = (iso: string | null) => {
   });
 };
 
+const prettyStatus = (status: string | null) => {
+  if (!status) return 'Not subscribed';
+  if (status === 'active') return 'Active';
+  if (status === 'trialing') return 'Trialing';
+  if (status === 'past_due') return 'Past due';
+  if (status === 'canceled') return 'Canceled';
+  if (status === 'unpaid') return 'Unpaid';
+  return status;
+};
+
 // ---------- Component ----------
 export default function LandlordSettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [loading, setLoading] = useState(true);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
-  // Load / create landlord record based on auth user
+  // Load / create landlord from auth user
   useEffect(() => {
     const billing = searchParams.get('billing');
     if (billing === 'success') {
-      setInfo('Your subscription was updated. If it still shows as not subscribed, try refreshing status.');
+      setInfo(
+        'Your subscription was updated. If it still shows as not subscribed, try refreshing status.'
+      );
     } else if (billing === 'cancelled') {
       setInfo('Subscription checkout was cancelled. You can try again anytime.');
     }
@@ -51,7 +66,6 @@ export default function LandlordSettingsPage() {
       setLoading(true);
       setError(null);
 
-      // 1) Get auth user
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError || !authData?.user?.email) {
         router.push('/landlord/login');
@@ -61,7 +75,7 @@ export default function LandlordSettingsPage() {
       const user = authData.user;
       const email = user.email!;
 
-      // 2) Try to find landlord by user_id
+      // 1) Try by user_id
       let { data: landlordRow, error: landlordError } = await supabase
         .from('landlords')
         .select('*')
@@ -75,7 +89,7 @@ export default function LandlordSettingsPage() {
         return;
       }
 
-      // 3) If still not found, try by email (for older rows)
+      // 2) Fallback: try by email (older rows)
       if (!landlordRow) {
         const byEmail = await supabase
           .from('landlords')
@@ -93,7 +107,7 @@ export default function LandlordSettingsPage() {
         landlordRow = byEmail.data as LandlordRow | null;
       }
 
-      // 4) If still none, create landlord row
+      // 3) If still none, create landlord row
       if (!landlordRow) {
         const { data: inserted, error: insertError } = await supabase
           .from('landlords')
@@ -142,7 +156,8 @@ export default function LandlordSettingsPage() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(
-          data?.error || `Unable to start subscription checkout (status ${res.status}).`
+          data?.error ||
+            `Unable to start subscription checkout (status ${res.status}).`
         );
       }
 
@@ -160,8 +175,37 @@ export default function LandlordSettingsPage() {
     }
   };
 
-  const handleRefreshStatus = async () => {
-    // Simple full reload so it re-runs the effect
+  const handleCancelSubscription = async () => {
+    if (!landlord) return;
+    setCancelling(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      const res = await fetch('/api/subscription/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ landlordId: landlord.id }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Unable to cancel subscription.');
+      }
+
+      setInfo(
+        'Your subscription will be cancelled at the end of the current billing period. You will keep access until Stripe ends the subscription.'
+      );
+    } catch (err: any) {
+      console.error('Cancel subscription error:', err);
+      setError(err?.message || 'Failed to cancel subscription. Please try again.');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const handleRefreshStatus = () => {
     window.location.href = '/landlord/settings';
   };
 
@@ -201,7 +245,7 @@ export default function LandlordSettingsPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto max-w-3xl space-y-6">
-        {/* Top bar */}
+        {/* Header */}
         <div className="flex items-center justify-between gap-2">
           <div>
             <button
@@ -215,7 +259,7 @@ export default function LandlordSettingsPage() {
               Account & subscription
             </h1>
             <p className="text-xs text-slate-400">
-              Manage your RentZentro landlord subscription and account status.
+              Manage your RentZentro landlord plan and billing.
             </p>
           </div>
           <button
@@ -226,7 +270,7 @@ export default function LandlordSettingsPage() {
           </button>
         </div>
 
-        {/* Messages */}
+        {/* Alerts */}
         {(info || error) && (
           <div
             className={`rounded-xl border px-4 py-2 text-sm ${
@@ -239,73 +283,123 @@ export default function LandlordSettingsPage() {
           </div>
         )}
 
-        {/* Plan summary */}
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-2">
-          <p className="text-xs text-slate-500 uppercase tracking-wide">
+        {/* Plan card */}
+        <section className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-900/30 via-slate-900 to-slate-950 px-4 py-4 space-y-3 shadow-sm">
+          <p className="text-xs text-emerald-200/90 uppercase tracking-wide">
             RentZentro landlord plan
           </p>
-          <p className="text-sm font-semibold text-slate-50">
-            $29.95 / month • Cancel anytime
-          </p>
-          <ul className="mt-2 space-y-1 text-xs text-slate-300">
-            <li>• Unlimited properties and units</li>
-            <li>• Secure card payments powered by Stripe</li>
-            <li>• Tenant portal, maintenance requests, and payment history</li>
-            <li>• Dashboard for overdue & upcoming rent</li>
-          </ul>
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <div>
+              <p className="text-2xl font-semibold text-slate-50">$29.95</p>
+              <p className="text-xs text-slate-300">per month • cancel anytime</p>
+            </div>
+            <div className="text-[11px] text-slate-300">
+              <p className="flex items-center gap-1">
+                <span>✅</span> Unlimited properties and units
+              </p>
+              <p className="flex items-center gap-1">
+                <span>✅</span> Secure Stripe-powered card payments
+              </p>
+              <p className="flex items-center gap-1">
+                <span>✅</span> Tenant portal & maintenance tracking
+              </p>
+              <p className="flex items-center gap-1">
+                <span>✅</span> Dashboard for overdue & upcoming rent
+              </p>
+            </div>
+          </div>
         </section>
 
-        {/* Current status */}
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-300 space-y-2">
-          <p>
-            <span className="text-slate-500">Account email:</span>{' '}
-            <span className="text-slate-100">{landlord.email}</span>
-          </p>
-          <p>
-            <span className="text-slate-500">Subscription status:</span>{' '}
-            <span className={isActive ? 'text-emerald-300' : 'text-slate-100'}>
-              {landlord.subscription_status || 'Not subscribed'}
-            </span>
-          </p>
-          <p>
-            <span className="text-slate-500">Next billing date:</span>{' '}
-            <span className="text-slate-100">
-              {formatDate(landlord.subscription_current_period_end)}
-            </span>
-          </p>
-        </section>
+        {/* Status + actions */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-xs space-y-1">
+              <p>
+                <span className="text-slate-500">Account email:</span>{' '}
+                <span className="text-slate-100">{landlord.email}</span>
+              </p>
+              <p>
+                <span className="text-slate-500">Subscription status:</span>{' '}
+                <span className={isActive ? 'text-emerald-300' : 'text-slate-100'}>
+                  {prettyStatus(landlord.subscription_status)}
+                </span>
+              </p>
+              <p>
+                <span className="text-slate-500">Next billing date:</span>{' '}
+                <span className="text-slate-100">
+                  {formatDate(landlord.subscription_current_period_end)}
+                </span>
+              </p>
+            </div>
 
-        {/* Actions */}
-        <section className="space-y-3">
-          {!isActive && (
-            <button
-              type="button"
-              onClick={handleStartSubscription}
-              disabled={startingCheckout}
-              className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {startingCheckout ? 'Starting subscription…' : 'Subscribe for $29.95/mo'}
-            </button>
-          )}
+            <div className="flex flex-col sm:items-end gap-2 text-xs">
+              {!isActive && (
+                <button
+                  type="button"
+                  onClick={handleStartSubscription}
+                  disabled={startingCheckout}
+                  className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {startingCheckout ? 'Starting subscription…' : 'Subscribe for $29.95/mo'}
+                </button>
+              )}
 
-          <button
-            type="button"
-            onClick={handleRefreshStatus}
-            className="w-full rounded-full border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-slate-100 hover:bg-slate-800"
-          >
-            Refresh subscription status
-          </button>
+              {isActive && (
+                <button
+                  type="button"
+                  onClick={handleCancelSubscription}
+                  disabled={cancelling}
+                  className="rounded-full bg-red-500/90 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-red-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {cancelling ? 'Scheduling cancellation…' : 'Cancel subscription'}
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleRefreshStatus}
+                className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-100 hover:bg-slate-800"
+              >
+                Refresh subscription status
+              </button>
+            </div>
+          </div>
 
           {isActive && (
-            <button
-              type="button"
-              onClick={() => router.push('/landlord')}
-              className="w-full rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20"
-            >
-              Go to landlord dashboard
-            </button>
+            <div className="pt-2 border-t border-slate-800 mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[11px]">
+              <p className="text-slate-400">
+                Your subscription is active. You can manage units, tenants, payments,
+                and maintenance from your dashboard.
+              </p>
+              <button
+                type="button"
+                onClick={() => router.push('/landlord')}
+                className="rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
+              >
+                Go to landlord dashboard
+              </button>
+            </div>
           )}
         </section>
+
+        {/* Support */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-300 space-y-1">
+          <p className="font-medium text-slate-100">Billing & support</p>
+          <p>
+            If you have questions about your subscription or billing, contact RentZentro
+            support:
+          </p>
+          <p className="text-emerald-300">rentzentro@gmail.com</p>
+        </section>
+
+        <div className="pt-2">
+          <Link
+            href="/landlord"
+            className="text-[11px] text-slate-500 hover:text-emerald-300"
+          >
+            ← Back to dashboard
+          </Link>
+        </div>
       </div>
     </main>
   );

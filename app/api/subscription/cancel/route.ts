@@ -3,82 +3,66 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 
-if (!stripeSecretKey) {
-  throw new Error('Missing STRIPE_SECRET_KEY environment variable');
-}
-if (!supabaseUrl || !serviceRoleKey) {
-  throw new Error('Missing Supabase service role env vars');
-}
-
-const stripe = new Stripe(stripeSecretKey as string);
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+const stripe = new Stripe(STRIPE_SECRET_KEY);
+const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const { landlordId } = body as { landlordId?: number };
 
-    if (!landlordId) {
+    if (!landlordId || typeof landlordId !== 'number') {
       return NextResponse.json(
-        { error: 'Missing landlordId in request body.' },
+        { error: 'Missing or invalid landlordId.' },
         { status: 400 }
       );
     }
 
-    // Load landlord to get subscription id
+    // Look up landlord to get their Stripe subscription ID
     const { data: landlord, error: landlordError } = await supabaseAdmin
       .from('landlords')
-      .select('id, stripe_subscription_id')
+      .select('stripe_subscription_id')
       .eq('id', landlordId)
       .maybeSingle();
 
     if (landlordError) {
-      console.error('Error loading landlord for cancel:', landlordError);
+      console.error('Error loading landlord in cancel route:', landlordError);
       return NextResponse.json(
-        { error: 'Unable to load landlord for subscription cancel.' },
+        { error: 'Unable to load landlord account.' },
         { status: 500 }
       );
     }
 
-    if (!landlord || !landlord.stripe_subscription_id) {
+    if (!landlord) {
       return NextResponse.json(
-        { error: 'No active subscription found for this landlord.' },
+        { error: 'Landlord not found.' },
+        { status: 404 }
+      );
+    }
+
+    if (!landlord.stripe_subscription_id) {
+      return NextResponse.json(
+        { error: 'No active subscription to cancel.' },
         { status: 400 }
       );
     }
 
-    const subscriptionId = landlord.stripe_subscription_id as string;
-
-    // Cancel at period end so they keep access until the end of the billing cycle
-    const updated = await stripe.subscriptions.update(subscriptionId, {
+    // Cancel at period end (they keep access until Stripe ends it)
+    await stripe.subscriptions.update(landlord.stripe_subscription_id, {
       cancel_at_period_end: true,
     });
 
-    // We do NOT immediately change subscription_status here.
-    // The Stripe "customer.subscription.updated" / "deleted" webhook
-    // will update the landlords table when the subscription actually ends.
-
-    return NextResponse.json(
-      {
-        ok: true,
-        subscriptionId: updated.id,
-        status: updated.status,
-        cancel_at_period_end: updated.cancel_at_period_end,
-      },
-      { status: 200 }
-    );
+    // We let the Stripe webhook update subscription_status when the period actually ends.
+    // Here we just confirm success.
+    return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err: any) {
     console.error('Subscription cancel error:', err);
     return NextResponse.json(
-      {
-        error:
-          err?.message ||
-          'Something went wrong while cancelling the subscription.',
-      },
+      { error: err?.message || 'Unexpected error cancelling subscription.' },
       { status: 500 }
     );
   }
