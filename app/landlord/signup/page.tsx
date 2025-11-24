@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
 
 export default function LandlordSignupPage() {
@@ -11,159 +10,192 @@ export default function LandlordSignupPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [passwordVisible, setPasswordVisible] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!email || !password) {
+      setError('Email and password are required.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      if (!email || !password) {
-        throw new Error('Email and password are required.');
-      }
-
       // 1) Create Supabase auth user
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-      });
+      const { data: signUpData, error: signUpError } =
+        await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name: name || 'Landlord',
+              role: 'landlord',
+            },
+          },
+        });
 
-      if (signUpError) {
-        throw signUpError;
+      if (signUpError) throw signUpError;
+
+      const user = signUpData.user;
+      if (!user) {
+        throw new Error('Account was created, but no user was returned.');
       }
 
-      const authedEmail =
-        signUpData.user?.email?.trim().toLowerCase() ?? email.trim().toLowerCase();
-
-      // 2) Insert landlord row tied to this email
-      const { error: landlordError } = await supabase.from('landlords').insert({
-        email: authedEmail,
-        name: name || 'Default Landlord',
-      });
+      // 2) Upsert landlord row with INACTIVE subscription
+      const { error: landlordError } = await supabase
+        .from('landlords')
+        .upsert(
+          {
+            // Match by email so we don't create duplicates if they re-sign up
+            email: user.email,
+            name: name || 'Default Landlord',
+            subscription_status: 'inactive', // <-- IMPORTANT
+          },
+          {
+            onConflict: 'email', // make sure landlords.email has a unique constraint
+          }
+        );
 
       if (landlordError) {
-        console.error('Error inserting landlord row:', landlordError);
-        // Not fatal for auth, but we DO want to surface it because dashboard relies on it
-        throw new Error('Your account was created, but we could not finish setup. Please contact support.');
+        console.error('Error creating landlord row:', landlordError);
+        throw new Error(
+          'Your account was created, but we could not finish the landlord setup. Please contact support.'
+        );
       }
 
-      // 3) Send them into the app.
-      // The landlord dashboard will redirect to /landlord/subscription
-      // if subscription_status is not active.
-      router.push('/landlord');
+      // 3) Send them DIRECTLY to settings / subscription
+      router.push('/landlord/settings');
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || 'Unable to create landlord account.');
+      setError(
+        err?.message ||
+          'Something went wrong while creating your account. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  const handleBackHome = () => {
+    router.push('/');
+  };
+
+  const handleLoginInstead = () => {
+    router.push('/landlord/login');
+  };
+
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-8">
-      <div className="mx-auto max-w-md">
-        <Link
-          href="/"
-          className="text-xs text-slate-500 hover:text-emerald-300"
+    <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
+      <div className="w-full max-w-md rounded-3xl bg-slate-900/80 border border-slate-800 p-6 shadow-xl space-y-6">
+        <button
+          type="button"
+          onClick={handleBackHome}
+          className="text-[11px] text-slate-500 hover:text-emerald-300"
         >
           ← Back to homepage
-        </Link>
+        </button>
 
-        <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 px-5 py-6 shadow-sm">
+        <div>
           <h1 className="text-xl font-semibold text-slate-50">
             Create your landlord account
           </h1>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-[12px] text-slate-400">
             This account lets you log in to the RentZentro landlord dashboard.
-            You&apos;ll start your subscription on the next step after you&apos;re signed in.
-          </p>
-
-          {error && (
-            <div className="mt-4 rounded-xl border border-rose-500/60 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-            {/* Name */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-300">
-                Name <span className="text-slate-500">(optional)</span>
-              </label>
-              <input
-                type="text"
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 outline-none placeholder:text-slate-500 focus:border-emerald-500"
-                placeholder="Default Landlord"
-              />
-            </div>
-
-            {/* Email */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-300">
-                Email
-              </label>
-              <input
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 outline-none placeholder:text-slate-500 focus:border-emerald-500"
-                placeholder="you@example.com"
-              />
-            </div>
-
-            {/* Password + show/hide toggle */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-300">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={passwordVisible ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 pr-10 text-sm text-slate-50 outline-none placeholder:text-slate-500 focus:border-emerald-500"
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setPasswordVisible((v) => !v)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-[11px] text-slate-400 hover:text-slate-200"
-                >
-                  {passwordVisible ? 'Hide' : 'Show'}
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Use at least 8 characters. You&apos;ll use this to sign in to your landlord dashboard.
-              </p>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-2 w-full rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
-            >
-              {loading ? 'Creating account…' : 'Create landlord account'}
-            </button>
-          </form>
-
-          <p className="mt-4 text-[11px] text-slate-500">
-            Already have an account?{' '}
-            <Link href="/landlord/login" className="text-emerald-300 hover:text-emerald-200">
-              Log in.
-            </Link>
+            You&apos;ll activate your{' '}
+            <span className="font-semibold text-emerald-300">$29.95/mo</span>{' '}
+            subscription on the next step.
           </p>
         </div>
+
+        {error && (
+          <div className="rounded-xl border border-red-500/60 bg-red-500/10 px-3 py-2 text-[12px] text-red-200">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="block text-[12px] text-slate-300">
+              Name (optional)
+            </label>
+            <input
+              type="text"
+              placeholder="Your name or business"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-[12px] text-slate-300">Email</label>
+            <input
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-[12px] text-slate-300">
+              Password
+            </label>
+            <input
+              type="password"
+              required
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              placeholder="Create a secure password"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="mt-2 w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Creating account…' : 'Create landlord account'}
+          </button>
+        </form>
+
+        <div className="text-center text-[12px] text-slate-400">
+          Already have an account?{' '}
+          <button
+            type="button"
+            onClick={handleLoginInstead}
+            className="text-emerald-300 hover:text-emerald-200 underline-offset-2 hover:underline"
+          >
+            Log in.
+          </button>
+        </div>
+
+        <p className="mt-1 text-[10px] text-slate-500 text-center">
+          By creating an account, you agree to the RentZentro{' '}
+          <a
+            href="/terms"
+            className="text-emerald-300 hover:text-emerald-200 underline-offset-2 hover:underline"
+          >
+            Terms
+          </a>{' '}
+          and{' '}
+          <a
+            href="/privacy"
+            className="text-emerald-300 hover:text-emerald-200 underline-offset-2 hover:underline"
+          >
+            Privacy Policy
+          </a>
+          .
+        </p>
       </div>
     </main>
   );
