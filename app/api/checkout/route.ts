@@ -1,9 +1,9 @@
 // app/api/checkout/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { supabase } from '../../supabaseClient';
+import { supabaseAdmin } from '../../supabaseAdminClient';
 
-// Initialize Stripe (no apiVersion to avoid TS noise)
+// Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 // Base URL for success/cancel redirects
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     const { amount, description, tenantId, propertyId } = body as {
-      amount: number;        // dollars, e.g. 1500
+      amount: number; // dollars, e.g. 1500
       description?: string;
       tenantId: number;
       propertyId?: number | null;
@@ -35,8 +35,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1) Look up tenant
-    const { data: tenant, error: tenantError } = await supabase
+    // 1) Look up tenant (use supabaseAdmin to bypass RLS safely on server)
+    const { data: tenant, error: tenantError } = await supabaseAdmin
       .from('tenants')
       .select('id, email, property_id')
       .eq('id', tenantId)
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2) Decide which property to use: explicit propertyId or tenant.property_id
+    // 2) Decide which property to use
     const effectivePropertyId = propertyId ?? tenant.property_id;
     if (!effectivePropertyId) {
       return NextResponse.json(
@@ -62,8 +62,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3) Load property, including owner_id (which should point to the landlord row)
-    const { data: property, error: propError } = await supabase
+    // 3) Load property, including owner_id
+    const { data: property, error: propError } = await supabaseAdmin
       .from('properties')
       .select('id, name, unit_label, owner_id')
       .eq('id', effectivePropertyId)
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     }
 
     // 4) Load landlord by properties.owner_id -> landlords.id
-    const { data: landlord, error: landlordError } = await supabase
+    const { data: landlord, error: landlordError } = await supabaseAdmin
       .from('landlords')
       .select('id, stripe_connect_account_id, stripe_connect_onboarded')
       .eq('id', property.owner_id)
@@ -112,7 +112,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const landlordStripeAccountId = landlord.stripe_connect_account_id as string;
+    const landlordStripeAccountId =
+      landlord.stripe_connect_account_id as string;
 
     // 5) Create Stripe Checkout Session that transfers funds to landlord
     const session = await stripe.checkout.sessions.create({
@@ -130,7 +131,7 @@ export async function POST(req: Request) {
                   property.name || 'your rental'
                 }${property.unit_label ? ` · ${property.unit_label}` : ''}`,
             },
-            unit_amount: Math.round(amount * 100), // convert dollars → cents
+            unit_amount: Math.round(amount * 100), // dollars → cents
           },
         },
       ],
@@ -144,11 +145,9 @@ export async function POST(req: Request) {
       },
       payment_intent_data: {
         transfer_data: {
-          // 🔥 This is the key line: send funds to the landlord’s connected account
           destination: landlordStripeAccountId,
         },
-        // If you ever want a per-transaction fee, set application_fee_amount here:
-        // application_fee_amount: Math.round(amount * 100 * 0.00),
+        // application_fee_amount: Math.round(amount * 100 * 0.00), // if you ever want a per-payment fee
       },
     });
 
