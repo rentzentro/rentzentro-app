@@ -64,6 +64,9 @@ export default function LandlordTenantsPage() {
   const [formPropertyId, setFormPropertyId] = useState<number | ''>('');
   const [savingTenant, setSavingTenant] = useState(false);
 
+  // Invite state
+  const [inviteLoadingId, setInviteLoadingId] = useState<number | null>(null);
+
   // ---------- Load landlord + data ----------
 
   useEffect(() => {
@@ -232,6 +235,56 @@ export default function LandlordTenantsPage() {
       setSuccess('Tenant deleted.');
     } catch (err: any) {
       setError(err?.message || 'Error deleting tenant.');
+    }
+  };
+
+  const handleSendInvite = async (
+    tenant: TenantRow,
+    property?: PropertyRow | null
+  ) => {
+    if (!tenant.email) {
+      setError('This tenant does not have an email on file.');
+      setSuccess(null);
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+    setInviteLoadingId(tenant.id);
+
+    try {
+      const res = await fetch('/api/tenant-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantEmail: tenant.email,
+          tenantName: tenant.name,
+          propertyName: property?.name,
+          unitLabel: property?.unit_label,
+          landlordName: landlord?.email, // you can later switch this to a landlord name field if you add it
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data?.error) {
+        console.error('Invite error:', data);
+        setError(
+          data?.error ||
+            `Failed to send portal invite to ${tenant.email}. Please try again.`
+        );
+        setSuccess(null);
+      } else {
+        setSuccess(
+          'Portal invite sent. Your tenant will receive an email with their signup link.'
+        );
+      }
+    } catch (err: any) {
+      console.error('Invite error:', err);
+      setError('Something went wrong sending the portal invite.');
+      setSuccess(null);
+    } finally {
+      setInviteLoadingId(null);
     }
   };
 
@@ -488,13 +541,25 @@ export default function LandlordTenantsPage() {
                         </p>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteTenant(t.id)}
-                        className="mt-1 rounded-full border border-rose-500/60 bg-rose-500/10 px-3 py-1 text-[11px] text-rose-100 hover:bg-rose-500/20"
-                      >
-                        Delete
-                      </button>
+                      <div className="mt-1 flex flex-wrap items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSendInvite(t, prop)}
+                          disabled={inviteLoadingId === t.id}
+                          className="rounded-full border border-emerald-500/70 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {inviteLoadingId === t.id
+                            ? 'Sending…'
+                            : 'Send portal invite'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTenant(t.id)}
+                          className="rounded-full border border-rose-500/60 bg-rose-500/10 px-3 py-1 text-[11px] text-rose-100 hover:bg-rose-500/20"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
