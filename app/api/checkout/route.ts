@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '../../supabaseAdminClient';
 
-// Initialize Stripe
+// Initialize Stripe (server-side only)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 // Base URL for success/cancel redirects
@@ -35,10 +35,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1) Look up tenant (use supabaseAdmin to bypass RLS safely on server)
+    // 1) Look up tenant (server-side admin client, bypasses RLS safely)
     const { data: tenant, error: tenantError } = await supabaseAdmin
       .from('tenants')
-      .select('id, email, property_id')
+      .select('id, email, property_id, owner_id')
       .eq('id', tenantId)
       .maybeSingle();
 
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3) Load property, including owner_id
+    // 3) Load property, including owner_id (may be null/old in some rows)
     const { data: property, error: propError } = await supabaseAdmin
       .from('properties')
       .select('id, name, unit_label, owner_id')
@@ -77,15 +77,73 @@ export async function POST(req: Request) {
       );
     }
 
-    // 4) Load landlord by properties.owner_id -> landlords.id
-    const { data: landlord, error: landlordError } = await supabaseAdmin
-      .from('landlords')
-      .select('id, stripe_connect_account_id, stripe_connect_onboarded')
-      .eq('id', property.owner_id)
-      .maybeSingle();
+    // 4) Figure out which landlord ID to use
+    // Prefer the tenant.owner_id (newer, more reliable),
+    // fall back to property.owner_id (older data).
+    const landlordForeign = tenant.owner_id ?? property.owner_id;
 
-    if (landlordError || !landlord) {
-      console.error('Checkout landlord lookup error:', landlordError);
+    if (!landlordForeign) {
+      return NextResponse.json(
+        {
+          error:
+            'No landlord is linked to this property. Please contact your landlord or RentZentro support.',
+        },
+        { status: 400 }
+      );
+    }
+
+    // 5) Try to load landlord by numeric id first...
+    let landlord = null as
+      | {
+          id: number;
+          stripe_connect_account_id: string | null;
+          stripe_connect_onboarded: boolean;
+        }
+      | null;
+
+    const { data: landlordById, error: landlordByIdError } =
+      await supabaseAdmin
+        .from('landlords')
+        .select('id, stripe_connect_account_id, stripe_connect_onboarded')
+        .eq('id', landlordForeign)
+        .maybeSingle();
+
+    if (landlordByIdError) {
+      console.error('Checkout landlordById error:', landlordByIdError);
+    }
+
+    if (landlordById) {
+      landlord = landlordById;
+    } else {
+      // 6) ...if that fails, try matching a landlord.user_id (UUID) to landlordForeign
+      const { data: landlordByUserId, error: landlordByUserIdError } =
+        await supabaseAdmin
+          .from('landlords')
+          .select('id, stripe_connect_account_id, stripe_connect_onboarded')
+          .eq('user_id', landlordForeign)
+          .maybeSingle();
+
+      if (landlordByUserIdError) {
+        console.error(
+          'Checkout landlordByUserId error:',
+          landlordByUserIdError
+        );
+      }
+
+      if (landlordByUserId) {
+        landlord = landlordByUserId;
+      }
+    }
+
+    if (!landlord) {
+      console.error(
+        'No landlord found for landlordForeign:',
+        landlordForeign,
+        'tenant.owner_id =',
+        tenant.owner_id,
+        'property.owner_id =',
+        property.owner_id
+      );
       return NextResponse.json(
         { error: 'Landlord not found for this property.' },
         { status: 400 }
@@ -115,7 +173,7 @@ export async function POST(req: Request) {
     const landlordStripeAccountId =
       landlord.stripe_connect_account_id as string;
 
-    // 5) Create Stripe Checkout Session that transfers funds to landlord
+    // 7) Create Stripe Checkout Session that transfers funds to landlord
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -147,7 +205,7 @@ export async function POST(req: Request) {
         transfer_data: {
           destination: landlordStripeAccountId,
         },
-        // application_fee_amount: Math.round(amount * 100 * 0.00), // if you ever want a per-payment fee
+        // If you ever want a per-payment platform fee, set application_fee_amount here.
       },
     });
 
