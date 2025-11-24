@@ -36,7 +36,7 @@ export default function LandlordLoginPage() {
 
       if (signInError) throw signInError;
 
-      router.push('/landlord');
+      router.push('/landlord/settings');
     } catch (err: any) {
       console.error(err);
       setError(
