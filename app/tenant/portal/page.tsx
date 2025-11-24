@@ -154,10 +154,10 @@ export default function TenantPortalPage() {
         if (authError) throw authError;
         const email = authData.user?.email;
         if (!email) {
-          throw new Error('Unable to load tenant: missing email.');
+          throw new Error('Unable to load tenant: missing email on your account.');
         }
 
-        // Tenant
+        // Tenant (lookup by email)
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select('*')
@@ -165,9 +165,22 @@ export default function TenantPortalPage() {
           .limit(1);
 
         if (tenantError) throw tenantError;
+
         const t = (tenantRows && tenantRows[0]) as TenantRow | undefined;
+
         if (!t) {
-          throw new Error('Tenant not found for logged-in user.');
+          // No tenant row found for this email
+          setTenant(null);
+          setProperty(null);
+          setPayments([]);
+          setDocuments([]);
+          setMaintenance([]);
+          setError(
+            'We couldn’t find a tenant profile for this email yet. ' +
+              'This usually means your landlord hasn’t added you to their tenant list, or used a different email. ' +
+              'Please contact your landlord to confirm they added you with this exact email address.'
+          );
+          return;
         }
 
         setTenant(t);
@@ -215,7 +228,7 @@ export default function TenantPortalPage() {
         if (docError) throw docError;
         setDocuments((docRows || []) as DocumentRow[]);
 
-        // Recent maintenance (only a few)
+        // Recent maintenance
         const { data: maintRows, error: maintError } = await supabase
           .from('maintenance_requests')
           .select('*')
@@ -322,6 +335,7 @@ export default function TenantPortalPage() {
   }
 
   if (!tenant) {
+    // Either we truly couldn't find a tenant row, or a load error occurred
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
         <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-700 p-6 shadow-xl space-y-4">
