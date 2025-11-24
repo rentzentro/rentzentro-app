@@ -348,7 +348,7 @@ export default function LandlordDashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
-            {/* Subscription/Settings */}
+            {/* Settings */}
             <Link
               href="/landlord/settings"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
