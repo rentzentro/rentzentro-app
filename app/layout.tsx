@@ -1,28 +1,26 @@
+// app/layout.tsx
+
 import './globals.css';
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 
-const inter = Inter({ subsets: ['latin'] });
-
-export const metadata: Metadata = {
-  title: "RentZentro – Rent payments. Centralized.",
-  description:
-    "A modern platform for landlords to track units, tenants, rent—and accept online payments through Stripe. Simple enough for one unit, powerful enough for portfolios.",
+export const metadata = {
+  title: "RentZentro — Simple rent collection for landlords",
+  description: "Collect rent online. Manage tenants, properties, maintenance, and payments easily.",
   icons: {
-    icon: "/favicon.png",                 // Browser tab icon
-    shortcut: "/favicon.png",             // Backup icon
-    apple: "/apple-touch-icon.png",       // iPhone/iPad home screen icon
+    icon: '/favicon.png',               // Browser tab icon
+    shortcut: '/favicon.png',           // Backup icon
+    apple: '/apple-touch-icon.png',     // iOS home screen icon
   },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <head>
+        {/* Extra safety for browsers that ignore Next metadata */}
+        <link rel="icon" href="/favicon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
