@@ -7,9 +7,16 @@ import { supabase } from '../supabaseClient';
 
 // ---------- Types ----------
 
+type LandlordRow = {
+  id: number;
+  email: string;
+  name: string | null;
+  subscription_status: string | null;
+  subscription_current_period_end: string | null;
+};
+
 type PropertyRow = {
   id: number;
-  created_at: string | null;
   name: string | null;
   unit_label: string | null;
   monthly_rent: number | null;
@@ -19,20 +26,16 @@ type PropertyRow = {
 
 type TenantRow = {
   id: number;
-  created_at: string | null;
   name: string | null;
   email: string;
   phone: string | null;
   property_id: number | null;
-  status: string | null;
   monthly_rent: number | null;
-  lease_start: string | null;
-  lease_end: string | null;
+  status: string | null;
 };
 
 type PaymentRow = {
   id: number;
-  created_at: string | null;
   tenant_id: number | null;
   property_id: number | null;
   amount: number | null;
@@ -43,7 +46,6 @@ type PaymentRow = {
 
 type MaintenanceRow = {
   id: number;
-  created_at: string | null;
   status: string | null;
 };
 
@@ -92,15 +94,14 @@ export default function LandlordDashboardPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [landlord, setLandlord] = useState<LandlordRow | null>(null);
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
-  const [maintenanceRequests, setMaintenanceRequests] = useState<
-    MaintenanceRow[]
-  >([]);
+  const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------- Load data ----------
+  // ---------- Load landlord + data ----------
 
   useEffect(() => {
     const load = async () => {
@@ -108,41 +109,56 @@ export default function LandlordDashboardPage() {
       setError(null);
 
       try {
-        // Ensure landlord is logged in
-        const { data: authData, error: authError } =
-          await supabase.auth.getUser();
+        // 1) Get auth user
+        const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError) throw authError;
 
-        const user = authData.user;
-        if (!user) {
-          router.push('/landlord/login');
+        const email = authData.user?.email;
+        if (!email) {
+          throw new Error('Unable to load landlord account. Please log in again.');
+        }
+
+        // 2) Load landlord row
+        const { data: landlordRow, error: landlordError } = await supabase
+          .from('landlords')
+          .select('*')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (landlordError) throw landlordError;
+        if (!landlordRow) {
+          throw new Error(
+            'Landlord record not found for this account. Please contact support if this seems wrong.'
+          );
+        }
+
+        const landlordTyped = landlordRow as LandlordRow;
+        setLandlord(landlordTyped);
+
+        // If subscription is NOT active, we stop here.
+        if ((landlordTyped.subscription_status || '').toLowerCase() !== 'active') {
+          setLoading(false);
           return;
         }
 
-        // Let RLS enforce ownership (no explicit owner_id filters)
+        // 3) Load dashboard data for subscribed landlord
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase
             .from('properties')
-            .select(
-              'id, created_at, name, unit_label, monthly_rent, status, next_due_date'
-            )
+            .select('*')
             .order('created_at', { ascending: false }),
           supabase
             .from('tenants')
-            .select(
-              'id, created_at, name, email, phone, property_id, status, monthly_rent, lease_start, lease_end'
-            )
+            .select('*')
             .order('created_at', { ascending: false }),
           supabase
             .from('payments')
-            .select(
-              'id, created_at, tenant_id, property_id, amount, paid_on, method, note'
-            )
+            .select('*')
             .order('paid_on', { ascending: false })
             .limit(10),
           supabase
             .from('maintenance_requests')
-            .select('id, created_at, status')
+            .select('id, status')
             .order('created_at', { ascending: false }),
         ]);
 
@@ -164,7 +180,7 @@ export default function LandlordDashboardPage() {
     };
 
     load();
-  }, [router]);
+  }, []);
 
   // ---------- Metrics ----------
 
@@ -174,7 +190,6 @@ export default function LandlordDashboardPage() {
     (t) => t.status?.toLowerCase() === 'current'
   ).length;
 
-  // Rent roll = sum of property.monthly_rent for current units
   const monthlyRentRoll = properties
     .filter((p) => p.status?.toLowerCase() === 'current')
     .reduce((sum, p) => sum + (p.monthly_rent || 0), 0);
@@ -226,18 +241,91 @@ export default function LandlordDashboardPage() {
     router.push('/landlord/login');
   };
 
+  const goToSubscription = () => {
+    router.push('/landlord/settings');
+  };
+
   // ---------- UI ----------
 
-  if (loading) {
+  if (loading && !landlord) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-50 p-6 flex items-center justify-center">
-        <p className="text-sm text-slate-400">
-          Loading landlord dashboard…
-        </p>
+        <p className="text-sm text-slate-400">Loading landlord dashboard…</p>
       </div>
     );
   }
 
+  if (!landlord) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-50 p-6 flex items-center justify-center">
+        <div className="max-w-md rounded-2xl bg-slate-900/80 border border-red-500/60 p-5 space-y-3">
+          <p className="text-sm text-red-200">
+            {error ||
+              'We could not find a landlord record for this account. Please contact support.'}
+          </p>
+          <button
+            onClick={handleSignOut}
+            className="mt-1 rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+          >
+            Back to landlord login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // HARD GATE: subscription must be ACTIVE to see dashboard
+  if ((landlord.subscription_status || '').toLowerCase() !== 'active') {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-3xl bg-slate-900/80 border border-amber-500/60 p-6 shadow-xl space-y-4 text-center">
+          <p className="text-xs text-amber-300 font-semibold uppercase tracking-wide">
+            Subscription required
+          </p>
+          <h1 className="text-lg font-semibold text-slate-50">
+            Unlock your RentZentro landlord tools
+          </h1>
+          <p className="text-sm text-slate-300">
+            Your landlord account is created, but your subscription isn&apos;t active yet.
+            To access your dashboard, properties, tenants, and online rent collection,
+            please activate the{' '}
+            <span className="font-semibold text-emerald-300">
+              $29.95/mo RentZentro Landlord Plan
+            </span>
+            .
+          </p>
+
+          <div className="space-y-2 text-[11px] text-slate-400 text-left rounded-2xl bg-slate-950/70 border border-slate-800 px-4 py-3">
+            <p className="font-semibold text-slate-100 mb-1">
+              Your account includes:
+            </p>
+            <ul className="space-y-1">
+              <li>• Online rent payments via Stripe</li>
+              <li>• Tenant and property management</li>
+              <li>• Maintenance request tracking + email alerts</li>
+              <li>• Document sharing with tenants</li>
+            </ul>
+          </div>
+
+          <button
+            onClick={goToSubscription}
+            className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+          >
+            Go to subscription settings
+          </button>
+
+          <button
+            onClick={handleSignOut}
+            className="w-full rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
+          >
+            Log out
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // If we're here: landlord exists AND subscription is ACTIVE → show full dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -260,18 +348,18 @@ export default function LandlordDashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
-            {/* Settings + subscription */}
+            {/* Settings */}
             <Link
               href="/landlord/settings"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
             >
-              Subscription & settings
+              Settings
             </Link>
 
             {/* Documents */}
             <Link
               href="/landlord/documents"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+              className="text-xs px-3 py-2 rounded-full border border-emerald-600 bg-slate-900 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
             >
               Documents
             </Link>
