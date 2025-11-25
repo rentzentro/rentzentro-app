@@ -96,7 +96,8 @@ export default function LandlordSettingsPage() {
     setSuccess(null);
 
     try {
-      const res = await fetch('/api/landlord/stripe-connect', {
+      // IMPORTANT: this route is /landlord/stripe-connect, NOT /api/...
+      const res = await fetch('/landlord/stripe-connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ landlordId: landlord.id }),
