@@ -152,22 +152,25 @@ export default function LandlordSettingsPage() {
         body: JSON.stringify({ landlordId: landlord.id }),
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error(
           data?.error ||
             `Unable to start subscription checkout (status ${res.status}).`
         );
       }
 
-      const data = await res.json();
-      if (!data.url) throw new Error('Missing checkout URL from server.');
+      if (!data.url) {
+        throw new Error('Missing checkout URL from server.');
+      }
 
       window.location.href = data.url;
     } catch (err: any) {
       console.error('Start subscription error:', err);
       setError(
-        err?.message || 'Failed to begin subscription checkout. Please try again.'
+        err?.message ||
+          'Failed to begin subscription checkout. Please try again.'
       );
     } finally {
       setStartingCheckout(false);
@@ -198,14 +201,17 @@ export default function LandlordSettingsPage() {
       );
     } catch (err: any) {
       console.error('Cancel subscription error:', err);
-      setError(err?.message || 'Failed to cancel subscription. Please try again.');
+      setError(
+        err?.message || 'Failed to cancel subscription. Please try again.'
+      );
     } finally {
       setCancelling(false);
     }
   };
 
   const handleRefreshStatus = () => {
-    window.location.href = '/landlord/settings';
+    // Just reload this page so it re-runs the Supabase load
+    window.location.reload();
   };
 
   const handleLogOut = async () => {
@@ -300,7 +306,9 @@ export default function LandlordSettingsPage() {
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
               <p className="text-2xl font-semibold text-slate-50">$29.95</p>
-              <p className="text-xs text-slate-300">per month • cancel anytime</p>
+              <p className="text-xs text-slate-300">
+                per month • cancel anytime
+              </p>
             </div>
             <div className="text-[11px] text-slate-300">
               <p className="flex items-center gap-1">
@@ -349,7 +357,9 @@ export default function LandlordSettingsPage() {
                   disabled={startingCheckout}
                   className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {startingCheckout ? 'Starting subscription…' : 'Subscribe for $29.95/mo'}
+                  {startingCheckout
+                    ? 'Starting subscription…'
+                    : 'Subscribe for $29.95/mo'}
                 </button>
               )}
 
@@ -377,8 +387,8 @@ export default function LandlordSettingsPage() {
           {isActive && (
             <div className="pt-2 border-t border-slate-800 mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[11px]">
               <p className="text-slate-400">
-                Your subscription is active. You can manage units, tenants, payments,
-                and maintenance from your dashboard.
+                Your subscription is active. You can manage units, tenants,
+                payments, and maintenance from your dashboard.
               </p>
               <button
                 type="button"
@@ -395,8 +405,8 @@ export default function LandlordSettingsPage() {
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-300 space-y-1">
           <p className="font-medium text-slate-100">Billing & support</p>
           <p>
-            If you have questions about your subscription or billing, contact RentZentro
-            support:
+            If you have questions about your subscription or billing, contact
+            RentZentro support:
           </p>
           <p className="text-emerald-300">rentzentro@gmail.com</p>
         </section>
