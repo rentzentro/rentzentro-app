@@ -39,7 +39,7 @@ const prettyStatus = (status: string | null) => {
 };
 
 // ---------- Component ----------
-export default function LandlordSettingsPage() {
+export default function LandlordSubscriptionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -210,7 +210,7 @@ export default function LandlordSettingsPage() {
   };
 
   const handleRefreshStatus = () => {
-    // Just reload this page so it re-runs the Supabase load
+    // Reload this page so it re-runs the Supabase load
     window.location.reload();
   };
 
@@ -335,16 +335,20 @@ export default function LandlordSettingsPage() {
                 <span className="text-slate-500">Account email:</span>{' '}
                 <span className="text-slate-100">{landlord.email}</span>
               </p>
+
               <p>
                 <span className="text-slate-500">Subscription status:</span>{' '}
                 <span className={isActive ? 'text-emerald-300' : 'text-slate-100'}>
                   {prettyStatus(landlord.subscription_status)}
                 </span>
               </p>
+
               <p>
                 <span className="text-slate-500">Next billing date:</span>{' '}
                 <span className="text-slate-100">
-                  {formatDate(landlord.subscription_current_period_end)}
+                  {landlord.subscription_current_period_end
+                    ? formatDate(landlord.subscription_current_period_end)
+                    : 'Not available — renewal is handled automatically through Stripe'}
                 </span>
               </p>
             </div>
@@ -379,24 +383,18 @@ export default function LandlordSettingsPage() {
                 onClick={handleRefreshStatus}
                 className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-100 hover:bg-slate-800"
               >
-                Refresh subscription status
+                Refresh status
               </button>
             </div>
           </div>
 
           {isActive && (
-            <div className="pt-2 border-t border-slate-800 mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[11px]">
+            <div className="pt-2 border-t border-slate-800 mt-2 text-[11px]">
               <p className="text-slate-400">
-                Your subscription is active. You can manage units, tenants,
-                payments, and maintenance from your dashboard.
+                Your subscription is active and renews automatically each month
+                through Stripe. If the next billing date is not shown here, you
+                will still be billed on schedule.
               </p>
-              <button
-                type="button"
-                onClick={() => router.push('/landlord')}
-                className="rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
-              >
-                Go to landlord dashboard
-              </button>
             </div>
           )}
         </section>
