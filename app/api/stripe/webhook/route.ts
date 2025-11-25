@@ -50,13 +50,13 @@ export async function POST(req: Request) {
 
       const metadata = session.metadata ?? {};
 
-      // ✅ USE THE CORRECT KEYS
+      // ✅ USE THE CORRECT KEYS (snake_case)
       const tenantId = Number(metadata.tenant_id);
       const propertyId = metadata.property_id ? Number(metadata.property_id) : null;
       const landlordId = metadata.landlord_id ? Number(metadata.landlord_id) : null;
 
       if (!tenantId || Number.isNaN(tenantId)) {
-        console.error('[rent webhook] Missing tenant_id in metadata:', metadata);
+        console.error('[rent webhook] Missing or invalid tenant_id in metadata:', metadata);
         return NextResponse.json({ error: 'Missing tenant_id' }, { status: 400 });
       }
 
@@ -77,7 +77,6 @@ export async function POST(req: Request) {
         paidOn,
       });
 
-      // 🔥 Insert corrected payment row
       const { error: insertError } = await supabaseAdmin
         .from('payments')
         .insert({
@@ -92,6 +91,7 @@ export async function POST(req: Request) {
 
       if (insertError) {
         console.error('[rent webhook] Insert error:', insertError);
+        return NextResponse.json({ error: 'Insert failed' }, { status: 500 });
       }
     }
 
