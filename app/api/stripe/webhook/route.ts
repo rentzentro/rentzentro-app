@@ -4,157 +4,100 @@ import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-// Stripe client
+// Stripe init
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: '2024-06-20' as any,
 });
 
-// Supabase (service role so RLS will NOT block inserts)
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-const ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET as string;
+// Supabase admin client (bypasses RLS)
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  process.env.SUPABASE_SERVICE_ROLE_KEY as string
+);
 
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+const ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET as string;
 
 export async function POST(req: Request) {
   if (!ENDPOINT_SECRET) {
-    console.error('Missing STRIPE_WEBHOOK_SECRET env var');
-    return NextResponse.json(
-      { error: 'Webhook secret not configured.' },
-      { status: 500 }
-    );
+    console.error('Missing STRIPE_WEBHOOK_SECRET');
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 });
   }
 
-  const headerStore = headers();
-  const sig = headerStore.get('stripe-signature');
+  const rawBody = await req.text();
+  const sig = headers().get('stripe-signature');
 
   if (!sig) {
-    return NextResponse.json(
-      { error: 'Missing Stripe signature header.' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Missing stripe-signature' }, { status: 400 });
   }
 
   let event: Stripe.Event;
 
   try {
-    const rawBody = await req.text();
     event = stripe.webhooks.constructEvent(rawBody, sig, ENDPOINT_SECRET);
   } catch (err: any) {
-    console.error('Stripe rent webhook signature verification failed:', err);
-    return NextResponse.json(
-      { error: 'Webhook signature verification failed.' },
-      { status: 400 }
-    );
+    console.error('Stripe webhook signature fail:', err);
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
   try {
-    switch (event.type) {
-      case 'checkout.session.completed': {
-        const session = event.data.object as Stripe.Checkout.Session;
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
 
-        // Only capture one-time rent payments (not subscriptions)
-        if (session.mode !== 'payment') {
-          console.log(
-            '[rent webhook] checkout.session.completed with mode != payment, ignoring'
-          );
-          break;
-        }
-
-        const metadata = session.metadata || {};
-
-        const tenantIdStr = metadata.tenantId;
-        const propertyIdStr = metadata.propertyId;
-        const description =
-          (metadata.description as string | undefined) || 'Rent payment';
-
-        if (!tenantIdStr) {
-          console.warn(
-            '[rent webhook] checkout.session.completed missing tenantId metadata'
-          );
-          break;
-        }
-
-        const tenantId = Number(tenantIdStr);
-        const propertyId =
-          propertyIdStr != null && propertyIdStr !== ''
-            ? Number(propertyIdStr)
-            : null;
-
-        if (Number.isNaN(tenantId)) {
-          console.warn(
-            '[rent webhook] Invalid tenantId in metadata:',
-            tenantIdStr
-          );
-          break;
-        }
-
-        if (propertyId != null && Number.isNaN(propertyId)) {
-          console.warn(
-            '[rent webhook] Invalid propertyId in metadata:',
-            propertyIdStr
-          );
-          break;
-        }
-
-        const amountTotal = session.amount_total; // in cents
-        if (!amountTotal) {
-          console.warn(
-            '[rent webhook] checkout.session.completed has no amount_total'
-          );
-          break;
-        }
-
-        // Store amount as whole dollars (matches your int column)
-        const amount = Math.round(amountTotal / 100);
-
-        // Use "today" as paid_on (date only)
-        const paidOn = new Date().toISOString().slice(0, 10);
-
-        console.log('[rent webhook] inserting payment row', {
-          tenantId,
-          propertyId,
-          amount,
-          paidOn,
-          description,
-        });
-
-        const { error: insertError } = await supabaseAdmin
-          .from('payments')
-          .insert([
-            {
-              tenant_id: tenantId,
-              property_id: propertyId,
-              amount,
-              paid_on: paidOn,
-              method: 'card',
-              note: description,
-            },
-          ]);
-
-        if (insertError) {
-          console.error(
-            '[rent webhook] Error inserting payment into payments table:',
-            insertError
-          );
-        }
-
-        break;
+      if (session.mode !== 'payment') {
+        console.log('[rent webhook] non-payment session, ignoring');
+        return NextResponse.json({ received: true });
       }
 
-      default:
-        console.log('[rent webhook] Unhandled event type:', event.type);
+      const metadata = session.metadata ?? {};
+
+      // ✅ USE THE CORRECT KEYS
+      const tenantId = Number(metadata.tenant_id);
+      const propertyId = metadata.property_id ? Number(metadata.property_id) : null;
+      const landlordId = metadata.landlord_id ? Number(metadata.landlord_id) : null;
+
+      if (!tenantId || Number.isNaN(tenantId)) {
+        console.error('[rent webhook] Missing tenant_id in metadata:', metadata);
+        return NextResponse.json({ error: 'Missing tenant_id' }, { status: 400 });
+      }
+
+      const amountCents = session.amount_total;
+      if (!amountCents) {
+        console.error('[rent webhook] No amount_total');
+        return NextResponse.json({ error: 'Missing amount' }, { status: 400 });
+      }
+
+      const amount = Math.round(amountCents / 100);
+      const paidOn = new Date().toISOString().slice(0, 10);
+
+      console.log('[rent webhook] inserting payment:', {
+        tenantId,
+        propertyId,
+        landlordId,
+        amount,
+        paidOn,
+      });
+
+      // 🔥 Insert corrected payment row
+      const { error: insertError } = await supabaseAdmin
+        .from('payments')
+        .insert({
+          tenant_id: tenantId,
+          property_id: propertyId,
+          owner_id: landlordId, // landlord link
+          amount,
+          paid_on: paidOn,
+          method: 'card',
+          note: 'Rent payment',
+        });
+
+      if (insertError) {
+        console.error('[rent webhook] Insert error:', insertError);
+      }
     }
 
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err: any) {
-    console.error('[rent webhook] Unexpected error handling event:', err);
-    return NextResponse.json(
-      {
-        error:
-          err?.message || 'Unexpected error while handling rent webhook event.',
-      },
-      { status: 500 }
-    );
+    console.error('[rent webhook] error:', err);
+    return NextResponse.json({ error: err?.message || 'Webhook error' }, { status: 500 });
   }
 }
