@@ -433,99 +433,27 @@ export default function HomePage() {
 
         {/* Contact Us */}
         <section className="mb-8 border-t border-slate-900 pt-6">
-          <div className="grid gap-6 md:grid-cols-[1.2fr,1.5fr] md:items-start">
-            {/* Text block */}
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Contact RentZentro
-              </p>
-              <h2 className="text-sm font-semibold text-slate-50">
-                Questions about getting started?
-              </h2>
-              <p className="mt-2 text-[11px] text-slate-400 max-w-sm">
-                Whether you manage a single-unit rental or a small portfolio,
-                we&apos;re happy to walk you through RentZentro and help you
-                decide if it&apos;s a fit.
-              </p>
+          <div className="max-w-xl">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Contact RentZentro
+            </p>
+            <h2 className="text-sm font-semibold text-slate-50">
+              Questions about RentZentro or getting started?
+            </h2>
+            <p className="mt-2 text-[11px] text-slate-400">
+              If you&apos;re a landlord or property manager and want to see if
+              RentZentro is a fit for your rentals, send us a quick email and
+              we&apos;ll be happy to help.
+            </p>
 
-              <div className="mt-4 space-y-1 text-[11px]">
-                <p className="text-slate-300 font-medium">Email</p>
-                <a
-                  href="mailto:info@rentzentro.com"
-                  className="text-emerald-300 hover:text-emerald-200 underline underline-offset-2"
-                >
-                  info@rentzentro.com
-                </a>
-              </div>
-            </div>
-
-            {/* Simple form (not wired to backend yet) */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <form className="space-y-3">
-                <div>
-                  <label
-                    htmlFor="contact-name"
-                    className="block text-[11px] font-medium text-slate-300"
-                  >
-                    Name
-                  </label>
-                  <input
-                    id="contact-name"
-                    type="text"
-                    placeholder="Your name"
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] text-slate-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="contact-email"
-                    className="block text-[11px] font-medium text-slate-300"
-                  >
-                    Email
-                  </label>
-                  <input
-                    id="contact-email"
-                    type="email"
-                    placeholder="you@example.com"
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] text-slate-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="contact-message"
-                    className="block text-[11px] font-medium text-slate-300"
-                  >
-                    Message
-                  </label>
-                  <textarea
-                    id="contact-message"
-                    rows={4}
-                    placeholder="Tell us a bit about your rentals or what you’re looking for."
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] text-slate-100 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="inline-flex w-full items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-[11px] font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-slate-950"
-                >
-                  Send message
-                </button>
-
-                <p className="text-[10px] text-slate-500">
-                  This form is for general inquiries. For account or billing
-                  issues, email{' '}
-                  <a
-                    href="mailto:info@rentzentro.com"
-                    className="text-emerald-300 hover:text-emerald-200 underline underline-offset-2"
-                  >
-                    info@rentzentro.com
-                  </a>
-                  .
-                </p>
-              </form>
+            <div className="mt-4 space-y-1 text-[11px]">
+              <p className="text-slate-300 font-medium">Email</p>
+              <a
+                href="mailto:info@rentzentro.com"
+                className="text-emerald-300 hover:text-emerald-200 underline underline-offset-2"
+              >
+                info@rentzentro.com
+              </a>
             </div>
           </div>
         </section>
