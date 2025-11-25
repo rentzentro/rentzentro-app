@@ -18,7 +18,6 @@ export async function POST(req: Request) {
   // Read webhook secret at runtime
   const endpointSecret = process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET;
 
-  // 🔍 DEBUG: Log if the secret is visible at all
   console.log(
     'DEBUG SUBSCRIPTION WEBHOOK SECRET PRESENT:',
     endpointSecret ? 'YES' : 'NO'
@@ -49,7 +48,7 @@ export async function POST(req: Request) {
     const rawBody = await req.text();
     event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
   } catch (err: any) {
-    console.error('Stripe webhook signature verification failed:', err);
+    console.error('Stripe subscription webhook signature verification failed:', err);
     return NextResponse.json(
       { error: 'Webhook signature verification failed.' },
       { status: 400 }
@@ -59,7 +58,7 @@ export async function POST(req: Request) {
   try {
     switch (event.type) {
       // ------------------------------------------------
-      // 1) Checkout session completed
+      // 1) Checkout session completed (subscription checkout)
       // ------------------------------------------------
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -68,7 +67,7 @@ export async function POST(req: Request) {
         const customerId = session.customer as string | null;
         const subscriptionId = session.subscription as string | null;
 
-        console.log('checkout.session.completed', {
+        console.log('[subscription webhook] checkout.session.completed', {
           landlordIdStr,
           customerId,
           subscriptionId,
@@ -77,14 +76,17 @@ export async function POST(req: Request) {
         // If this is an old session without metadata, just log & ACK.
         if (!landlordIdStr || !customerId || !subscriptionId) {
           console.warn(
-            'Old/invalid checkout.session.completed (missing landlordId/customerId/subscriptionId). Acking anyway.'
+            '[subscription webhook] Old/invalid checkout.session.completed (missing landlordId/customerId/subscriptionId). Acking anyway.'
           );
           break;
         }
 
         const landlordId = Number(landlordIdStr);
         if (!Number.isFinite(landlordId)) {
-          console.warn('Invalid landlordId in metadata:', landlordIdStr);
+          console.warn(
+            '[subscription webhook] Invalid landlordId in metadata:',
+            landlordIdStr
+          );
           break;
         }
 
@@ -94,13 +96,13 @@ export async function POST(req: Request) {
           .update({
             stripe_customer_id: customerId,
             stripe_subscription_id: subscriptionId,
-            // status & period end set later by subscription.updated
+            // status & period end set later by subscription.created/updated
           })
           .eq('id', landlordId);
 
         if (updateError) {
           console.error(
-            'Error updating landlord on checkout.session.completed:',
+            '[subscription webhook] Error updating landlord on checkout.session.completed:',
             updateError
           );
         }
@@ -109,8 +111,10 @@ export async function POST(req: Request) {
       }
 
       // ------------------------------------------------
-      // 2) Subscription updated or deleted
+      // 2) Subscription created/updated/deleted
+      //    This is where we actually set status + period end
       // ------------------------------------------------
+      case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription;
@@ -127,7 +131,7 @@ export async function POST(req: Request) {
             ? new Date(currentPeriodEndUnix * 1000).toISOString()
             : null;
 
-        console.log('subscription event', {
+        console.log('[subscription webhook] subscription event', {
           type: event.type,
           customerId,
           status,
@@ -144,7 +148,7 @@ export async function POST(req: Request) {
 
         if (landlordError) {
           console.error(
-            'Error finding landlord for subscription webhook:',
+            '[subscription webhook] Error finding landlord for subscription webhook:',
             landlordError
           );
           break;
@@ -152,7 +156,7 @@ export async function POST(req: Request) {
 
         if (!landlord) {
           console.warn(
-            'No landlord found for stripe_customer_id in subscription webhook:',
+            '[subscription webhook] No landlord found for stripe_customer_id:',
             customerId
           );
           break;
@@ -169,7 +173,7 @@ export async function POST(req: Request) {
 
         if (updateError) {
           console.error(
-            'Error updating landlord subscription fields:',
+            '[subscription webhook] Error updating landlord subscription fields:',
             updateError
           );
         }
@@ -178,7 +182,9 @@ export async function POST(req: Request) {
       }
 
       default: {
-        console.log(`Unhandled Stripe event type: ${event.type}`);
+        console.log(
+          `[subscription webhook] Unhandled Stripe event type: ${event.type}`
+        );
       }
     }
 

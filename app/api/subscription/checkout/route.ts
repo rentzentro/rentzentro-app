@@ -1,3 +1,4 @@
+// app/api/subscription/checkout/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
@@ -93,6 +94,7 @@ export async function POST(req: Request) {
       ],
       success_url: `${APP_URL}/landlord/settings?billing=success`,
       cancel_url: `${APP_URL}/landlord/settings?billing=cancelled`,
+      // 🔑 This metadata is what your webhook reads
       metadata: {
         landlordId: String(landlord.id),
       },
