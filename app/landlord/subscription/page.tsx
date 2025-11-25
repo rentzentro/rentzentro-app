@@ -348,7 +348,7 @@ export default function LandlordSubscriptionPage() {
                 <span className="text-slate-100">
                   {landlord.subscription_current_period_end
                     ? formatDate(landlord.subscription_current_period_end)
-                    : 'Not available — renewal is handled automatically through Stripe'}
+                    : 'Subscription renewal is handled automatically through Stripe'}
                 </span>
               </p>
             </div>
