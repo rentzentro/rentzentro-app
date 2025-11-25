@@ -36,7 +36,8 @@ export default function LandlordLoginPage() {
 
       if (signInError) throw signInError;
 
-      router.push('/landlord/settings');
+      // ✅ ALWAYS go through verify-account now
+      router.push('/landlord/verify-account');
     } catch (err: any) {
       console.error(err);
       setError(
@@ -94,7 +95,7 @@ export default function LandlordLoginPage() {
           Landlord login
         </h1>
         <p className="text-xs text-slate-400 mb-4">
-          Sign in to view your dashboard, properties, tenants, and payments.
+          Sign in to manage your RentZentro account.
         </p>
 
         {error && (
