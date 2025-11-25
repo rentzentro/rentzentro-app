@@ -406,7 +406,7 @@ export default function LandlordSubscriptionPage() {
             If you have questions about your subscription or billing, contact
             RentZentro support:
           </p>
-          <p className="text-emerald-300">rentzentro@gmail.com</p>
+          <p className="text-emerald-300">support@rentzentro.com</p>
         </section>
       </div>
     </main>
