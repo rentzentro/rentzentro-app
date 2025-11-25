@@ -1,9 +1,22 @@
 // app/landlord/stripe-connect/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { supabase } from '../../supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
-// ---- Stripe client ----
+// ---------- Supabase (admin) ----------
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error(
+    'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars.'
+  );
+}
+
+// This client bypasses RLS and is ONLY used on the server
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+// ---------- Stripe ----------
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
 if (!stripeSecretKey) {
@@ -12,7 +25,7 @@ if (!stripeSecretKey) {
   );
 }
 
-// No apiVersion here -> no red underline, Stripe uses your account's default version
+// No apiVersion here – Stripe uses your account’s default
 const stripe = new Stripe(stripeSecretKey);
 
 // Base domain for redirect after onboarding
@@ -30,8 +43,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Load landlord so we have email + any existing Stripe account
-    const { data: landlord, error: landlordError } = await supabase
+    // Use admin client so RLS doesn't block reading the landlord row
+    const { data: landlord, error: landlordError } = await supabaseAdmin
       .from('landlords')
       .select(
         'id, email, stripe_connect_account_id, stripe_connect_onboarded'
@@ -48,6 +61,7 @@ export async function POST(req: Request) {
     }
 
     if (!landlord) {
+      console.error('No landlord row for id:', landlordId);
       return NextResponse.json(
         { error: 'Landlord not found.' },
         { status: 404 }
@@ -70,7 +84,8 @@ export async function POST(req: Request) {
 
       accountId = account.id;
 
-      const { error: updateError } = await supabase
+      // Save Stripe account ID on landlord (admin client, so no RLS issues)
+      const { error: updateError } = await supabaseAdmin
         .from('landlords')
         .update({
           stripe_connect_account_id: accountId,
@@ -79,11 +94,11 @@ export async function POST(req: Request) {
 
       if (updateError) {
         console.error('Error saving Stripe account ID:', updateError);
-        // Not fatal for onboarding, we can still continue
+        // Not fatal; onboarding link will still work
       }
     }
 
-    // Create an onboarding link for payouts setup / manage
+    // Create an onboarding link for payouts setup / management
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${DOMAIN}/landlord/stripe-connect/complete?refresh=1`,
