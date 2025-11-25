@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
 
 // ---------- Types ----------
@@ -245,29 +244,39 @@ export default function LandlordSettingsPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto max-w-3xl space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-2">
+        {/* Header with top buttons */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <button
-              type="button"
-              onClick={() => router.push('/')}
-              className="text-[11px] text-slate-500 hover:text-emerald-300"
-            >
-              ← Back to homepage
-            </button>
-            <h1 className="mt-1 text-xl font-semibold text-slate-50">
+            <h1 className="text-xl font-semibold text-slate-50">
               Account & subscription
             </h1>
             <p className="text-xs text-slate-400">
               Manage your RentZentro landlord plan and billing.
             </p>
           </div>
-          <button
-            onClick={handleLogOut}
-            className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
-          >
-            Log out
-          </button>
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+            >
+              Back to homepage
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push('/landlord')}
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+            >
+              Back to dashboard
+            </button>
+            <button
+              type="button"
+              onClick={handleLogOut}
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+            >
+              Log out
+            </button>
+          </div>
         </div>
 
         {/* Alerts */}
@@ -391,15 +400,6 @@ export default function LandlordSettingsPage() {
           </p>
           <p className="text-emerald-300">rentzentro@gmail.com</p>
         </section>
-
-        <div className="pt-2">
-          <Link
-            href="/landlord"
-            className="text-[11px] text-slate-500 hover:text-emerald-300"
-          >
-            ← Back to dashboard
-          </Link>
-        </div>
       </div>
     </main>
   );
