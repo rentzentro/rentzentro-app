@@ -18,7 +18,7 @@ export default function HomePage() {
                 RentZentro
               </p>
               <p className="text-[11px] text-slate-400">
-                Simple rent + maintenance for small landlords
+                Confidence, simplicity, and control for every landlord.
               </p>
             </div>
           </div>
