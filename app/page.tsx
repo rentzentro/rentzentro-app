@@ -440,13 +440,7 @@ export default function HomePage() {
             <h2 className="text-sm font-semibold text-slate-50">
               Questions about RentZentro or getting started?
             </h2>
-            <p className="mt-2 text-[11px] text-slate-400">
-              If you&apos;re a landlord or property manager and want to see if
-              RentZentro is a fit for your rentals, send us a quick email and
-              we&apos;ll be happy to help.
-            </p>
-
-            <div className="mt-4 space-y-1 text-[11px]">
+             <div className="mt-4 space-y-1 text-[11px]">
               <p className="text-slate-300 font-medium">Email</p>
               <a
                 href="mailto:info@rentzentro.com"
