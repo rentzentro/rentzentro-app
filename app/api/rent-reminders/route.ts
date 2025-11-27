@@ -5,324 +5,175 @@ import { Resend } from 'resend';
 
 export const runtime = 'nodejs';
 
-// ---------- Supabase (admin) ----------
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.SUPABASE_SERVICE_ROLE_KEY as string
-);
+// --- Supabase admin client ---
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 
-// ---------- Resend (email) ----------
-const resendApiKey = process.env.RESEND_API_KEY;
-const defaultFromEmail =
+const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+// --- Email setup (same stack as maintenance emails) ---
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const FROM_EMAIL =
   process.env.RENTZENTRO_FROM_EMAIL || 'no-reply@rentzentro.com';
 
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
-// ---------- Types ----------
-type PropertyRow = {
-  id: number;
-  name: string | null;
-  unit_label: string | null;
-  next_due_date: string | null; // ISO date string (YYYY-MM-DD or ISO)
-  owner_id: number | null;
-};
-
-type TenantRow = {
-  id: number;
-  name: string | null;
-  email: string;
-  status: string | null;
-  property_id: number | null;
-  monthly_rent: number | null;
-};
-
-type LandlordRow = {
-  id: number;
-  name: string | null;
-  email: string;
-};
-
-// ---------- Helpers ----------
-function todayDateStringUTC() {
-  const now = new Date();
-  // Use UTC date portion (YYYY-MM-DD)
-  return now.toISOString().slice(0, 10);
-}
-
-function normalizeDateOnly(value: string | null): string | null {
-  if (!value) return null;
-  // If already just YYYY-MM-DD, return as-is
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  // Otherwise, assume ISO and slice
-  return value.slice(0, 10);
-}
-
-function daysDifference(from: string, to: string): number {
-  const a = new Date(from + 'T00:00:00Z').getTime();
-  const b = new Date(to + 'T00:00:00Z').getTime();
-  const diffMs = b - a;
-  return Math.round(diffMs / (1000 * 60 * 60 * 24));
-}
-
-function formatCurrency(amount: number | null): string {
-  if (amount == null || Number.isNaN(amount)) return '';
-  return `$${amount.toFixed(2)}`;
-}
-
-// ---------- Email builder ----------
-function buildEmailForTenant(opts: {
-  tenant: TenantRow;
-  property: PropertyRow;
-  landlord: LandlordRow | null;
-  dueDate: string;
-  isPastDue: boolean;
-  daysLate: number;
-}) {
-  const { tenant, property, landlord, dueDate, isPastDue, daysLate } = opts;
-
-  const tenantName = tenant.name || 'Tenant';
-  const propName = property.name || 'your rental';
-  const unit = property.unit_label ? ` · ${property.unit_label}` : '';
-  const rentAmount = formatCurrency(tenant.monthly_rent);
-  const prettyDue = new Date(dueDate + 'T00:00:00Z').toLocaleDateString(
-    'en-US',
-    { year: 'numeric', month: 'long', day: 'numeric' }
-  );
-
-  const subject = isPastDue
-    ? `Rent past due for ${propName}${unit}`
-    : `Rent due today for ${propName}${unit}`;
-
-  const introLine = isPastDue
-    ? `Our records show your rent payment for ${propName}${unit} is past due.`
-    : `This is a reminder that your rent payment for ${propName}${unit} is due today.`;
-
-  const lateLine = isPastDue
-    ? `As of today, this payment is ${daysLate} day${
-        daysLate === 1 ? '' : 's'
-      } late.`
-    : '';
-
-  const amountLine = rentAmount
-    ? `Expected monthly rent: ${rentAmount}.`
-    : 'Please refer to your lease for the expected rent amount.';
-
-  const landlordLine = landlord
-    ? `If you’ve already paid, you can ignore this message. Otherwise, please submit your payment as soon as possible or contact your landlord, ${landlord.name || landlord.email}, with any questions.`
-    : `If you’ve already paid, you can ignore this message. Otherwise, please submit your payment as soon as possible or contact your landlord with any questions.`;
-
-  const text = [
-    `${tenantName},`,
-    '',
-    introLine,
-    '',
-    `Due date on file: ${prettyDue}.`,
-    lateLine,
-    '',
-    amountLine,
-    '',
-    'You can pay your rent securely through your RentZentro tenant portal provided by your landlord.',
-    '',
-    landlordLine,
-    '',
-    '— RentZentro automated reminder',
-  ]
-    .filter(Boolean)
-    .join('\n');
-
-  return { subject, text };
-}
-
-// ---------- Main handler ----------
-export async function POST(req: Request) {
+export async function POST() {
   try {
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+      console.error('[rent-reminders] Supabase env vars missing');
+      return NextResponse.json(
+        { error: 'Server not configured for Supabase.' },
+        { status: 500 }
+      );
+    }
+
     if (!resend) {
-      console.error('[rent-reminders] RESEND_API_KEY is not configured');
+      console.error('[rent-reminders] RESEND_API_KEY missing');
       return NextResponse.json(
         { error: 'Email service not configured.' },
         { status: 500 }
       );
     }
 
-    const today = todayDateStringUTC();
+    // Use pure date string (no time zone) for comparison
+    const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
 
-    // 1) Find all properties with next_due_date <= today
-    const { data: properties, error: propsError } = await supabaseAdmin
+    // 1) Find properties with rent due today or earlier
+    const { data: dueProperties, error: propsError } = await supabaseAdmin
       .from('properties')
-      .select('id, name, unit_label, next_due_date, owner_id')
-      .not('next_due_date', 'is', null)
+      .select('id, name, unit_label, monthly_rent, next_due_date, owner_id')
+      .eq('status', 'current')
       .lte('next_due_date', today);
 
     if (propsError) {
       console.error('[rent-reminders] Error loading properties:', propsError);
       return NextResponse.json(
-        { error: 'Failed to load due properties.' },
+        { error: 'Failed to load properties.' },
         { status: 500 }
       );
     }
 
-    if (!properties || properties.length === 0) {
-      console.log(
-        '[rent-reminders] No properties with rent due or past due today.'
-      );
+    if (!dueProperties || dueProperties.length === 0) {
+      console.log('[rent-reminders] No properties due on or before', today);
       return NextResponse.json(
-        { message: 'No rent reminders to send today.' },
+        { message: 'Success: No active tenants to notify' },
         { status: 200 }
       );
     }
 
-    const normalizedProps: PropertyRow[] = properties.map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      unit_label: p.unit_label,
-      next_due_date: normalizeDateOnly(p.next_due_date),
-      owner_id: p.owner_id,
-    }));
+    const propertyIds = dueProperties.map((p) => p.id);
 
-    const propertyIds = normalizedProps.map((p) => p.id);
-    const landlordIds = Array.from(
-      new Set(
-        normalizedProps
-          .map((p) => p.owner_id)
-          .filter((id): id is number => typeof id === 'number')
-      )
-    );
-
-    // 2) Load landlords in one query
-    const landlordsMap = new Map<number, LandlordRow>();
-    if (landlordIds.length > 0) {
-      const { data: landlords, error: landlordsError } = await supabaseAdmin
-        .from('landlords')
-        .select('id, name, email')
-        .in('id', landlordIds);
-
-      if (landlordsError) {
-        console.error(
-          '[rent-reminders] Error loading landlords:',
-          landlordsError
-        );
-      } else if (landlords) {
-        for (const l of landlords) {
-          landlordsMap.set(l.id, {
-            id: l.id,
-            name: l.name,
-            email: l.email,
-          });
-        }
-      }
-    }
-
-    // 3) Load tenants for those properties
+    // 2) Load tenants on those properties who are "current" and have an email
     const { data: tenants, error: tenantsError } = await supabaseAdmin
       .from('tenants')
-      .select('id, name, email, status, property_id, monthly_rent')
-      .in('property_id', propertyIds);
+      .select('id, name, email, status, monthly_rent, property_id')
+      .in('property_id', propertyIds)
+      .eq('status', 'current')
+      .not('email', 'is', null)
+      .neq('email', '');
 
     if (tenantsError) {
       console.error('[rent-reminders] Error loading tenants:', tenantsError);
       return NextResponse.json(
-        { error: 'Failed to load tenants for due properties.' },
+        { error: 'Failed to load tenants.' },
         { status: 500 }
       );
     }
 
     if (!tenants || tenants.length === 0) {
       console.log(
-        '[rent-reminders] No tenants found for due properties; nothing to email.'
+        '[rent-reminders] Properties due, but no current tenants with email.'
       );
       return NextResponse.json(
-        { message: 'No tenants to notify.' },
+        { message: 'Success: No active tenants to notify' },
         { status: 200 }
       );
     }
 
-    // Optional: filter to "active" tenants if you use a status field
-    const activeTenants: TenantRow[] = tenants.filter((t: any) => {
-      if (!t.email) return false;
-      if (!t.property_id) return false;
-      // If you have specific statuses like 'active', 'moved_out', adjust here
-      if (!t.status) return true;
-      return t.status.toLowerCase() === 'active';
-    });
-
-    if (activeTenants.length === 0) {
-      console.log(
-        '[rent-reminders] No active tenants with email addresses found.'
-      );
-      return NextResponse.json(
-        { message: 'No active tenants to notify.' },
-        { status: 200 }
-      );
+    // Quick lookup for property info by id
+    const propertyById = new Map<number, any>();
+    for (const p of dueProperties) {
+      propertyById.set(p.id as number, p);
     }
 
-    // 4) Map properties by id for quick lookup
-    const propsMap = new Map<number, PropertyRow>();
-    for (const p of normalizedProps) {
-      propsMap.set(p.id, p);
-    }
+    // 3) Send emails (one per tenant)
+    let successCount = 0;
+    let failCount = 0;
 
-    // 5) Send emails
-    let sentCount = 0;
-    const todayStr = today;
+    for (const t of tenants) {
+      const email = (t.email || '').trim();
+      if (!email) continue;
 
-    for (const tenant of activeTenants) {
-      const prop = tenant.property_id
-        ? propsMap.get(tenant.property_id)
-        : undefined;
+      const prop = t.property_id
+        ? propertyById.get(t.property_id as number)
+        : null;
 
-      if (!prop || !prop.next_due_date) continue;
+      const propertyName =
+        prop?.name || 'your rental unit';
+      const unitLabel = prop?.unit_label ? ` · ${prop.unit_label}` : '';
+      const rentAmount =
+        t.monthly_rent ?? prop?.monthly_rent ?? null;
+      const dueDate = prop?.next_due_date || today; // fallback
 
-      const dueDate = prop.next_due_date;
-      const diffDays = daysDifference(dueDate, todayStr);
+      const subject = `Rent reminder for ${propertyName}${unitLabel}`;
+      const friendlyAmount = rentAmount
+        ? `$${Number(rentAmount).toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`
+        : 'your monthly rent';
 
-      // dueDate > todayStr should not happen because we filtered <= today,
-      // but guard anyway.
-      if (diffDays < 0) continue;
-
-      const isPastDue = dueDate < todayStr;
-      const landlord =
-        prop.owner_id != null ? landlordsMap.get(prop.owner_id) || null : null;
-
-      const { subject, text } = buildEmailForTenant({
-        tenant,
-        property: prop,
-        landlord,
-        dueDate,
-        isPastDue,
-        daysLate: isPastDue ? diffDays : 0,
+      const friendlyDate = new Date(dueDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
       });
 
+      const html = `
+        <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.5; color: #0f172a;">
+          <h2 style="color:#022c22;">Rent reminder from RentZentro</h2>
+          <p>Hi ${t.name || 'there'},</p>
+          <p>This is a friendly reminder that your rent for
+            <strong>${propertyName}${unitLabel}</strong>
+            is due on <strong>${friendlyDate}</strong>.</p>
+          <p>Amount due: <strong>${friendlyAmount}</strong></p>
+          <p>If your landlord has enabled online payments, you can pay securely through your RentZentro tenant portal.</p>
+          <p style="margin-top:16px;">If you&apos;ve already paid, you can ignore this message.</p>
+          <p style="margin-top:24px; font-size:12px; color:#64748b;">
+            Sent by RentZentro on behalf of your landlord.
+          </p>
+        </div>
+      `;
+
       try {
-        await resend.emails.send({
-          from: defaultFromEmail,
-          to: [tenant.email],
+        const result = await resend.emails.send({
+          from: FROM_EMAIL,
+          to: email,
           subject,
-          text,
+          html,
         });
 
-        console.log('[rent-reminders] Sent reminder to tenant', {
-          tenantId: tenant.id,
-          tenantEmail: tenant.email,
-          propertyId: prop.id,
-          dueDate,
-          isPastDue,
-          daysLate: isPastDue ? diffDays : 0,
+        console.log('[rent-reminders] Email sent', {
+          tenantId: t.id,
+          email,
+          resultId: (result as any)?.id,
         });
 
-        sentCount += 1;
-      } catch (err) {
+        successCount++;
+      } catch (sendErr: any) {
         console.error(
-          '[rent-reminders] Error sending email to tenant',
-          tenant.email,
-          err
+          '[rent-reminders] Failed to send email to',
+          email,
+          sendErr
         );
+        failCount++;
       }
     }
 
     return NextResponse.json(
       {
-        message: `Rent reminders processed.`,
-        sent: sentCount,
+        message: `Reminder job completed. Emails sent: ${successCount}, failed: ${failCount}.`,
       },
       { status: 200 }
     );
@@ -332,7 +183,7 @@ export async function POST(req: Request) {
       {
         error:
           err?.message ||
-          'Unexpected error while sending rent reminders.',
+          'Unexpected error while running rent reminders.',
       },
       { status: 500 }
     );
