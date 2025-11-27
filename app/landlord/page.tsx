@@ -135,8 +135,15 @@ export default function LandlordDashboardPage() {
         const landlordTyped = landlordRow as LandlordRow;
         setLandlord(landlordTyped);
 
-        // If subscription is NOT active, we stop here.
-        if ((landlordTyped.subscription_status || '').toLowerCase() !== 'active') {
+        // Decide if this landlord is considered "subscribed"
+        const statusLower = (landlordTyped.subscription_status || '').toLowerCase();
+        const isSubscribed =
+          statusLower === 'active' ||
+          statusLower === 'trialing' ||
+          statusLower === 'active_cancel_at_period_end';
+
+        // If subscription is NOT active / trialing / scheduled to cancel, we stop here.
+        if (!isSubscribed) {
           setLoading(false);
           return;
         }
@@ -274,8 +281,14 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // HARD GATE: subscription must be ACTIVE to see dashboard
-  if ((landlord.subscription_status || '').toLowerCase() !== 'active') {
+  // HARD GATE: subscription must be active / trialing / scheduled-to-cancel to see dashboard
+  const statusLower = (landlord.subscription_status || '').toLowerCase();
+  const isSubscribed =
+    statusLower === 'active' ||
+    statusLower === 'trialing' ||
+    statusLower === 'active_cancel_at_period_end';
+
+  if (!isSubscribed) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-3xl bg-slate-900/80 border border-amber-500/60 p-6 shadow-xl space-y-4 text-center">
@@ -325,7 +338,7 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // If we're here: landlord exists AND subscription is ACTIVE → show full dashboard
+  // If we're here: landlord exists AND subscription is considered active → show full dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
