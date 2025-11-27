@@ -21,9 +21,7 @@ export default function PrivacyPage() {
             Privacy Policy
           </h1>
           <p className="text-xs text-amber-300">
-            This template is for general information only and does not constitute
-            legal advice. You should have a qualified attorney review and adapt
-            this policy before launching RentZentro in production.
+
           </p>
         </header>
 

@@ -66,7 +66,7 @@ From your tenant portal you will be able to:
 If you weren't expecting this email, you can safely ignore it.
 
 – RentZentro
-Simple rent collection for small landlords.
+Simple rent collection for landlords.
     `.trim();
 
     const html = `

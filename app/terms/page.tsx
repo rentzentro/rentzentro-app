@@ -21,9 +21,7 @@ export default function TermsPage() {
             Terms of Service
           </h1>
           <p className="text-xs text-amber-300">
-            This template is for general information only and does not constitute
-            legal advice. You should have a qualified attorney review and adapt
-            these terms before launching RentZentro in production.
+
           </p>
         </header>
 
@@ -99,13 +97,7 @@ export default function TermsPage() {
             4. Fees, Billing, and Taxes
           </h2>
           <p>
-            <span className="font-semibold">Platform fees.</span> RentZentro
-            currently charges a platform fee equal to{' '}
-            <span className="font-semibold">2.5% of each successful card</span>{' '}
-            payment processed through the Service (the &quot;Transaction
-            Fee&quot;). Unless we have a separate written agreement with you,
-            the Transaction Fee is charged to the Landlord and is in addition to
-            any processing fees charged by Payment Processors.
+
           </p>
           <p>
             We may modify our pricing, including the Transaction Fee, in the

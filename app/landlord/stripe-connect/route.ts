@@ -79,7 +79,7 @@ export async function POST(req: Request) {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
-        business_type: 'individual', // simple default for small landlords
+        business_type: 'individual', // simple default for landlords
       });
 
       accountId = account.id;

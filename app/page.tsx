@@ -18,7 +18,7 @@ export default function HomePage() {
                 RentZentro
               </p>
               <p className="text-[11px] text-slate-400">
-                Confidence, simplicity, and control for every landlord.
+              Confidence, simplicity, and control for every landlord
               </p>
             </div>
           </div>
@@ -52,7 +52,7 @@ export default function HomePage() {
                   <span className="text-emerald-300">$29.95/mo</span>
                 </p>
                 <p className="text-[11px] text-emerald-100/80">
-                  Flat monthly price. Unlimited units, tenants, and maintenance
+                  Flat monthly price. Unlimited units, tenants, payments, and maintenance
                   requests.
                 </p>
                 <div className="mt-1 inline-flex items-center gap-2">
@@ -61,7 +61,7 @@ export default function HomePage() {
                     Powered by Stripe
                   </span>
                   <span className="text-[10px] text-emerald-100/80">
-                    Secure card payments for your tenants.
+                    Secure card & ACH rent payments for your tenants.
                   </span>
                 </div>
               </div>
@@ -84,9 +84,10 @@ export default function HomePage() {
                 Stop chasing rent. Start running your rentals like a business.
               </h1>
               <p className="mt-3 max-w-xl text-sm text-slate-400">
-                RentZentro gives small landlords a clean dashboard, tenant
-                portal, online card payments, and maintenance tracking—without
-                the corporate bloat.
+                RentZentro is software for landlords—not a management company.
+                Get a clean dashboard, tenant portal, online card & ACH rent payments,
+                automatic rent reminders, document sharing, and maintenance tracking
+                without the corporate bloat.
               </p>
             </div>
 
@@ -121,7 +122,7 @@ export default function HomePage() {
                     ✓
                   </span>
                   <p>
-                    See all units, rent statuses, and maintenance in one clean,
+                    See all units, rent statuses, and maintenance requests in one clean,
                     modern dashboard.
                   </p>
                 </div>
@@ -131,8 +132,9 @@ export default function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Tenants pay rent with card through Stripe. Payments log
-                    automatically to your activity.
+                    Tenants pay rent online with card or ACH through Stripe.
+                    Payments log automatically to your dashboard—RentZentro never
+                    holds your funds.
                   </p>
                 </div>
 
@@ -141,8 +143,8 @@ export default function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Maintenance requests hit your inbox and show up on your
-                    maintenance board instantly.
+                    Automatic rent reminders emailed to your tenants and maintenance requests that
+                    hit your inbox and show on your maintenance board instantly.
                   </p>
                 </div>
               </div>
@@ -158,7 +160,7 @@ export default function HomePage() {
                   </span>
                   <p>
                     Simple tenant portal to see rent due, payment history, and
-                    documents for the unit.
+                    shared documents—and pay rent online with card or bank (ACH).
                   </p>
                 </div>
 
@@ -167,8 +169,8 @@ export default function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Submit maintenance requests with details. Track status and
-                    see landlord notes.
+                    Submit maintenance requests with details, then track status and
+                    see landlord updates.
                   </p>
                 </div>
 
@@ -177,8 +179,8 @@ export default function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Access shared lease documents in one place, instead of
-                    digging through old email threads.
+                    Access files and important documents in one place instead
+                    of digging through old email threads.
                   </p>
                 </div>
               </div>
@@ -315,7 +317,7 @@ export default function HomePage() {
                         {
                           name: 'L. Rivera · 22 Pine · 3C',
                           amount: '$1,250',
-                          meta: 'Card • Yesterday · 4:27 PM',
+                          meta: 'ACH • Yesterday · 4:27 PM',
                         },
                         {
                           name: 'D. Chen · 7 Spruce · 2F',
@@ -406,8 +408,8 @@ export default function HomePage() {
                 1. Create your landlord account
               </p>
               <p className="text-[11px] text-slate-400">
-                Sign up, subscribe, and add your properties and tenants. It
-                takes minutes—not hours.
+                Sign up, subscribe, and add your properties and tenants. Turn on
+                online payments and reminders in minutes—not hours.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -415,8 +417,8 @@ export default function HomePage() {
                 2. Invite tenants & go live
               </p>
               <p className="text-[11px] text-slate-400">
-                RentZentro emails your tenants. They get a simple portal to pay
-                rent, view documents, and submit maintenance.
+                RentZentro emails your tenants. They get a simple portal to pay rent
+                by card or ACH, view documents, and submit maintenance requests.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -425,7 +427,7 @@ export default function HomePage() {
               </p>
               <p className="text-[11px] text-slate-400">
                 Log in once a day, check what&apos;s overdue, what&apos;s paid,
-                and what needs fixing. No more guessing.
+                and what needs fixing. RentZentro keeps the details organized.
               </p>
             </div>
           </div>
@@ -440,7 +442,7 @@ export default function HomePage() {
             <h2 className="text-sm font-semibold text-slate-50">
               Questions about RentZentro or getting started?
             </h2>
-             <div className="mt-4 space-y-1 text-[11px]">
+            <div className="mt-4 space-y-1 text-[11px]">
               <p className="text-slate-300 font-medium">Email</p>
               <a
                 href="mailto:info@rentzentro.com"
