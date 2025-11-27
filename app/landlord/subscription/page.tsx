@@ -18,9 +18,9 @@ type LandlordRow = {
 
 // ---------- Helpers ----------
 const formatDate = (iso: string | null) => {
-  if (!iso) return '-';
+  if (!iso) return null;
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '-';
+  if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -50,6 +50,10 @@ export default function LandlordSubscriptionPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+
+  // Extra: live cancellation date from Stripe (fallback if DB has null)
+  const [stripeCancelDate, setStripeCancelDate] = useState<string | null>(null);
+  const [loadingStripeDate, setLoadingStripeDate] = useState(false);
 
   // Load / create landlord from auth user
   useEffect(() => {
@@ -139,6 +143,43 @@ export default function LandlordSubscriptionPage() {
 
     load();
   }, [router, searchParams]);
+
+  // When we have a landlord, if they are scheduled to cancel and DB has no date,
+  // query Stripe directly to get the current_period_end.
+  useEffect(() => {
+    const fetchStripeCancelDate = async () => {
+      if (!landlord) return;
+
+      const isScheduledToCancel =
+        landlord.subscription_status === 'active_cancel_at_period_end';
+
+      const dbHasDate = !!landlord.subscription_current_period_end;
+
+      if (!isScheduledToCancel || dbHasDate) return;
+
+      setLoadingStripeDate(true);
+      try {
+        const res = await fetch('/api/subscription/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ landlordId: landlord.id }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok && data?.current_period_end) {
+          const formatted = formatDate(data.current_period_end);
+          if (formatted) setStripeCancelDate(formatted);
+        }
+      } catch (err) {
+        console.error('Error fetching Stripe subscription status:', err);
+      } finally {
+        setLoadingStripeDate(false);
+      }
+    };
+
+    fetchStripeCancelDate();
+  }, [landlord]);
 
   const handleStartSubscription = async () => {
     if (!landlord) return;
@@ -250,9 +291,8 @@ export default function LandlordSubscriptionPage() {
   const isActive =
     landlord.subscription_status === 'active' || isScheduledToCancel;
 
-  const dateLabel = landlord.subscription_current_period_end
-    ? formatDate(landlord.subscription_current_period_end)
-    : null;
+  const dbDateLabel = formatDate(landlord.subscription_current_period_end);
+  const effectiveDateLabel = stripeCancelDate || dbDateLabel;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -357,10 +397,12 @@ export default function LandlordSubscriptionPage() {
                     : 'Next billing date:'}
                 </span>{' '}
                 <span className="text-slate-100">
-                  {dateLabel
+                  {effectiveDateLabel
                     ? isScheduledToCancel
-                      ? `Scheduled to cancel on ${dateLabel}`
-                      : dateLabel
+                      ? `Scheduled to cancel on ${effectiveDateLabel}`
+                      : effectiveDateLabel
+                    : loadingStripeDate
+                    ? 'Loading cancellation date…'
                     : 'Not available — renewal is handled automatically through Stripe'}
                 </span>
               </p>
