@@ -5,11 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
 
-type ViewState =
-  | 'loading'
-  | 'no-landlord'
-  | 'redirecting'
-  | 'error';
+type ViewState = 'loading' | 'no-landlord' | 'redirecting' | 'error';
 
 export default function LandlordVerifyAccountPage() {
   const router = useRouter();
@@ -58,12 +54,21 @@ export default function LandlordVerifyAccountPage() {
           return;
         }
 
-        // 3) Check subscription status (best-effort, safe)
         const l: any = landlord;
-        const subscriptionStatus: string | undefined =
-          l.stripe_subscription_status || l.subscription_status;
+
+        // 3) Check subscription status (best-effort, safe)
+        const rawStatus: string = (
+          l.stripe_subscription_status ||
+          l.subscription_status ||
+          ''
+        )
+          .toString()
+          .toLowerCase();
+
         const isSubscribed: boolean =
-          subscriptionStatus === 'active' ||
+          rawStatus === 'active' ||
+          rawStatus === 'trialing' ||
+          rawStatus === 'active_cancel_at_period_end' ||
           l.is_subscribed === true ||
           l.subscription_active === true;
 
