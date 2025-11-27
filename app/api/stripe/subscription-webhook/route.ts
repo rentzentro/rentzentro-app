@@ -19,24 +19,43 @@ async function updateLandlordFromSubscription(
   subscription: Stripe.Subscription,
   contextLabel: string
 ) {
-  const status = subscription.status;
+  const rawStatus = subscription.status;
   // If Stripe says "cancel at period end", store a special status
   const effectiveStatus = subscription.cancel_at_period_end
     ? 'active_cancel_at_period_end'
-    : status;
+    : rawStatus;
 
-  // Stripe stores this as a unix timestamp (seconds)
-  const currentPeriodEndUnix =
+  // Try to get current_period_end from this subscription
+  let currentPeriodEnd: string | null = null;
+  let currentPeriodEndUnix =
     (subscription as any).current_period_end as number | null | undefined;
 
-  const currentPeriodEnd =
-    typeof currentPeriodEndUnix === 'number' && !Number.isNaN(currentPeriodEndUnix)
-      ? new Date(currentPeriodEndUnix * 1000).toISOString()
-      : null;
+  if (typeof currentPeriodEndUnix === 'number' && !Number.isNaN(currentPeriodEndUnix)) {
+    currentPeriodEnd = new Date(currentPeriodEndUnix * 1000).toISOString();
+  } else {
+    // Backup: fetch fresh subscription from Stripe to see if it has current_period_end
+    try {
+      const fresh = await stripe.subscriptions.retrieve(subscription.id);
+      currentPeriodEndUnix =
+        (fresh as any).current_period_end as number | null | undefined;
+
+      if (
+        typeof currentPeriodEndUnix === 'number' &&
+        !Number.isNaN(currentPeriodEndUnix)
+      ) {
+        currentPeriodEnd = new Date(currentPeriodEndUnix * 1000).toISOString();
+      }
+    } catch (err) {
+      console.error(
+        `[subscription webhook] (${contextLabel}) Error fetching fresh subscription for current_period_end:`,
+        err
+      );
+    }
+  }
 
   console.log(`[subscription webhook] ${contextLabel}`, {
     customerId,
-    status,
+    rawStatus,
     effectiveStatus,
     currentPeriodEndUnix,
     currentPeriodEnd,
@@ -65,13 +84,19 @@ async function updateLandlordFromSubscription(
     return;
   }
 
+  // Build update payload – only overwrite period_end if we actually have a value
+  const updatePayload: Record<string, any> = {
+    stripe_subscription_id: subscription.id,
+    subscription_status: effectiveStatus,
+  };
+
+  if (currentPeriodEnd) {
+    updatePayload.subscription_current_period_end = currentPeriodEnd;
+  }
+
   const { error: updateError } = await supabaseAdmin
     .from('landlords')
-    .update({
-      stripe_subscription_id: subscription.id,
-      subscription_status: effectiveStatus,
-      subscription_current_period_end: currentPeriodEnd,
-    })
+    .update(updatePayload)
     .eq('id', landlord.id);
 
   if (updateError) {
