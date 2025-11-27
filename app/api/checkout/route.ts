@@ -174,9 +174,10 @@ export async function POST(req: Request) {
       landlord.stripe_connect_account_id as string;
 
     // 7) Create Stripe Checkout Session that transfers funds to landlord
+    //    ACH added: allow both card + US bank account
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      payment_method_types: ['card'],
+      payment_method_types: ['card', 'us_bank_account'],
       line_items: [
         {
           quantity: 1,
@@ -206,6 +207,13 @@ export async function POST(req: Request) {
           destination: landlordStripeAccountId,
         },
         // If you ever want a per-payment platform fee, set application_fee_amount here.
+      },
+      // Optional but nice: lets Stripe show extra bank options if available
+      payment_method_options: {
+        us_bank_account: {
+          // Let Stripe handle verification automatically (default behavior)
+          verification_method: 'automatic',
+        },
       },
     });
 
