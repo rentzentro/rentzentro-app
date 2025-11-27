@@ -20,6 +20,10 @@ async function updateLandlordFromSubscription(
   contextLabel: string
 ) {
   const status = subscription.status;
+  // If Stripe says "cancel at period end", store a special status
+  const effectiveStatus = subscription.cancel_at_period_end
+    ? 'active_cancel_at_period_end'
+    : status;
 
   // Stripe stores this as a unix timestamp (seconds)
   const currentPeriodEndUnix =
@@ -33,8 +37,10 @@ async function updateLandlordFromSubscription(
   console.log(`[subscription webhook] ${contextLabel}`, {
     customerId,
     status,
+    effectiveStatus,
     currentPeriodEndUnix,
     currentPeriodEnd,
+    cancel_at_period_end: subscription.cancel_at_period_end,
   });
 
   const { data: landlord, error: landlordError } = await supabaseAdmin
@@ -63,7 +69,7 @@ async function updateLandlordFromSubscription(
     .from('landlords')
     .update({
       stripe_subscription_id: subscription.id,
-      subscription_status: status,
+      subscription_status: effectiveStatus,
       subscription_current_period_end: currentPeriodEnd,
     })
     .eq('id', landlord.id);

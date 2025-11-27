@@ -31,6 +31,7 @@ const formatDate = (iso: string | null) => {
 const prettyStatus = (status: string | null) => {
   if (!status) return 'Not subscribed';
   if (status === 'active') return 'Active';
+  if (status === 'active_cancel_at_period_end') return 'Active (scheduled to cancel)';
   if (status === 'trialing') return 'Trialing';
   if (status === 'past_due') return 'Past due';
   if (status === 'canceled') return 'Canceled';
@@ -197,7 +198,7 @@ export default function LandlordSubscriptionPage() {
       }
 
       setInfo(
-        'Your subscription will be cancelled at the end of the current billing period. You will keep access until Stripe ends the subscription.'
+        'Your subscription will stay active until the end of the current billing cycle, then cancel automatically.'
       );
     } catch (err: any) {
       console.error('Cancel subscription error:', err);
@@ -210,7 +211,6 @@ export default function LandlordSubscriptionPage() {
   };
 
   const handleRefreshStatus = () => {
-    // Reload this page so it re-runs the Supabase load
     window.location.reload();
   };
 
@@ -245,7 +245,14 @@ export default function LandlordSubscriptionPage() {
     );
   }
 
-  const isActive = landlord.subscription_status === 'active';
+  const isScheduledToCancel =
+    landlord.subscription_status === 'active_cancel_at_period_end';
+  const isActive =
+    landlord.subscription_status === 'active' || isScheduledToCancel;
+
+  const dateLabel = landlord.subscription_current_period_end
+    ? formatDate(landlord.subscription_current_period_end)
+    : null;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -344,11 +351,17 @@ export default function LandlordSubscriptionPage() {
               </p>
 
               <p>
-                <span className="text-slate-500">Next billing date:</span>{' '}
+                <span className="text-slate-500">
+                  {isScheduledToCancel
+                    ? 'Cancellation date:'
+                    : 'Next billing date:'}
+                </span>{' '}
                 <span className="text-slate-100">
-                  {landlord.subscription_current_period_end
-                    ? formatDate(landlord.subscription_current_period_end)
-                    : 'Subscription renewal is handled automatically through Stripe'}
+                  {dateLabel
+                    ? isScheduledToCancel
+                      ? `Scheduled to cancel on ${dateLabel}`
+                      : dateLabel
+                    : 'Not available — renewal is handled automatically through Stripe'}
                 </span>
               </p>
             </div>
@@ -392,8 +405,8 @@ export default function LandlordSubscriptionPage() {
             <div className="pt-2 border-t border-slate-800 mt-2 text-[11px]">
               <p className="text-slate-400">
                 Your subscription is active and renews automatically each month
-                through Stripe. If the next billing date is not shown here, you
-                will still be billed on schedule.
+                unless you cancel. If you&apos;ve scheduled cancellation, you&apos;ll
+                keep full access until the cancellation date shown above.
               </p>
             </div>
           )}
@@ -406,7 +419,7 @@ export default function LandlordSubscriptionPage() {
             If you have questions about your subscription or billing, contact
             RentZentro support:
           </p>
-          <p className="text-emerald-300">support@rentzentro.com</p>
+          <p className="text-emerald-300">rentzentro@gmail.com</p>
         </section>
       </div>
     </main>
