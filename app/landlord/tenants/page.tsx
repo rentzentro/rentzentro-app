@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
@@ -31,6 +31,8 @@ type TenantRow = {
   property_id: number | null;
   status: string | null;
   monthly_rent: number | null;
+  lease_start: string | null;
+  lease_end: string | null;
 };
 
 // ---------- Helpers ----------
@@ -43,6 +45,13 @@ const formatCurrency = (v: number | null | undefined) =>
         currency: 'USD',
         maximumFractionDigits: 2,
       });
+
+// Normalize a date from Supabase for <input type="date">
+const toDateInputValue = (iso: string | null | undefined): string => {
+  if (!iso) return '';
+  // Handles both "YYYY-MM-DD" and full ISO timestamps
+  return iso.slice(0, 10);
+};
 
 // ---------- Component ----------
 
@@ -62,6 +71,8 @@ export default function LandlordTenantsPage() {
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formPropertyId, setFormPropertyId] = useState<number | ''>('');
+  const [formLeaseStart, setFormLeaseStart] = useState('');
+  const [formLeaseEnd, setFormLeaseEnd] = useState('');
   const [savingTenant, setSavingTenant] = useState(false);
 
   // Invite state
@@ -73,6 +84,8 @@ export default function LandlordTenantsPage() {
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editPropertyId, setEditPropertyId] = useState<number | ''>('');
+  const [editLeaseStart, setEditLeaseStart] = useState('');
+  const [editLeaseEnd, setEditLeaseEnd] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
   // ---------- Load landlord + data ----------
@@ -141,9 +154,7 @@ export default function LandlordTenantsPage() {
         // Properties for this landlord
         const { data: propRows, error: propError } = await supabase
           .from('properties')
-          .select(
-            'id, owner_id, name, unit_label, monthly_rent, status'
-          )
+          .select('id, owner_id, name, unit_label, monthly_rent, status')
           .eq('owner_id', ownerUuid)
           .order('created_at', { ascending: false });
 
@@ -154,7 +165,7 @@ export default function LandlordTenantsPage() {
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select(
-            'id, owner_id, name, email, phone, property_id, status, monthly_rent'
+            'id, owner_id, name, email, phone, property_id, status, monthly_rent, lease_start, lease_end'
           )
           .eq('owner_id', ownerUuid)
           .order('created_at', { ascending: false });
@@ -181,9 +192,11 @@ export default function LandlordTenantsPage() {
     setFormEmail('');
     setFormPhone('');
     setFormPropertyId('');
+    setFormLeaseStart('');
+    setFormLeaseEnd('');
   };
 
-  const handleCreateTenant = async (e: React.FormEvent) => {
+  const handleCreateTenant = async (e: FormEvent) => {
     e.preventDefault();
     if (!landlord || !landlord.user_id) return;
 
@@ -209,6 +222,8 @@ export default function LandlordTenantsPage() {
           property_id: formPropertyId,
           status: 'Current',
           monthly_rent: null, // property is source of truth for rent
+          lease_start: formLeaseStart || null,
+          lease_end: formLeaseEnd || null,
         })
         .select('*')
         .single();
@@ -239,6 +254,8 @@ export default function LandlordTenantsPage() {
     setEditEmail(t.email || '');
     setEditPhone(t.phone || '');
     setEditPropertyId(t.property_id ?? '');
+    setEditLeaseStart(toDateInputValue(t.lease_start));
+    setEditLeaseEnd(toDateInputValue(t.lease_end));
     setError(null);
     setSuccess(null);
   };
@@ -249,10 +266,12 @@ export default function LandlordTenantsPage() {
     setEditEmail('');
     setEditPhone('');
     setEditPropertyId('');
+    setEditLeaseStart('');
+    setEditLeaseEnd('');
     setSavingEdit(false);
   };
 
-  const handleUpdateTenant = async (e: React.FormEvent) => {
+  const handleUpdateTenant = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingTenant) return;
 
@@ -272,6 +291,8 @@ export default function LandlordTenantsPage() {
           email: editEmail.trim(),
           phone: editPhone.trim() || null,
           property_id: editPropertyId || null,
+          lease_start: editLeaseStart || null,
+          lease_end: editLeaseEnd || null,
         })
         .eq('id', editingTenant.id)
         .select('*')
@@ -313,7 +334,6 @@ export default function LandlordTenantsPage() {
       }
 
       setTenants((prev) => prev.filter((t) => t.id !== tenantId));
-      // If we were editing this tenant, close the editor
       if (editingTenant && editingTenant.id === tenantId) {
         cancelEditTenant();
       }
@@ -423,7 +443,8 @@ export default function LandlordTenantsPage() {
               Manage tenants
             </h1>
             <p className="text-[13px] text-slate-400">
-              Add or remove tenants, link them to properties, and send portal invites.
+              Add or remove tenants, link them to properties, set lease dates, and send
+              portal invites.
             </p>
           </div>
 
@@ -465,7 +486,8 @@ export default function LandlordTenantsPage() {
                 Add a tenant
               </p>
               <p className="mt-1 text-sm text-slate-200">
-                Create a tenant linked to one of your properties.
+                Create a tenant linked to one of your properties and set their lease
+                dates.
               </p>
             </div>
 
@@ -536,6 +558,26 @@ export default function LandlordTenantsPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Lease dates */}
+                <div className="space-y-1 md:col-span-1">
+                  <label className="block text-slate-300">Lease start</label>
+                  <input
+                    type="date"
+                    value={formLeaseStart}
+                    onChange={(e) => setFormLeaseStart(e.target.value)}
+                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div className="space-y-1 md:col-span-1">
+                  <label className="block text-slate-300">Lease end</label>
+                  <input
+                    type="date"
+                    value={formLeaseEnd}
+                    onChange={(e) => setFormLeaseEnd(e.target.value)}
+                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
                 </div>
 
                 <div className="md:col-span-2 flex items-center justify-end gap-2 pt-1">
@@ -641,6 +683,26 @@ export default function LandlordTenantsPage() {
                 </select>
               </div>
 
+              {/* Lease dates */}
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">Lease start</label>
+                <input
+                  type="date"
+                  value={editLeaseStart}
+                  onChange={(e) => setEditLeaseStart(e.target.value)}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">Lease end</label>
+                <input
+                  type="date"
+                  value={editLeaseEnd}
+                  onChange={(e) => setEditLeaseEnd(e.target.value)}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+
               <div className="md:col-span-2 flex items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
@@ -709,6 +771,16 @@ export default function LandlordTenantsPage() {
                             }`
                           : 'Not linked'}
                       </p>
+                      {(t.lease_start || t.lease_end) && (
+                        <p className="text-[11px] text-slate-500">
+                          Lease:{' '}
+                          {t.lease_start
+                            ? toDateInputValue(t.lease_start)
+                            : '—'}{' '}
+                          to{' '}
+                          {t.lease_end ? toDateInputValue(t.lease_end) : '—'}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col items-end gap-1 text-[11px]">
                       <p className="text-slate-400">

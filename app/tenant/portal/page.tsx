@@ -478,12 +478,12 @@ export default function TenantPortalPage() {
                   disabled={paying}
                   className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {paying ? 'Starting payment…' : 'Pay rent securely with card'}
+                  {paying ? 'Starting payment…' : 'Pay rent securely with Card / ACH'}
                 </button>
               </div>
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Card payments are processed securely by Stripe. You&apos;ll get
+                Card / ACH  payments are processed securely by Stripe. You&apos;ll get
                 a confirmation once your payment is completed.
               </p>
             </section>
