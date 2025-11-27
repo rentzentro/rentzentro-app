@@ -3,14 +3,16 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
+export const runtime = 'nodejs';
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: '2024-06-20' as any,
 });
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+  process.env.SUPABASE_SERVICE_ROLE_KEY as string
+);
 
 export async function POST(req: Request) {
   try {
@@ -19,12 +21,12 @@ export async function POST(req: Request) {
 
     if (!landlordId) {
       return NextResponse.json(
-        { error: 'Missing landlordId in request body.' },
+        { error: 'Missing landlordId.' },
         { status: 400 }
       );
     }
 
-    // 1) Load landlord row
+    // 1) Load landlord
     const { data: landlord, error: landlordError } = await supabaseAdmin
       .from('landlords')
       .select('*')
@@ -41,28 +43,17 @@ export async function POST(req: Request) {
 
     if (!landlord) {
       return NextResponse.json(
-        { error: 'Landlord account not found.' },
+        { error: 'Landlord not found.' },
         { status: 404 }
       );
     }
 
-    const l: any = landlord;
+    const customerId = landlord.stripe_customer_id as string | null;
+    let subscriptionId = landlord.stripe_subscription_id as string | null;
 
-    let subscriptionId: string | null =
-      (l.stripe_subscription_id as string | null) || null;
-    const customerId: string | null =
-      (l.stripe_customer_id as string | null) || null;
-    const status: string | null =
-      (l.stripe_subscription_status as string | null) || null;
-
-    // 2) Try to resolve an active subscription to cancel
+    // 2) If subscriptionId not stored, fetch from Stripe
     if (!subscriptionId) {
-      // No stored subscription id – try to find one via customer
       if (!customerId) {
-        console.warn(
-          '[cancel-subscription] No stripe_subscription_id or stripe_customer_id on landlord:',
-          l.id
-        );
         return NextResponse.json(
           { error: 'No active subscription to cancel.' },
           { status: 400 }
@@ -76,10 +67,6 @@ export async function POST(req: Request) {
       });
 
       if (subs.data.length === 0) {
-        console.warn(
-          '[cancel-subscription] No active Stripe subscriptions found for customer:',
-          customerId
-        );
         return NextResponse.json(
           { error: 'No active subscription to cancel.' },
           { status: 400 }
@@ -87,95 +74,61 @@ export async function POST(req: Request) {
       }
 
       subscriptionId = subs.data[0].id;
-    } else {
-      // We have a subscriptionId — optionally sanity check the status
-      if (status && status !== 'active') {
-        console.warn(
-          '[cancel-subscription] stripe_subscription_id present but status is not active:',
-          status
-        );
-        return NextResponse.json(
-          { error: 'No active subscription to cancel.' },
-          { status: 400 }
-        );
-      }
     }
 
     if (!subscriptionId) {
-      // Failsafe – shouldn’t happen if above logic worked
       return NextResponse.json(
         { error: 'No active subscription to cancel.' },
         { status: 400 }
       );
     }
 
-    // 3) Cancel subscription at Stripe
+    // 3) Schedule cancellation at period end
+    let updated;
     try {
-      await stripe.subscriptions.cancel(subscriptionId);
+      updated = await stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: true,
+      });
     } catch (stripeErr: any) {
-      // If Stripe says it's already canceled, treat that as success but still update DB
-      if (stripeErr?.code !== 'resource_missing') {
-        console.error('[cancel-subscription] Stripe cancel error:', stripeErr);
-        return NextResponse.json(
-          {
-            error:
-              stripeErr?.message ||
-              'Unable to cancel subscription at this time. Please try again.',
-          },
-          { status: 500 }
-        );
-      } else {
-        console.warn(
-          '[cancel-subscription] Subscription already canceled at Stripe, continuing to update DB.'
-        );
-      }
-    }
-
-    // 4) Update landlord row in Supabase
-    const updatePayload: Record<string, any> = {
-      stripe_subscription_status: 'canceled',
-    };
-
-    // If your schema uses these, we try to keep them in sync too:
-    if ('stripe_subscription_id' in l) {
-      updatePayload['stripe_subscription_id'] = null;
-    }
-    if ('is_subscribed' in l) {
-      updatePayload['is_subscribed'] = false;
-    }
-    if ('subscription_active' in l) {
-      updatePayload['subscription_active'] = false;
-    }
-
-    const { error: updateError } = await supabaseAdmin
-      .from('landlords')
-      .update(updatePayload)
-      .eq('id', l.id);
-
-    if (updateError) {
-      console.error(
-        '[cancel-subscription] Error updating landlord row:',
-        updateError
-      );
-      // still treat cancel as successful, but surface a warning
+      console.error('[cancel-subscription] Stripe update error:', stripeErr);
       return NextResponse.json(
         {
-          ok: true,
-          warning:
-            'Subscription canceled at Stripe, but there was an issue updating your account status. Please contact support.',
+          error:
+            stripeErr?.message ||
+            'Unable to schedule subscription cancellation. Please try again.',
         },
-        { status: 200 }
+        { status: 500 }
       );
     }
 
-    return NextResponse.json({ ok: true }, { status: 200 });
+    // TypeScript workaround: Stripe typings are a bit loose here
+    const currentPeriodEnd = (updated as any).current_period_end;
+
+    console.log('[cancel-subscription] Scheduled cancel at period end:', {
+      subscriptionId: updated.id,
+      status: updated.status,
+      cancel_at_period_end: updated.cancel_at_period_end,
+      current_period_end: currentPeriodEnd,
+    });
+
+    // 4) DO NOT update Supabase here.
+    // Stripe → webhook → Supabase remains the single source of truth.
+
+    return NextResponse.json(
+      {
+        ok: true,
+        message:
+          'Your subscription will remain active until the end of your current billing cycle.',
+      },
+      { status: 200 }
+    );
   } catch (err: any) {
     console.error('[cancel-subscription] Unexpected error:', err);
     return NextResponse.json(
       {
         error:
           err?.message ||
-          'Unexpected error while canceling your subscription. Please try again.',
+          'Unexpected error while canceling subscription.',
       },
       { status: 500 }
     );
