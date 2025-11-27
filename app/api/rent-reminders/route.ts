@@ -43,8 +43,9 @@ export async function POST() {
     const { data: dueProperties, error: propsError } = await supabaseAdmin
       .from('properties')
       .select('id, name, unit_label, monthly_rent, next_due_date, owner_id')
-      .eq('status', 'current')
+      .not('next_due_date', 'is', null)
       .lte('next_due_date', today);
+      // NOTE: intentionally no .eq('status', 'current') so we don't miss "Current"
 
     if (propsError) {
       console.error('[rent-reminders] Error loading properties:', propsError);
@@ -64,14 +65,14 @@ export async function POST() {
 
     const propertyIds = dueProperties.map((p) => p.id);
 
-    // 2) Load tenants on those properties who are "current" and have an email
+    // 2) Load tenants on those properties who have an email
     const { data: tenants, error: tenantsError } = await supabaseAdmin
       .from('tenants')
       .select('id, name, email, status, monthly_rent, property_id')
       .in('property_id', propertyIds)
-      .eq('status', 'current')
       .not('email', 'is', null)
       .neq('email', '');
+      // NOTE: no status filter, to avoid "current" vs "Current" mismatch
 
     if (tenantsError) {
       console.error('[rent-reminders] Error loading tenants:', tenantsError);
@@ -83,7 +84,7 @@ export async function POST() {
 
     if (!tenants || tenants.length === 0) {
       console.log(
-        '[rent-reminders] Properties due, but no current tenants with email.'
+        '[rent-reminders] Properties due, but no tenants with email.'
       );
       return NextResponse.json(
         { message: 'Success: No active tenants to notify' },
@@ -109,11 +110,9 @@ export async function POST() {
         ? propertyById.get(t.property_id as number)
         : null;
 
-      const propertyName =
-        prop?.name || 'your rental unit';
+      const propertyName = prop?.name || 'your rental unit';
       const unitLabel = prop?.unit_label ? ` · ${prop.unit_label}` : '';
-      const rentAmount =
-        t.monthly_rent ?? prop?.monthly_rent ?? null;
+      const rentAmount = t.monthly_rent ?? prop?.monthly_rent ?? null;
       const dueDate = prop?.next_due_date || today; // fallback
 
       const subject = `Rent reminder for ${propertyName}${unitLabel}`;
