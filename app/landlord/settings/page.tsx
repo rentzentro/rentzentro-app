@@ -177,7 +177,8 @@ export default function LandlordSettingsPage() {
               Landlord settings
             </h1>
             <p className="text-[11px] text-slate-400">
-              Manage your payouts and billing for your RentZentro account.
+              This is where new landlords should start: connect payouts so tenant
+              payments can be deposited, then manage your RentZentro plan and billing.
             </p>
           </div>
 
@@ -209,7 +210,7 @@ export default function LandlordSettingsPage() {
                 Payouts
               </p>
               <h2 className="mt-1 text-sm font-semibold text-slate-50">
-                Stripe-powered payouts for rent
+                Connect payouts to receive rent
               </h2>
             </div>
             <span
@@ -230,7 +231,8 @@ export default function LandlordSettingsPage() {
           <p className="text-xs text-slate-400">
             RentZentro uses Stripe Connect to send tenant rent payments directly
             to your bank account. We never hold your funds; Stripe deposits them
-            to you based on your payout schedule.
+            to you based on your payout schedule. Until payouts are connected,
+            tenants can&apos;t successfully pay rent through RentZentro.
           </p>
 
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -247,8 +249,8 @@ export default function LandlordSettingsPage() {
                 : 'Connect payouts with Stripe'}
             </button>
             <p className="text-[11px] text-slate-500 sm:flex-1">
-              Stripe will open in a new page where you can update your bank
-              account, view payouts, and manage tax forms.
+              Stripe will open in a new page where you can add or update your
+              bank account, view payouts, and manage tax forms.
             </p>
           </div>
         </section>
@@ -268,7 +270,9 @@ export default function LandlordSettingsPage() {
 
           <p className="text-xs text-slate-400">
             Manage your RentZentro landlord subscription, update your billing
-            details, or cancel your plan at any time.
+            details, or cancel your plan at any time. If you&apos;re on a free
+            access promotion, you won&apos;t be billed until you start a paid
+            subscription from the next screen.
           </p>
 
           <div className="mt-3">
