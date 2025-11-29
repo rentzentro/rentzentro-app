@@ -25,6 +25,12 @@ async function updateLandlordFromSubscription(
     ? 'active_cancel_at_period_end'
     : rawStatus;
 
+  // Decide if this subscription should be treated as "active" in your app
+  const subscriptionActive =
+    effectiveStatus === 'active' ||
+    effectiveStatus === 'trialing' ||
+    effectiveStatus === 'active_cancel_at_period_end';
+
   // Try to get current_period_end from this subscription
   let currentPeriodEnd: string | null = null;
   let currentPeriodEndUnix =
@@ -57,6 +63,7 @@ async function updateLandlordFromSubscription(
     customerId,
     rawStatus,
     effectiveStatus,
+    subscriptionActive,
     currentPeriodEndUnix,
     currentPeriodEnd,
     cancel_at_period_end: subscription.cancel_at_period_end,
@@ -88,10 +95,17 @@ async function updateLandlordFromSubscription(
   const updatePayload: Record<string, any> = {
     stripe_subscription_id: subscription.id,
     subscription_status: effectiveStatus,
+    subscription_active: subscriptionActive,
   };
 
   if (currentPeriodEnd) {
     updatePayload.subscription_current_period_end = currentPeriodEnd;
+  }
+
+  // If subscription is now active/trialing/etc, kill any internal free-trial flags
+  if (subscriptionActive) {
+    updatePayload.trial_active = false;
+    updatePayload.trial_end = null;
   }
 
   const { error: updateError } = await supabaseAdmin
@@ -195,7 +209,7 @@ export async function POST(req: Request) {
         break;
       }
 
-      // 2) Subscription lifecycle events – set status + period end
+      // 2) Subscription lifecycle events – set status + period end + subscription_active + clear internal trial
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {

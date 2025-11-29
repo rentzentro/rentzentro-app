@@ -13,6 +13,9 @@ type LandlordRow = {
   name: string | null;
   subscription_status: string | null;
   subscription_current_period_end: string | null;
+  trial_active: boolean | null;
+  trial_end: string | null;
+  subscription_active: boolean | null;
 };
 
 type PropertyRow = {
@@ -135,20 +138,37 @@ export default function LandlordDashboardPage() {
         const landlordTyped = landlordRow as LandlordRow;
         setLandlord(landlordTyped);
 
-        // Decide if this landlord is considered "subscribed"
+        // Compute subscription / trial flags early
         const statusLower = (landlordTyped.subscription_status || '').toLowerCase();
-        const isSubscribed =
+        const subscriptionFlag = landlordTyped.subscription_active === true;
+
+        const isSubscribedFromStatus =
           statusLower === 'active' ||
           statusLower === 'trialing' ||
           statusLower === 'active_cancel_at_period_end';
 
-        // If subscription is NOT active / trialing / scheduled to cancel, we stop here.
-        if (!isSubscribed) {
+        const isSubscribed = subscriptionFlag || isSubscribedFromStatus;
+
+        // Trial validity check
+        const now = new Date();
+        let hasValidTrial = false;
+        if (landlordTyped.trial_active && landlordTyped.trial_end) {
+          const trialEndDate = new Date(landlordTyped.trial_end);
+          if (!isNaN(trialEndDate.getTime())) {
+            // Free access while now < trialEnd
+            hasValidTrial = now < trialEndDate;
+          }
+        }
+
+        // If neither active subscription nor valid trial, stop here (dashboard gated below)
+        const canAccessDashboard = isSubscribed || hasValidTrial;
+
+        if (!canAccessDashboard) {
           setLoading(false);
           return;
         }
 
-        // 3) Load dashboard data for subscribed landlord
+        // 3) Load dashboard data for subscribed or trialing landlord
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase
             .from('properties')
@@ -281,14 +301,29 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // HARD GATE: subscription must be active / trialing / scheduled-to-cancel to see dashboard
+  // --- Subscription / trial gating ---
   const statusLower = (landlord.subscription_status || '').toLowerCase();
-  const isSubscribed =
+  const subscriptionFlag = landlord.subscription_active === true;
+
+  const isSubscribedFromStatus =
     statusLower === 'active' ||
     statusLower === 'trialing' ||
     statusLower === 'active_cancel_at_period_end';
 
-  if (!isSubscribed) {
+  const isSubscribed = subscriptionFlag || isSubscribedFromStatus;
+
+  const now = new Date();
+  let hasValidTrial = false;
+  if (landlord.trial_active && landlord.trial_end) {
+    const trialEndDate = new Date(landlord.trial_end);
+    if (!isNaN(trialEndDate.getTime())) {
+      hasValidTrial = now < trialEndDate;
+    }
+  }
+
+  const canAccessDashboard = isSubscribed || hasValidTrial;
+
+  if (!canAccessDashboard) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-3xl bg-slate-900/80 border border-amber-500/60 p-6 shadow-xl space-y-4 text-center">
@@ -338,7 +373,7 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // If we're here: landlord exists AND subscription is considered active → show full dashboard
+  // If we're here: landlord exists AND subscription is active OR trial is valid → show full dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -358,6 +393,11 @@ export default function LandlordDashboardPage() {
             <p className="text-[13px] text-slate-400">
               Overview of your units, rent status, and recent payments.
             </p>
+            {hasValidTrial && (
+              <p className="mt-1 text-[11px] text-emerald-300">
+                You&apos;re currently on a free promo period. Enjoy full access until your trial ends.
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">

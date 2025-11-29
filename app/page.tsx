@@ -7,6 +7,15 @@ export default function HomePage() {
     <main className="min-h-screen bg-slate-950 text-slate-50">
       {/* Top shell */}
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 lg:px-6">
+        {/* Holiday promo ribbon */}
+        <div className="mb-4 rounded-full border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-slate-900 px-4 py-2 text-center text-[11px] font-medium text-emerald-100 shadow-sm">
+          🎄 December special:{' '}
+          <span className="font-semibold text-emerald-300">
+            Free RentZentro for new landlords now through all December — no card required.
+          </span>{' '}
+          $29.95/mo to continue after the free period.
+        </div>
+
         {/* Header */}
         <header className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -18,7 +27,7 @@ export default function HomePage() {
                 RentZentro
               </p>
               <p className="text-[11px] text-slate-400">
-              Confidence, simplicity, and control for every landlord
+                Confidence, simplicity, and control for every landlord
               </p>
             </div>
           </div>
@@ -52,8 +61,12 @@ export default function HomePage() {
                   <span className="text-emerald-300">$29.95/mo</span>
                 </p>
                 <p className="text-[11px] text-emerald-100/80">
-                  Flat monthly price. Unlimited units, tenants, payments, and maintenance
-                  requests.
+                  Flat monthly price. Unlimited units, tenants, payments, and
+                  maintenance requests.
+                </p>
+                <p className="mt-1 text-[11px] font-medium text-emerald-200">
+                  🎁 Free for new landlords through December — no card required
+                  to start.
                 </p>
                 <div className="mt-1 inline-flex items-center gap-2">
                   <span className="inline-flex items-center rounded-full border border-slate-700/80 bg-slate-950/60 px-2 py-0.5 text-[10px] text-slate-200">
@@ -70,7 +83,7 @@ export default function HomePage() {
               href="/landlord/signup"
               className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-slate-950 hover:bg-emerald-400"
             >
-              Start as a landlord
+              Start free in December
             </Link>
           </div>
         </div>
@@ -85,9 +98,9 @@ export default function HomePage() {
               </h1>
               <p className="mt-3 max-w-xl text-sm text-slate-400">
                 RentZentro is software for landlords—not a management company.
-                Get a clean dashboard, tenant portal, online card & ACH rent payments,
-                automatic rent reminders, document sharing, and maintenance tracking
-                without the corporate bloat.
+                Get a clean dashboard, tenant portal, online card & ACH rent
+                payments, automatic rent reminders, document sharing, and
+                maintenance tracking without the corporate bloat.
               </p>
             </div>
 
@@ -97,7 +110,7 @@ export default function HomePage() {
                 href="/landlord/signup"
                 className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400"
               >
-                I&apos;m a landlord
+                Start free in December
               </Link>
               <Link
                 href="/tenant/login"
@@ -106,7 +119,7 @@ export default function HomePage() {
                 I&apos;m a tenant
               </Link>
               <span className="text-[11px] text-slate-500">
-                No setup fees · Cancel anytime
+                No card required for December promo · Cancel anytime
               </span>
             </div>
 
@@ -122,8 +135,8 @@ export default function HomePage() {
                     ✓
                   </span>
                   <p>
-                    See all units, rent statuses, and maintenance requests in one clean,
-                    modern dashboard.
+                    See all units, rent statuses, and maintenance requests in
+                    one clean, modern dashboard.
                   </p>
                 </div>
 
@@ -133,8 +146,8 @@ export default function HomePage() {
                   </span>
                   <p>
                     Tenants pay rent online with card or ACH through Stripe.
-                    Payments log automatically to your dashboard—RentZentro never
-                    holds your funds.
+                    Payments log automatically to your dashboard—RentZentro
+                    never holds your funds.
                   </p>
                 </div>
 
@@ -143,8 +156,9 @@ export default function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Automatic rent reminders emailed to your tenants and maintenance requests that
-                    hit your inbox and show on your maintenance board instantly.
+                    Automatic rent reminders emailed to your tenants and
+                    maintenance requests that hit your inbox and show on your
+                    maintenance board instantly.
                   </p>
                 </div>
               </div>
@@ -160,7 +174,8 @@ export default function HomePage() {
                   </span>
                   <p>
                     Simple tenant portal to see rent due, payment history, and
-                    shared documents—and pay rent online with card or bank (ACH).
+                    shared documents—and pay rent online with card or bank
+                    (ACH).
                   </p>
                 </div>
 
@@ -169,8 +184,8 @@ export default function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Submit maintenance requests with details, then track status and
-                    see landlord updates.
+                    Submit maintenance requests with details, then track status
+                    and see landlord updates.
                   </p>
                 </div>
 
@@ -179,8 +194,8 @@ export default function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Access files and important documents in one place instead
-                    of digging through old email threads.
+                    Access files and important documents in one place instead of
+                    digging through old email threads.
                   </p>
                 </div>
               </div>
@@ -211,7 +226,7 @@ export default function HomePage() {
                 {/* Left: cards */}
                 <div className="space-y-3">
                   {/* Summary row */}
-                  <div className="grid gap-2 sm:grid-cols-3 text-[11px]">
+                  <div className="grid gap-2 text-[11px] sm:grid-cols-3">
                     <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
                       <p className="text-[10px] text-slate-500 uppercase tracking-wide">
                         Properties
@@ -257,7 +272,7 @@ export default function HomePage() {
                         This month
                       </span>
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-3 text-[11px]">
+                    <div className="grid gap-2 text-[11px] sm:grid-cols-3">
                       <div className="rounded-2xl border border-rose-500/40 bg-rose-950/40 p-2">
                         <p className="text-[11px] font-semibold text-rose-100">
                           Overdue
@@ -397,8 +412,62 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* December promo explanation */}
+        <section className="mb-8 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-5">
+          <div className="max-w-2xl">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-300">
+              Now - December free access
+            </p>
+            <h2 className="text-sm font-semibold text-slate-50">
+              Start the new year organized — Now - December is on us.
+            </h2>
+            <p className="mt-2 text-[11px] text-slate-300">
+              Create a new landlord account now and use RentZentro free
+              through December 31st. No credit card required to start. On
+              January 1st, you can add your card to keep your account active at{' '}
+              <span className="font-semibold text-emerald-200">
+                $29.95/month
+              </span>{' '}
+              or simply walk away.
+            </p>
+            <div className="mt-3 grid gap-3 text-[11px] sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <p className="mb-1 text-[11px] font-semibold text-slate-100">
+                  Try it with real tenants
+                </p>
+                <p className="text-slate-400">
+                  Add properties, invite tenants, and send real rent reminders
+                  during the free period.
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <p className="mb-1 text-[11px] font-semibold text-slate-100">
+                  No card, no surprise billing
+                </p>
+                <p className="text-slate-400">
+                  We won&apos;t charge you during December. You choose whether
+                  to continue in January.
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <p className="mb-1 text-[11px] font-semibold text-slate-100">
+                  Keep everything you set up
+                </p>
+                <p className="text-slate-400">
+                  If you subscribe, your tenants, payments, and maintenance
+                  history are already in place.
+                </p>
+              </div>
+            </div>
+            <p className="mt-3 text-[10px] text-slate-500">
+              Free access applies to new landlord accounts created now through January 1st. A payment method is required to continue service
+              after the free period ends.
+            </p>
+          </div>
+        </section>
+
         {/* How it works */}
-        <section className="mb-8 mt-1 border-t border-slate-900 pt-6">
+        <section className="mb-8 border-t border-slate-900 pt-6">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
             How RentZentro fits into your day
           </p>
@@ -408,8 +477,8 @@ export default function HomePage() {
                 1. Create your landlord account
               </p>
               <p className="text-[11px] text-slate-400">
-                Sign up, subscribe, and add your properties and tenants. Turn on
-                online payments and reminders in minutes—not hours.
+                Sign up, add your properties and tenants, and turn on online
+                payments and reminders in minutes—not hours.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -417,8 +486,9 @@ export default function HomePage() {
                 2. Invite tenants & go live
               </p>
               <p className="text-[11px] text-slate-400">
-                RentZentro emails your tenants. They get a simple portal to pay rent
-                by card or ACH, view documents, and submit maintenance requests.
+                RentZentro emails your tenants. They get a simple portal to pay
+                rent by card or ACH, view documents, and submit maintenance
+                requests.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -443,10 +513,10 @@ export default function HomePage() {
               Questions about RentZentro or getting started?
             </h2>
             <div className="mt-4 space-y-1 text-[11px]">
-              <p className="text-slate-300 font-medium">Email</p>
+              <p className="font-medium text-slate-300">Email</p>
               <a
                 href="mailto:info@rentzentro.com"
-                className="text-emerald-300 hover:text-emerald-200 underline underline-offset-2"
+                className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
               >
                 info@rentzentro.com
               </a>

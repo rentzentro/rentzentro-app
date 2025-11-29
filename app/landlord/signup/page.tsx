@@ -60,15 +60,26 @@ export default function LandlordSignupPage() {
         );
       }
 
+      // --- PROMO LOGIC: Now through Jan 1, 2026 ---
+      // Anyone who signs up before 2026-01-01 gets free access until that date.
+      const now = new Date();
+      const promoCutoff = new Date('2026-01-01T00:00:00Z'); // adjust if you change promo
+      const isPromoPeriod = now < promoCutoff;
+
+      // trial_end is stored as a date string; Supabase/Postgres will cast it
+      const trialEndValue = isPromoPeriod ? '2026-01-01' : null;
+
       // 2) Insert landlord row linked to this auth user
-      const { error: insertError } = await supabase
-        .from('landlords')
-        .insert([
-          {
-            email,
-            user_id: user.id,
-          },
-        ]);
+      const { error: insertError } = await supabase.from('landlords').insert([
+        {
+          email,
+          user_id: user.id,
+          // Promo flags:
+          trial_active: isPromoPeriod,
+          trial_end: trialEndValue,
+          subscription_active: false,
+        },
+      ]);
 
       if (insertError) {
         console.error('Error inserting landlord row:', insertError);
@@ -77,9 +88,16 @@ export default function LandlordSignupPage() {
         );
       }
 
-      // 3) Send them straight to subscription – no free dashboard
-      setInfo('Account created! Redirecting you to subscription…');
-      router.push('/landlord/subscription');
+      // 3) Redirect based on whether they are in the promo period
+      if (isPromoPeriod) {
+        setInfo(
+          'Account created! You have free access until January 1st. Redirecting you to your landlord dashboard…'
+        );
+        router.push('/landlord'); // main landlord dashboard
+      } else {
+        setInfo('Account created! Redirecting you to subscription…');
+        router.push('/landlord/subscription');
+      }
     } catch (err: any) {
       console.error(err);
       setError(
@@ -107,9 +125,13 @@ export default function LandlordSignupPage() {
         <h1 className="text-lg font-semibold text-slate-50 mb-1">
           Create your landlord account
         </h1>
-        <p className="text-xs text-slate-400 mb-4">
+        <p className="text-xs text-slate-400 mb-1">
           Start your RentZentro landlord plan and connect payouts for rent
           collection.
+        </p>
+        <p className="text-[11px] text-emerald-300 mb-4">
+          Promo: Sign up now and get free access until January 1st. No card
+          required until you&apos;re ready to subscribe.
         </p>
 
         {error && (
