@@ -35,7 +35,9 @@ export default function OwnerDashboardPage() {
       setError(null);
 
       try {
-        const res = await fetch('/api/owner/metrics');
+        const res = await fetch('/api/owner/metrics', {
+          cache: 'no-store', // <- force fresh data every time
+        });
         const data = await res.json();
 
         if (!res.ok) {
