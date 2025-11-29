@@ -36,15 +36,30 @@ export default function OwnerDashboardPage() {
 
       try {
         const res = await fetch('/api/owner/metrics', {
-          cache: 'no-store', // <- force fresh data every time
+          cache: 'no-store', // always pull fresh data
         });
-        const data = await res.json();
+
+        const raw = await res.json().catch(() => ({}));
 
         if (!res.ok) {
-          throw new Error(data?.error || 'Failed to load owner metrics.');
+          throw new Error(raw?.error || 'Failed to load owner metrics.');
         }
 
-        setMetrics(data as OwnerMetrics);
+        // Allow either { metrics: {...} } or {...}
+        const src: any = raw && raw.metrics ? raw.metrics : raw;
+
+        const cleaned: OwnerMetrics = {
+          totalLandlords: Number(src.totalLandlords ?? 0),
+          totalProperties: Number(src.totalProperties ?? 0),
+          totalTenants: Number(src.totalTenants ?? 0),
+          totalMonthlyRent: Number(src.totalMonthlyRent ?? 0),
+          paidLandlords: Number(src.paidLandlords ?? 0),
+          trialLandlords: Number(src.trialLandlords ?? 0),
+          MRR: Number(src.MRR ?? 0),
+          paymentsLast30Days: Number(src.paymentsLast30Days ?? 0),
+        };
+
+        setMetrics(cleaned);
       } catch (err: any) {
         console.error(err);
         setError(
