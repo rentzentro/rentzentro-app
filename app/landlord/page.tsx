@@ -15,7 +15,6 @@ type LandlordRow = {
   subscription_current_period_end: string | null;
   trial_active: boolean | null;
   trial_end: string | null;
-  subscription_active: boolean | null;
 };
 
 type PropertyRow = {
@@ -121,10 +120,20 @@ export default function LandlordDashboardPage() {
           throw new Error('Unable to load landlord account. Please log in again.');
         }
 
-        // 2) Load landlord row
+        // 2) Load landlord row (including trial + subscription fields)
         const { data: landlordRow, error: landlordError } = await supabase
           .from('landlords')
-          .select('*')
+          .select(
+            `
+            id,
+            email,
+            name,
+            subscription_status,
+            subscription_current_period_end,
+            trial_active,
+            trial_end
+          `
+          )
           .eq('email', email)
           .maybeSingle();
 
@@ -138,37 +147,7 @@ export default function LandlordDashboardPage() {
         const landlordTyped = landlordRow as LandlordRow;
         setLandlord(landlordTyped);
 
-        // Compute subscription / trial flags early
-        const statusLower = (landlordTyped.subscription_status || '').toLowerCase();
-        const subscriptionFlag = landlordTyped.subscription_active === true;
-
-        const isSubscribedFromStatus =
-          statusLower === 'active' ||
-          statusLower === 'trialing' ||
-          statusLower === 'active_cancel_at_period_end';
-
-        const isSubscribed = subscriptionFlag || isSubscribedFromStatus;
-
-        // Trial validity check
-        const now = new Date();
-        let hasValidTrial = false;
-        if (landlordTyped.trial_active && landlordTyped.trial_end) {
-          const trialEndDate = new Date(landlordTyped.trial_end);
-          if (!isNaN(trialEndDate.getTime())) {
-            // Free access while now < trialEnd
-            hasValidTrial = now < trialEndDate;
-          }
-        }
-
-        // If neither active subscription nor valid trial, stop here (dashboard gated below)
-        const canAccessDashboard = isSubscribed || hasValidTrial;
-
-        if (!canAccessDashboard) {
-          setLoading(false);
-          return;
-        }
-
-        // 3) Load dashboard data for subscribed or trialing landlord
+        // 3) Load dashboard data (we'll gate in the UI)
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase
             .from('properties')
@@ -209,7 +188,7 @@ export default function LandlordDashboardPage() {
     load();
   }, []);
 
-  // ---------- Metrics ----------
+  // ---------- Metrics & subscription / trial logic ----------
 
   const totalProperties = properties.length;
 
@@ -261,6 +240,35 @@ export default function LandlordDashboardPage() {
     (m) => m.status?.toLowerCase() === 'new'
   ).length;
 
+  // Subscription / trial status
+  let hasActiveTrial = false;
+  let subscribedViaStripe = false;
+
+  if (landlord) {
+    const statusLower = (landlord.subscription_status || '').toLowerCase();
+    subscribedViaStripe =
+      statusLower === 'active' ||
+      statusLower === 'trialing' ||
+      statusLower === 'active_cancel_at_period_end';
+
+    if (landlord.trial_active) {
+      if (landlord.trial_end) {
+        const trialEndDate = new Date(landlord.trial_end);
+        const trialEndDateOnly = new Date(
+          trialEndDate.getFullYear(),
+          trialEndDate.getMonth(),
+          trialEndDate.getDate()
+        );
+        hasActiveTrial = trialEndDateOnly >= todayDateOnly;
+      } else {
+        // trial_active true but no end date: treat as active (defensive)
+        hasActiveTrial = true;
+      }
+    }
+  }
+
+  const isSubscribedOrTrial = subscribedViaStripe || hasActiveTrial;
+
   // ---------- Actions ----------
 
   const handleSignOut = async () => {
@@ -301,29 +309,8 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // --- Subscription / trial gating ---
-  const statusLower = (landlord.subscription_status || '').toLowerCase();
-  const subscriptionFlag = landlord.subscription_active === true;
-
-  const isSubscribedFromStatus =
-    statusLower === 'active' ||
-    statusLower === 'trialing' ||
-    statusLower === 'active_cancel_at_period_end';
-
-  const isSubscribed = subscriptionFlag || isSubscribedFromStatus;
-
-  const now = new Date();
-  let hasValidTrial = false;
-  if (landlord.trial_active && landlord.trial_end) {
-    const trialEndDate = new Date(landlord.trial_end);
-    if (!isNaN(trialEndDate.getTime())) {
-      hasValidTrial = now < trialEndDate;
-    }
-  }
-
-  const canAccessDashboard = isSubscribed || hasValidTrial;
-
-  if (!canAccessDashboard) {
+  // HARD GATE: must have active Stripe sub OR active free trial
+  if (!isSubscribedOrTrial) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-3xl bg-slate-900/80 border border-amber-500/60 p-6 shadow-xl space-y-4 text-center">
@@ -334,9 +321,9 @@ export default function LandlordDashboardPage() {
             Unlock your RentZentro landlord tools
           </h1>
           <p className="text-sm text-slate-300">
-            Your landlord account is created, but your subscription isn&apos;t active yet.
-            To access your dashboard, properties, tenants, and online rent collection,
-            please activate the{' '}
+            Your landlord account is created, but your subscription isn&apos;t active
+            and your free promo period has ended. To access your dashboard, properties,
+            tenants, and online rent collection, please activate the{' '}
             <span className="font-semibold text-emerald-300">
               $29.95/mo RentZentro Landlord Plan
             </span>
@@ -373,7 +360,7 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // If we're here: landlord exists AND subscription is active OR trial is valid → show full dashboard
+  // If we're here: landlord exists AND has active trial or subscription → show full dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -393,11 +380,6 @@ export default function LandlordDashboardPage() {
             <p className="text-[13px] text-slate-400">
               Overview of your units, rent status, and recent payments.
             </p>
-            {hasValidTrial && (
-              <p className="mt-1 text-[11px] text-emerald-300">
-                You&apos;re currently on a free promo period. Enjoy full access until your trial ends.
-              </p>
-            )}
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
