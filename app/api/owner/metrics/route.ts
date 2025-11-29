@@ -2,109 +2,130 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+type LandlordRow = {
+  id: number;
+  subscription_status: string | null;
+  trial_active: boolean | null;
+  trial_end: string | null;
+};
+
+type PropertyRow = {
+  id: number;
+  monthly_rent: number | null;
+};
+
+type TenantRow = {
+  id: number;
+};
+
 export async function GET() {
   try {
-    // ---------- Landlords ----------
-    const {
-      data: landlordsData,
-      count: totalLandlords,
-      error: landlordsError,
-    } = await supabaseAdmin
+    // ---- Load landlords ----
+    const { data: landlords, error: landlordError } = await supabaseAdmin
       .from('landlords')
-      .select('id, subscription_status', { count: 'exact' });
+      .select('id, subscription_status, trial_active, trial_end');
 
-    if (landlordsError) throw landlordsError;
+    if (landlordError) {
+      console.error('[owner metrics] Error loading landlords:', landlordError);
+      return NextResponse.json(
+        { error: 'Failed to load landlord metrics.' },
+        { status: 500 }
+      );
+    }
 
-    const paidLandlords =
-      landlordsData?.filter((l) => {
-        const s = (l.subscription_status || '').toLowerCase();
-        return s === 'active' || s === 'active_cancel_at_period_end';
-      }).length ?? 0;
+    const landlordList = (landlords || []) as LandlordRow[];
 
-    const trialLandlords =
-      landlordsData?.filter((l) => {
-        const s = (l.subscription_status || '').toLowerCase();
-        return s === 'trialing';
-      }).length ?? 0;
-
-    // ---------- Properties ----------
-    const {
-      data: propertiesData,
-      count: totalProperties,
-      error: propertiesError,
-    } = await supabaseAdmin
+    // ---- Load properties ----
+    const { data: properties, error: propertyError } = await supabaseAdmin
       .from('properties')
-      .select('monthly_rent, status', { count: 'exact' });
+      .select('id, monthly_rent');
 
-    if (propertiesError) throw propertiesError;
+    if (propertyError) {
+      console.error('[owner metrics] Error loading properties:', propertyError);
+      return NextResponse.json(
+        { error: 'Failed to load property metrics.' },
+        { status: 500 }
+      );
+    }
 
-    const totalMonthlyRent =
-      propertiesData
-        ?.filter((p) => (p.status || '').toLowerCase() === 'current')
-        .reduce((sum, p) => sum + (p.monthly_rent || 0), 0) ?? 0;
+    const propertyList = (properties || []) as PropertyRow[];
 
-    // ---------- Tenants ----------
-    const {
-      count: totalTenants,
-      error: tenantsError,
-    } = await supabaseAdmin
+    // ---- Load tenants ----
+    const { data: tenants, error: tenantError } = await supabaseAdmin
       .from('tenants')
-      .select('id', { count: 'exact', head: true });
+      .select('id');
 
-    if (tenantsError) throw tenantsError;
+    if (tenantError) {
+      console.error('[owner metrics] Error loading tenants:', tenantError);
+      return NextResponse.json(
+        { error: 'Failed to load tenant metrics.' },
+        { status: 500 }
+      );
+    }
 
-    // ---------- Payments (last 30 days) ----------
+    const tenantList = (tenants || []) as TenantRow[];
+
     const now = new Date();
-    const thirtyDaysAgo = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate() - 30
-    );
 
-    const {
-      data: paymentsData,
-      error: paymentsError,
-    } = await supabaseAdmin
-      .from('payments')
-      .select('amount, paid_on')
-      .gte('paid_on', thirtyDaysAgo.toISOString());
+    let totalLandlords = landlordList.length;
+    let paidLandlords = 0;
+    let trialLandlords = 0;
 
-    if (paymentsError) throw paymentsError;
+    landlordList.forEach((ll) => {
+      const status = (ll.subscription_status || '').toLowerCase();
 
-    const paymentsLast30Days =
-      paymentsData?.reduce((sum, p) => sum + (p.amount || 0), 0) ?? 0;
+      const isPaid =
+        status === 'active' ||
+        status === 'active_cancel_at_period_end' ||
+        status === 'past_due' ||
+        status === 'unpaid';
 
-    // ---------- MRR (rough) ----------
-    const MRR = paidLandlords * 29.95;
+      // promo-style trial (your December promo)
+      const isPromoTrial =
+        !!ll.trial_active &&
+        !!ll.trial_end &&
+        new Date(ll.trial_end) >= now;
+
+      // Stripe-style trial
+      const isStripeTrial = status === 'trialing';
+
+      if (isPaid) {
+        paidLandlords += 1;
+      } else if (isPromoTrial || isStripeTrial) {
+        // only count as trial if NOT already counted as paid
+        trialLandlords += 1;
+      }
+    });
+
+    const totalProperties = propertyList.length;
+    const totalTenants = tenantList.length;
+
+    const totalMonthlyRent = propertyList.reduce((sum, p) => {
+      const v = p.monthly_rent ?? 0;
+      if (Number.isNaN(v)) return sum;
+      return sum + v;
+    }, 0);
 
     return NextResponse.json(
       {
-        totalLandlords: totalLandlords ?? 0,
-        totalProperties: totalProperties ?? 0,
-        totalTenants: totalTenants ?? 0,
-        totalMonthlyRent,
+        totalLandlords,
         paidLandlords,
         trialLandlords,
-        MRR,
-        paymentsLast30Days,
+        totalProperties,
+        totalTenants,
+        totalMonthlyRent,
       },
       { status: 200 }
     );
   } catch (err: any) {
-    console.error('[owner metrics] Error:', err);
+    console.error('[owner metrics] Fatal error:', err);
     return NextResponse.json(
-      {
-        error:
-          err?.message || 'Failed to load owner metrics. Check server logs.',
-      },
+      { error: err?.message || 'Unexpected error loading owner metrics.' },
       { status: 500 }
     );
   }
