@@ -11,6 +11,7 @@ type LandlordRow = {
   id: number;
   email: string;
   name: string | null;
+  user_id: string | null; // auth UID for this landlord
   subscription_status: string | null;
   subscription_current_period_end: string | null;
   trial_active: boolean | null;
@@ -116,15 +117,12 @@ export default function LandlordDashboardPage() {
         const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError) throw authError;
 
-        const user = authData.user;
-        const email = user?.email;
-        const authUserId = user?.id;
-
-        if (!email || !authUserId) {
+        const email = authData.user?.email;
+        if (!email) {
           throw new Error('Unable to load landlord account. Please log in again.');
         }
 
-        // 2) Load landlord row (including trial + subscription fields)
+        // 2) Load landlord row (including trial + subscription fields + user_id)
         const { data: landlordRow, error: landlordError } = await supabase
           .from('landlords')
           .select(
@@ -132,6 +130,7 @@ export default function LandlordDashboardPage() {
             id,
             email,
             name,
+            user_id,
             subscription_status,
             subscription_current_period_end,
             trial_active,
@@ -152,44 +151,53 @@ export default function LandlordDashboardPage() {
         setLandlord(landlordTyped);
 
         // 3) Load dashboard data (we'll gate in the UI)
-        const [propRes, tenantRes, paymentRes, maintRes, unreadRes] =
-          await Promise.all([
-            supabase
-              .from('properties')
-              .select('*')
-              .order('created_at', { ascending: false }),
-            supabase
-              .from('tenants')
-              .select('*')
-              .order('created_at', { ascending: false }),
-            supabase
-              .from('payments')
-              .select('*')
-              .order('paid_on', { ascending: false })
-              .limit(10),
-            supabase
-              .from('maintenance_requests')
-              .select('id, status')
-              .order('created_at', { ascending: false }),
-            supabase
-              .from('messages')
-              .select('id')
-              .eq('landlord_user_id', authUserId)
-              .eq('sender_type', 'tenant')
-              .is('read_at', null),
-          ]);
+        const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
+          supabase
+            .from('properties')
+            .select('*')
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('tenants')
+            .select('*')
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('payments')
+            .select('*')
+            .order('paid_on', { ascending: false })
+            .limit(10),
+          supabase
+            .from('maintenance_requests')
+            .select('id, status')
+            .order('created_at', { ascending: false }),
+        ]);
 
         if (propRes.error) throw propRes.error;
         if (tenantRes.error) throw tenantRes.error;
         if (paymentRes.error) throw paymentRes.error;
         if (maintRes.error) throw maintRes.error;
-        if (unreadRes.error) throw unreadRes.error;
 
         setProperties((propRes.data || []) as PropertyRow[]);
         setTenants((tenantRes.data || []) as TenantRow[]);
         setPayments((paymentRes.data || []) as PaymentRow[]);
         setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
-        setNewMessageCount((unreadRes.data || []).length);
+
+        // 4) Unread messages for this landlord (tenant -> landlord)
+        if (landlordTyped.user_id) {
+          const { data: unreadRows, error: unreadError } = await supabase
+            .from('messages')
+            .select('id')
+            .eq('landlord_user_id', landlordTyped.user_id)
+            .eq('sender_type', 'tenant')
+            .is('read_at', null);
+
+          if (unreadError) {
+            console.error('Unread messages query error:', unreadError);
+          } else {
+            setNewMessageCount((unreadRows || []).length);
+          }
+        } else {
+          setNewMessageCount(0);
+        }
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Failed to load landlord dashboard data.');
