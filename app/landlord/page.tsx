@@ -101,6 +101,7 @@ export default function LandlordDashboardPage() {
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRow[]>([]);
+  const [newMessageCount, setNewMessageCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   // ---------- Load landlord + data ----------
@@ -115,8 +116,11 @@ export default function LandlordDashboardPage() {
         const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError) throw authError;
 
-        const email = authData.user?.email;
-        if (!email) {
+        const user = authData.user;
+        const email = user?.email;
+        const authUserId = user?.id;
+
+        if (!email || !authUserId) {
           throw new Error('Unable to load landlord account. Please log in again.');
         }
 
@@ -148,35 +152,44 @@ export default function LandlordDashboardPage() {
         setLandlord(landlordTyped);
 
         // 3) Load dashboard data (we'll gate in the UI)
-        const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
-          supabase
-            .from('properties')
-            .select('*')
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('tenants')
-            .select('*')
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('payments')
-            .select('*')
-            .order('paid_on', { ascending: false })
-            .limit(10),
-          supabase
-            .from('maintenance_requests')
-            .select('id, status')
-            .order('created_at', { ascending: false }),
-        ]);
+        const [propRes, tenantRes, paymentRes, maintRes, unreadRes] =
+          await Promise.all([
+            supabase
+              .from('properties')
+              .select('*')
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('tenants')
+              .select('*')
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('payments')
+              .select('*')
+              .order('paid_on', { ascending: false })
+              .limit(10),
+            supabase
+              .from('maintenance_requests')
+              .select('id, status')
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('messages')
+              .select('id')
+              .eq('landlord_user_id', authUserId)
+              .eq('sender_type', 'tenant')
+              .is('read_at', null),
+          ]);
 
         if (propRes.error) throw propRes.error;
         if (tenantRes.error) throw tenantRes.error;
         if (paymentRes.error) throw paymentRes.error;
         if (maintRes.error) throw maintRes.error;
+        if (unreadRes.error) throw unreadRes.error;
 
         setProperties((propRes.data || []) as PropertyRow[]);
         setTenants((tenantRes.data || []) as TenantRow[]);
         setPayments((paymentRes.data || []) as PaymentRow[]);
         setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
+        setNewMessageCount((unreadRes.data || []).length);
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Failed to load landlord dashboard data.');
@@ -397,6 +410,19 @@ export default function LandlordDashboardPage() {
               className="text-xs px-3 py-2 rounded-full border border-emerald-600 bg-slate-900 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
             >
               Documents
+            </Link>
+
+            {/* Messages with badge */}
+            <Link
+              href="/landlord/messages"
+              className="relative flex items-center gap-1 text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            >
+              <span>Messages</span>
+              {newMessageCount > 0 && (
+                <span className="ml-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
+                  {newMessageCount}
+                </span>
+              )}
             </Link>
 
             {/* Maintenance with badge */}

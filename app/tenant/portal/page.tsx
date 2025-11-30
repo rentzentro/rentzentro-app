@@ -137,6 +137,7 @@ export default function TenantPortalPage() {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceRow[]>([]);
+  const [newMessageCount, setNewMessageCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
@@ -153,9 +154,13 @@ export default function TenantPortalPage() {
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
         if (authError) throw authError;
-        const email = authData.user?.email;
-        if (!email) {
-          throw new Error('Unable to load tenant: missing email on your account.');
+
+        const user = authData.user;
+        const email = user?.email;
+        const authUserId = user?.id;
+
+        if (!email || !authUserId) {
+          throw new Error('Unable to load tenant: missing account data.');
         }
 
         // Tenant (lookup by email)
@@ -274,6 +279,20 @@ export default function TenantPortalPage() {
           console.error('Tenant portal maintenance error:', maintError);
         }
         setMaintenance((maintRows || []) as MaintenanceRow[]);
+
+        // Unread messages for this tenant (from landlord)
+        const { data: unreadRows, error: unreadError } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('tenant_user_id', authUserId)
+          .eq('sender_type', 'landlord')
+          .is('read_at', null);
+
+        if (unreadError) {
+          console.error('Tenant portal unread messages error:', unreadError);
+        } else {
+          setNewMessageCount((unreadRows || []).length);
+        }
       } catch (err: any) {
         console.error(err);
         setError(
@@ -434,12 +453,25 @@ export default function TenantPortalPage() {
               </p>
               <p className="text-slate-400 text-[11px]">{tenant.email}</p>
             </div>
-            <button
-              onClick={handleLogOut}
-              className="rounded-md bg-slate-800 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
-            >
-              Log out
-            </button>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/tenant/messages"
+                className="relative inline-flex items-center gap-1 rounded-md bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 border border-slate-600 hover:bg-slate-800"
+              >
+                <span>Messages</span>
+                {newMessageCount > 0 && (
+                  <span className="ml-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
+                    {newMessageCount}
+                  </span>
+                )}
+              </Link>
+              <button
+                onClick={handleLogOut}
+                className="rounded-md bg-slate-800 px-3 py-1.5 text-[11px] font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+              >
+                Log out
+              </button>
+            </div>
           </div>
         </header>
 

@@ -1,0 +1,157 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { supabase } from '../../supabaseClient';
+import { ConversationPanel } from '../../components/ConversationPanel';
+
+type TenantRow = {
+  id: number;
+  name: string | null;
+  email: string;
+  user_id: string | null; // auth.users UUID
+  owner_id: string | null; // landlord auth UUID
+};
+
+type LandlordRow = {
+  id: number;
+  name: string | null;
+  email: string;
+  user_id: string | null; // auth.users UUID
+};
+
+export default function TenantMessagesPage() {
+  const router = useRouter();
+
+  const [tenant, setTenant] = useState<TenantRow | null>(null);
+  const [landlord, setLandlord] = useState<LandlordRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+        const user = authData.user;
+        if (!user) {
+          router.push('/tenant/login');
+          return;
+        }
+
+        const { data: tenantRow, error: tenantError } = await supabase
+          .from('tenants')
+          .select('id, name, email, user_id, owner_id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (tenantError || !tenantRow) {
+          throw tenantError || new Error('Tenant record not found.');
+        }
+
+        setTenant(tenantRow as TenantRow);
+
+        if (!tenantRow.owner_id) {
+          setLandlord(null);
+          setError('No landlord is linked to this tenant account yet.');
+          return;
+        }
+
+        const { data: landlordRow, error: landlordError } = await supabase
+          .from('landlords')
+          .select('id, name, email, user_id')
+          .eq('user_id', tenantRow.owner_id)
+          .single();
+
+        if (landlordError || !landlordRow) {
+          throw landlordError || new Error('Landlord account not found.');
+        }
+
+        setLandlord(landlordRow as LandlordRow);
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || 'Failed to load messages.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [router]);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/tenant/login');
+  };
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-slate-50">
+      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-6 lg:px-6">
+        {/* Top shell */}
+        <header className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/tenant/portal"
+              className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-800"
+            >
+              ← Back to portal
+            </Link>
+            <h1 className="text-base font-semibold text-slate-50">
+              Messages
+            </h1>
+          </div>
+          <button
+            onClick={handleSignOut}
+            className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+          >
+            Log out
+          </button>
+        </header>
+
+        {error && (
+          <div className="mb-3 rounded-2xl border border-rose-500/50 bg-rose-950/40 px-4 py-2 text-xs text-rose-100">
+            {error}
+          </div>
+        )}
+
+        {loading && (
+          <div className="text-xs text-slate-400">Loading…</div>
+        )}
+
+        {!loading && (!tenant || !landlord) && !error && (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-4 text-xs text-slate-200">
+            We couldn&apos;t find a linked landlord for this account yet. Please
+            contact your landlord to confirm your invite link.
+          </div>
+        )}
+
+        {!loading &&
+          tenant &&
+          landlord &&
+          tenant.user_id &&
+          landlord.user_id && (
+            <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
+              <div className="mb-2 text-[11px] text-slate-300">
+                You&apos;re messaging{' '}
+                <span className="font-semibold">
+                  {landlord.name || landlord.email}
+                </span>
+                .
+              </div>
+              <ConversationPanel
+                landlordId={landlord.id}
+                landlordUserId={landlord.user_id}
+                tenantId={tenant.id}
+                tenantUserId={tenant.user_id}
+                currentRole="tenant"
+              />
+            </section>
+          )}
+      </div>
+    </main>
+  );
+}
