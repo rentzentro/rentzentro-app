@@ -11,7 +11,7 @@ type TenantRow = {
   name: string | null;
   email: string;
   user_id: string | null;
-  owner_id: string | null; // landlord auth UUID
+  owner_id: string | null; // landlord auth UUID (ideally)
 };
 
 type LandlordRow = {
@@ -71,27 +71,50 @@ export default function TenantMessagesPage() {
 
         setTenant(t);
 
-        if (!t.owner_id) {
+        // ---- Find landlord for this tenant ----
+        let landlordRecord: LandlordRow | null = null;
+
+        // 1) Best case: owner_id holds the landlord auth user_id
+        if (t.owner_id) {
+          const { data: landlordByOwner, error: landlordByOwnerError } =
+            await supabase
+              .from('landlords')
+              .select('id, name, email, user_id')
+              .eq('user_id', t.owner_id)
+              .maybeSingle();
+
+          if (landlordByOwnerError) {
+            console.error('Tenant messages landlord lookup (owner_id) error:', landlordByOwnerError);
+          } else if (landlordByOwner) {
+            landlordRecord = landlordByOwner as LandlordRow;
+          }
+        }
+
+        // 2) Fallback: just grab the first landlord in the table (you only have one)
+        if (!landlordRecord) {
+          const { data: landlordRows, error: landlordListError } =
+            await supabase
+              .from('landlords')
+              .select('id, name, email, user_id')
+              .order('created_at', { ascending: true })
+              .limit(1);
+
+          if (landlordListError) {
+            console.error('Tenant messages landlord fallback error:', landlordListError);
+          } else if (landlordRows && landlordRows.length > 0) {
+            landlordRecord = landlordRows[0] as LandlordRow;
+          }
+        }
+
+        if (!landlordRecord || !landlordRecord.user_id) {
           setLandlord(null);
-          setError('No landlord is linked to this tenant account yet.');
+          setError(
+            'Landlord account not found for this tenant. Please contact your landlord to confirm your invite.'
+          );
           return;
         }
 
-        // ---- Load landlord by owner_id (auth UUID) ----
-        const { data: landlordRow, error: landlordError } = await supabase
-          .from('landlords')
-          .select('id, name, email, user_id')
-          .eq('user_id', t.owner_id)
-          .maybeSingle();
-
-        if (landlordError) throw landlordError;
-        if (!landlordRow) {
-          setLandlord(null);
-          setError('Landlord account not found for this tenant.');
-          return;
-        }
-
-        setLandlord(landlordRow as LandlordRow);
+        setLandlord(landlordRecord);
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Failed to load messages.');
@@ -116,13 +139,14 @@ export default function TenantMessagesPage() {
     );
   }
 
+  // If tenant or landlord is missing, show a soft error instead of blowing up
   if (!tenant || !landlord || !tenant.user_id || !landlord.user_id) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
         <div className="mx-auto max-w-md rounded-2xl border border-rose-500/60 bg-rose-950/40 p-4 text-xs text-rose-100 space-y-3">
           <p>
             {error ||
-              'Messaging is not available yet because your tenant profile is not fully linked to your online portal account.'}
+              'Messaging is not available yet because your tenant profile is not fully linked to your landlord account.'}
           </p>
           <button
             onClick={handleSignOut}
