@@ -18,6 +18,7 @@ type TenantRow = {
   monthly_rent: number | null;
   lease_start: string | null;
   lease_end: string | null;
+  user_id?: string | null;
 };
 
 type PropertyRow = {
@@ -163,18 +164,22 @@ export default function TenantPortalPage() {
           throw new Error('Unable to load tenant: missing account data.');
         }
 
-        // Tenant (lookup by email)
+        // Tenant: prefer user_id match, fall back to email
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select(
-            'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end'
+            'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id'
           )
-          .eq('email', email)
-          .limit(1);
+          .or(`user_id.eq.${authUserId},email.eq.${email}`)
+          .order('created_at', { ascending: true });
 
         if (tenantError) throw tenantError;
 
-        const t = (tenantRows && tenantRows[0]) as TenantRow | undefined;
+        let t: TenantRow | null =
+          tenantRows && tenantRows.length > 0
+            ? (tenantRows.find((row: any) => row.user_id === authUserId) ??
+              tenantRows[0])
+            : null;
 
         if (!t) {
           setTenant(null);
@@ -188,6 +193,22 @@ export default function TenantPortalPage() {
               'Please contact your landlord to confirm they added you with this exact email address.'
           );
           return;
+        }
+
+        // --- Auto-link tenant.user_id on first login ---
+        if (!t.user_id) {
+          const { data: updated, error: updateError } = await supabase
+            .from('tenants')
+            .update({ user_id: authUserId })
+            .eq('id', t.id)
+            .select('id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id')
+            .maybeSingle();
+
+          if (updateError) {
+            console.error('Failed to link tenant.user_id:', updateError);
+          } else if (updated) {
+            t = updated as TenantRow;
+          }
         }
 
         setTenant(t);
@@ -281,17 +302,21 @@ export default function TenantPortalPage() {
         setMaintenance((maintRows || []) as MaintenanceRow[]);
 
         // Unread messages for this tenant (from landlord)
-        const { data: unreadRows, error: unreadError } = await supabase
-          .from('messages')
-          .select('id')
-          .eq('tenant_user_id', authUserId)
-          .eq('sender_type', 'landlord')
-          .is('read_at', null);
+        if (t.user_id) {
+          const { data: unreadRows, error: unreadError } = await supabase
+            .from('messages')
+            .select('id')
+            .eq('tenant_user_id', t.user_id)
+            .eq('sender_type', 'landlord')
+            .is('read_at', null);
 
-        if (unreadError) {
-          console.error('Tenant portal unread messages error:', unreadError);
+          if (unreadError) {
+            console.error('Tenant portal unread messages error:', unreadError);
+          } else {
+            setNewMessageCount((unreadRows || []).length);
+          }
         } else {
-          setNewMessageCount((unreadRows || []).length);
+          setNewMessageCount(0);
         }
       } catch (err: any) {
         console.error(err);
