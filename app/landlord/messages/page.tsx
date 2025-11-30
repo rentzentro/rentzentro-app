@@ -71,6 +71,7 @@ export default function LandlordMessagesPage() {
         }
 
         const landlordTyped = landlordRow as LandlordRow;
+
         // Defensive: if user_id is null, backfill from auth
         if (!landlordTyped.user_id) {
           const { data: updated, error: updateError } = await supabase
@@ -102,6 +103,7 @@ export default function LandlordMessagesPage() {
         setTenants(tenantList);
 
         // Unread messages per tenant (tenant -> landlord)
+        let counts: Record<string, number> = {};
         if (landlordTyped.user_id) {
           const { data: unreadRows, error: unreadError } = await supabase
             .from('messages')
@@ -113,26 +115,24 @@ export default function LandlordMessagesPage() {
           if (unreadError) {
             console.error('Unread-by-tenant query error:', unreadError);
           } else {
-            const counts: Record<string, number> = {};
+            counts = {};
             (unreadRows || []).forEach((row: any) => {
               const key = row.tenant_user_id as string | null;
               if (!key) return;
               counts[key] = (counts[key] || 0) + 1;
             });
-            setUnreadByTenant(counts);
           }
-        } else {
-          setUnreadByTenant({});
         }
 
-        // Default selection: first tenant with unread, otherwise first tenant
-        if (tenantList.length > 0) {
-          const tenantWithUnread =
-            tenantList.find(
-              (t) => t.user_id && unreadByTenant[t.user_id] && unreadByTenant[t.user_id] > 0
-            ) || tenantList[0];
+        setUnreadByTenant(counts);
 
-          setSelectedTenant(tenantWithUnread);
+        // Default selection: tenant with unread first, else first tenant
+        if (tenantList.length > 0) {
+          const withUnread =
+            tenantList.find(
+              (t) => t.user_id && counts[t.user_id] && counts[t.user_id] > 0
+            ) || tenantList[0];
+          setSelectedTenant(withUnread);
         } else {
           setSelectedTenant(null);
         }
@@ -148,18 +148,30 @@ export default function LandlordMessagesPage() {
     };
 
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---------- Actions ----------
 
   const handleBack = () => {
-    router.push('/landlord/dashboard');
+    // Go to landlord main dashboard (no 404)
+    router.push('/landlord');
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/landlord/login');
+  };
+
+  const handleSelectTenant = (t: TenantRow) => {
+    setSelectedTenant(t);
+
+    // Optimistically clear unread badge for this tenant
+    if (t.user_id) {
+      setUnreadByTenant((prev) => ({
+        ...prev,
+        [t.user_id as string]: 0,
+      }));
+    }
   };
 
   // ---------- Render ----------
@@ -197,24 +209,26 @@ export default function LandlordMessagesPage() {
         {/* Header */}
         <header className="flex items-center justify-between gap-4">
           <div className="space-y-1">
-            <button
-              type="button"
-              onClick={handleBack}
-              className="text-[11px] text-slate-500 hover:text-emerald-300"
-            >
-              ← Back to dashboard
-            </button>
             <h1 className="text-lg font-semibold text-slate-50">Messages</h1>
             <p className="text-[11px] text-slate-400">
               Send and receive messages with your tenants.
             </p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
-          >
-            Log out
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
+            >
+              Back to dashboard
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
+            >
+              Log out
+            </button>
+          </div>
         </header>
 
         {error && (
@@ -249,7 +263,7 @@ export default function LandlordMessagesPage() {
                     <button
                       key={t.id}
                       type="button"
-                      onClick={() => setSelectedTenant(t)}
+                      onClick={() => handleSelectTenant(t)}
                       className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-xs transition
                         ${
                           isSelected
