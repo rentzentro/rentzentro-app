@@ -1,212 +1,243 @@
+// app/api/messages/notify/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const FROM_EMAIL =
-  process.env.RENTZENTRO_FROM_EMAIL || 'notifications@rentzentro.com';
-
-// Supabase admin client (service role)
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-// Resend client (it’s OK if API key is empty – we’ll guard later)
-const resend = new Resend(RESEND_API_KEY);
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
+const RESEND_API_KEY = process.env.RESEND_API_KEY as string;
+
+// This should be notifications@rentzentro.com in your env
+const FROM_EMAIL =
+  process.env.RENTZENTRO_FROM_EMAIL || 'notifications@rentzentro.com';
+
+const resend = new Resend(RESEND_API_KEY);
+
+const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const { messageId } = body || {};
+    const body = (await req.json().catch(() => ({}))) as {
+      messageId?: string;
+    };
 
-    console.log('[messages/notify] Incoming request with body:', body);
+    const { messageId } = body;
 
     if (!messageId) {
-      console.error('[messages/notify] Missing messageId in request body');
+      console.error('[messages/notify] Missing messageId in body', body);
       return NextResponse.json(
-        { error: 'messageId is required' },
+        { error: 'Missing messageId' },
         { status: 400 }
       );
     }
 
-    if (!RESEND_API_KEY) {
-      console.error(
-        '[messages/notify] RESEND_API_KEY is not set. Skipping email send.'
-      );
-      return NextResponse.json({ ok: true });
-    }
+    console.log('[messages/notify] Incoming request', { messageId });
 
-    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-      console.error(
-        '[messages/notify] Supabase env vars missing. Skipping email send.'
-      );
-      return NextResponse.json({ ok: true });
-    }
-
-    // 1) Load the message
-    const { data: msg, error: msgError } = await supabaseAdmin
+    // 1) Load message
+    const { data: message, error: messageError } = await supabaseAdmin
       .from('messages')
       .select(
-        'id, created_at, sender_type, body, landlord_id, tenant_id'
+        `
+        id,
+        created_at,
+        body,
+        sender_type,
+        landlord_id,
+        tenant_id
+      `
       )
       .eq('id', messageId)
       .maybeSingle();
 
-    if (msgError) {
-      console.error('[messages/notify] Message lookup error:', msgError);
+    if (messageError) {
+      console.error('[messages/notify] Error loading message', messageError);
       return NextResponse.json(
         { error: 'Failed to load message' },
         { status: 500 }
       );
     }
 
-    if (!msg) {
-      console.error('[messages/notify] Message not found for id:', messageId);
+    if (!message) {
+      console.error('[messages/notify] No message found for id', messageId);
       return NextResponse.json(
         { error: 'Message not found' },
         { status: 404 }
       );
     }
 
-    console.log('[messages/notify] Loaded message:', msg);
+    console.log('[messages/notify] Loaded message', message);
 
-    // 2) Load landlord + tenant rows
-    const [
-      { data: landlordRow, error: landlordError },
-      { data: tenantRow, error: tenantError },
-    ] = await Promise.all([
-      supabaseAdmin
-        .from('landlords')
-        .select('id, name, email')
-        .eq('id', msg.landlord_id)
-        .maybeSingle(),
-      supabaseAdmin
-        .from('tenants')
-        .select('id, name, email')
-        .eq('id', msg.tenant_id)
-        .maybeSingle(),
-    ]);
+    // 2) Load landlord (we always need this)
+    const { data: landlord, error: landlordError } = await supabaseAdmin
+      .from('landlords')
+      .select('id, name, email')
+      .eq('id', message.landlord_id)
+      .maybeSingle();
 
     if (landlordError) {
-      console.error('[messages/notify] Landlord lookup error:', landlordError);
-    }
-    if (tenantError) {
-      console.error('[messages/notify] Tenant lookup error:', tenantError);
+      console.error('[messages/notify] Error loading landlord', landlordError);
+      return NextResponse.json(
+        { error: 'Failed to load landlord' },
+        { status: 500 }
+      );
     }
 
-    if (!landlordRow || !tenantRow) {
-      console.error('[messages/notify] Missing landlord or tenant row:', {
-        landlordRow,
-        tenantRow,
+    if (!landlord || !landlord.email) {
+      console.error('[messages/notify] Landlord missing email', {
+        landlord,
+        landlord_id: message.landlord_id,
       });
-      return NextResponse.json({ ok: true });
+      return NextResponse.json(
+        { error: 'Landlord has no email' },
+        { status: 400 }
+      );
     }
 
-    console.log('[messages/notify] Landlord row:', landlordRow);
-    console.log('[messages/notify] Tenant row:', tenantRow);
+    console.log('[messages/notify] Landlord row', landlord);
 
-    // 3) Decide who gets the email
-    const senderTypeRaw = msg.sender_type as string | null;
-    const senderType =
-      senderTypeRaw && senderTypeRaw.toLowerCase() === 'landlord'
-        ? 'landlord'
-        : 'tenant';
-
+    // 3) Decide who we are emailing based on sender_type
     let toEmail: string | null = null;
-    let toName = '';
-    let replyToEmail: string | null = null;
-    let senderName = '';
+    let toName: string | null = null;
+    let replyToEmail: string | undefined;
+    let subject: string;
+    let intro: string;
 
-    if (senderType === 'landlord') {
-      // Landlord sent -> notify tenant
-      toEmail = tenantRow.email;
-      toName = tenantRow.name || tenantRow.email;
-      replyToEmail = landlordRow.email;
-      senderName = landlordRow.name || landlordRow.email;
-    } else {
-      // Tenant sent -> notify landlord
-      toEmail = landlordRow.email;
-      toName = landlordRow.name || landlordRow.email;
-      replyToEmail = tenantRow.email;
-      senderName = tenantRow.name || tenantRow.email;
+    // We will also load tenant (we need it in both branches for reply-to, etc.)
+    const { data: tenant, error: tenantError } = await supabaseAdmin
+      .from('tenants')
+      .select('id, name, email')
+      .eq('id', message.tenant_id)
+      .maybeSingle();
+
+    if (tenantError) {
+      console.error('[messages/notify] Error loading tenant', tenantError);
+      // Not fatal for landlord-only notifications, but we bail for safety
+      return NextResponse.json(
+        { error: 'Failed to load tenant' },
+        { status: 500 }
+      );
     }
 
-    console.log('[messages/notify] Computed routing:', {
-      senderType,
-      toEmail,
-      toName,
-      replyToEmail,
-      senderName,
-    });
+    // ---------- sender: landlord → notify tenant ----------
+    if (message.sender_type === 'landlord') {
+      if (!tenant || !tenant.email) {
+        console.error('[messages/notify] Tenant missing email for notify', {
+          tenant,
+          tenant_id: message.tenant_id,
+        });
+        return NextResponse.json(
+          { error: 'Tenant has no email' },
+          { status: 400 }
+        );
+      }
+
+      toEmail = tenant.email;
+      toName = tenant.name || tenant.email;
+      replyToEmail = landlord.email || undefined;
+
+      subject = 'New message from your landlord on RentZentro';
+      intro = `You have a new message from your landlord${
+        landlord.name ? `, ${landlord.name}` : ''
+      } on RentZentro.`;
+    } else {
+      // ---------- sender: tenant → notify landlord ----------
+      toEmail = landlord.email;
+      toName = landlord.name || landlord.email;
+      replyToEmail = tenant?.email || undefined;
+
+      subject = 'New message from your tenant on RentZentro';
+      intro = `You have a new message from your tenant${
+        tenant?.name ? `, ${tenant.name}` : ''
+      } on RentZentro.`;
+    }
 
     if (!toEmail) {
-      console.error(
-        '[messages/notify] No destination email for message id:',
-        messageId
+      console.error('[messages/notify] No recipient email resolved');
+      return NextResponse.json(
+        { error: 'No recipient email' },
+        { status: 400 }
       );
-      return NextResponse.json({ ok: true });
     }
 
     // 4) Build email content
-    const snippet =
-      typeof msg.body === 'string'
-        ? msg.body.length > 260
-          ? msg.body.slice(0, 257) + '...'
-          : msg.body
-        : '';
+    const snippet = (message.body || '').slice(0, 280);
 
-    const subject = 'New message on RentZentro';
+    const text = [
+      intro,
+      '',
+      'Message:',
+      message.body || '(no message body)',
+      '',
+      'Log in to your RentZentro portal to reply:',
+      'https://www.rentzentro.com',
+    ].join('\n');
 
-    const text = `Hi ${toName},
+    const html = `
+      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size:14px; color:#e5e7eb; background-color:#020617; padding:24px;">
+        <div style="max-width:560px; margin:0 auto; background-color:#020617; border-radius:18px; border:1px solid #1e293b; padding:20px;">
+          <p style="font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:#9ca3af; margin:0 0 8px;">
+            RentZentro notification
+          </p>
+          <h1 style="font-size:18px; margin:0 0 8px; color:#f9fafb;">
+            ${subject}
+          </h1>
+          <p style="margin:0 0 16px; color:#d1d5db;">${intro}</p>
 
-You have a new message from ${senderName} on RentZentro.
+          <div style="margin:16px 0; padding:14px 16px; border-radius:14px; background:#020617; border:1px solid #1e293b;">
+            <p style="margin:0 0 6px; font-size:12px; color:#9ca3af;">Latest message:</p>
+            <p style="margin:0; white-space:pre-wrap; color:#e5e7eb;">
+              ${snippet || '(no message body)'}
+            </p>
+          </div>
 
-Message:
-"${snippet}"
+          <p style="margin:16px 0 4px; font-size:13px; color:#d1d5db;">
+            Log in to your RentZentro portal to view the full conversation and reply:
+          </p>
+          <p style="margin:0 0 16px;">
+            <a href="https://www.rentzentro.com" style="display:inline-block; background-color:#22c55e; color:#020617; padding:8px 16px; border-radius:999px; font-weight:600; font-size:13px; text-decoration:none;">
+              Open RentZentro
+            </a>
+          </p>
 
-Log in to your RentZentro portal to view and reply.
+          <p style="margin:12px 0 0; font-size:11px; color:#6b7280;">
+            You’re receiving this email because messaging is enabled for your RentZentro account.
+          </p>
+        </div>
+      </div>
+    `;
 
-– RentZentro
-`;
-
-    const html = `<p>Hi ${toName},</p>
-<p>You have a new message from <strong>${senderName}</strong> on <strong>RentZentro</strong>.</p>
-<p style="margin: 12px 0; padding: 8px 12px; border-radius: 8px; background: #020617; color: #e5e7eb; border: 1px solid #1f2937; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;">
-  ${snippet || '(no message body)'}
-</p>
-<p>Log in to your RentZentro portal to view and reply.</p>
-<p style="color:#9ca3af;">– RentZentro</p>`;
-
-    console.log('[messages/notify] Sending email via Resend from:', FROM_EMAIL);
-
-    // 5) Send via Resend – ALWAYS from your verified RentZentro email
-    const sendResult = (await resend.emails.send({
+    // 5) Send via Resend
+    const sendResult = await resend.emails.send({
       from: `RentZentro <${FROM_EMAIL}>`,
       to: [toEmail],
       subject,
       text,
       html,
-      replyTo: replyToEmail || undefined,
-    })) as any;
+      // OK if undefined – Resend ignores it when not set
+      reply_to: replyToEmail,
+    } as any);
 
-    console.log('[messages/notify] Resend send result:', sendResult);
+    console.log('[messages/notify] Resend send result', sendResult);
 
-    if (sendResult?.error) {
-      console.error('[messages/notify] Resend send error:', sendResult.error);
+    if ((sendResult as any).error) {
+      console.error(
+        '[messages/notify] Resend error',
+        (sendResult as any).error
+      );
       return NextResponse.json(
-        { error: 'Failed to send email notification' },
+        { error: 'Failed to send email' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('[messages/notify] Unexpected error:', err);
+    console.error('[messages/notify] Unexpected error', err);
     return NextResponse.json(
-      { error: 'Internal error sending notification' },
+      { error: 'Internal error sending notify email' },
       { status: 500 }
     );
   }
