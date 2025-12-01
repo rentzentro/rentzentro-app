@@ -22,14 +22,16 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { messageId } = body || {};
 
+    console.log('[messages/notify] Incoming request with body:', body);
+
     if (!messageId) {
+      console.error('[messages/notify] Missing messageId in request body');
       return NextResponse.json(
         { error: 'messageId is required' },
         { status: 400 }
       );
     }
 
-    // If no API key, just skip sending so app doesn’t crash
     if (!RESEND_API_KEY) {
       console.error(
         '[messages/notify] RESEND_API_KEY is not set. Skipping email send.'
@@ -69,6 +71,8 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log('[messages/notify] Loaded message:', msg);
+
     // 2) Load landlord + tenant rows
     const [
       { data: landlordRow, error: landlordError },
@@ -101,8 +105,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    console.log('[messages/notify] Landlord row:', landlordRow);
+    console.log('[messages/notify] Tenant row:', tenantRow);
+
     // 3) Decide who gets the email
-    const senderType: 'landlord' | 'tenant' = msg.sender_type;
+    const senderTypeRaw = msg.sender_type as string | null;
+    const senderType =
+      senderTypeRaw && senderTypeRaw.toLowerCase() === 'landlord'
+        ? 'landlord'
+        : 'tenant';
 
     let toEmail: string | null = null;
     let toName = '';
@@ -122,6 +133,14 @@ export async function POST(req: Request) {
       replyToEmail = tenantRow.email;
       senderName = tenantRow.name || tenantRow.email;
     }
+
+    console.log('[messages/notify] Computed routing:', {
+      senderType,
+      toEmail,
+      toName,
+      replyToEmail,
+      senderName,
+    });
 
     if (!toEmail) {
       console.error(
@@ -161,6 +180,8 @@ Log in to your RentZentro portal to view and reply.
 <p>Log in to your RentZentro portal to view and reply.</p>
 <p style="color:#9ca3af;">– RentZentro</p>`;
 
+    console.log('[messages/notify] Sending email via Resend from:', FROM_EMAIL);
+
     // 5) Send via Resend – ALWAYS from your verified RentZentro email
     const sendResult = (await resend.emails.send({
       from: `RentZentro <${FROM_EMAIL}>`,
@@ -168,9 +189,10 @@ Log in to your RentZentro portal to view and reply.
       subject,
       text,
       html,
-      // NOTE: Resend SDK uses "replyTo" (camelCase), not "reply_to"
       replyTo: replyToEmail || undefined,
     })) as any;
+
+    console.log('[messages/notify] Resend send result:', sendResult);
 
     if (sendResult?.error) {
       console.error('[messages/notify] Resend send error:', sendResult.error);
