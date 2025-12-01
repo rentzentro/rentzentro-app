@@ -14,7 +14,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 // --- Email setup (same stack as maintenance emails) ---
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL =
-  process.env.RENTZENTRO_FROM_EMAIL || 'no-reply@rentzentro.com';
+  process.env.RENTZENTRO_FROM_EMAIL || 'notifications@rentzentro.com';
 
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 

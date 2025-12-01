@@ -6,7 +6,7 @@ export const resend = new Resend(process.env.RESEND_API_KEY || '');
 
 // Default "from" identity for RentZentro emails
 export const RENTZENTRO_FROM_EMAIL =
-  'RentZentro <no-reply@rentzentro.com>';
+  'RentZentro <notifications@rentzentro.com>';
 
 // Optional: support email you can reuse elsewhere
 export const RENTZENTRO_REPLY_TO = 'rentzentro@gmail.com';

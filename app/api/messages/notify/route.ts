@@ -6,7 +6,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FROM_EMAIL =
-  process.env.RENTZENTRO_FROM_EMAIL || 'no-reply@rentzentro.com';
+  process.env.RENTZENTRO_FROM_EMAIL || 'notifications@rentzentro.com';
 
 // Supabase admin client (service role)
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
