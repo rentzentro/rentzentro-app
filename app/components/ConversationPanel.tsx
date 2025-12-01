@@ -20,7 +20,7 @@ type MessageRow = {
   tenant_user_id: string | null;
   sender_type: 'landlord' | 'tenant';
   body: string;
-  read_at: string | null;
+  read_at: string | null; // when the *recipient* saw it
 };
 
 export function ConversationPanel({
@@ -39,7 +39,7 @@ export function ConversationPanel({
   const otherSenderType: 'landlord' | 'tenant' =
     currentRole === 'landlord' ? 'tenant' : 'landlord';
 
-  // ---------- Mark messages as read ----------
+  // ---------- Mark messages as read (for this viewer) ----------
 
   const markMessagesRead = useCallback(async () => {
     try {
@@ -48,17 +48,18 @@ export function ConversationPanel({
         .update({ read_at: new Date().toISOString() })
         .eq('landlord_user_id', landlordUserId)
         .eq('tenant_user_id', tenantUserId)
-        .eq('sender_type', otherSenderType)
+        .eq('sender_type', otherSenderType) // messages FROM the other side
         .is('read_at', null);
 
       if (updateError) {
         console.error('Failed to mark messages as read:', updateError);
       } else {
-        // Optimistically update local state so the user sees them clear immediately
+        // Optimistically update local state
+        const nowIso = new Date().toISOString();
         setMessages((prev) =>
           prev.map((m) =>
             m.sender_type === otherSenderType && m.read_at == null
-              ? { ...m, read_at: new Date().toISOString() }
+              ? { ...m, read_at: nowIso }
               : m
           )
         );
@@ -102,7 +103,7 @@ export function ConversationPanel({
     load();
   }, [landlordUserId, tenantUserId, markMessagesRead]);
 
-  // ---------- Send message ----------
+  // ---------- Send message + trigger email notification ----------
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -121,8 +122,7 @@ export function ConversationPanel({
           tenant_user_id: tenantUserId,
           sender_type: senderType,
           body: input.trim(),
-          // read_at should be NULL for the recipient until they view it
-          read_at: null,
+          read_at: null, // recipient hasn't seen it yet
         })
         .select(
           'id, created_at, landlord_id, landlord_user_id, tenant_id, tenant_user_id, sender_type, body, read_at'
@@ -131,8 +131,21 @@ export function ConversationPanel({
 
       if (insertError) throw insertError;
 
-      setMessages((prev) => [...prev, data as MessageRow]);
+      const newMsg = data as MessageRow;
+      setMessages((prev) => [...prev, newMsg]);
       setInput('');
+
+      // Fire-and-forget: email notification to the other side
+      try {
+        await fetch('/api/messages/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messageId: newMsg.id }),
+        });
+      } catch (notifyErr) {
+        // Don't block UI if email fails
+        console.error('Failed to send message email notification:', notifyErr);
+      }
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Failed to send message.');
@@ -141,9 +154,7 @@ export function ConversationPanel({
     }
   };
 
-  const handleKeyDown: React.KeyboardEventHandler<HTMLTextAreaElement> = (
-    e
-  ) => {
+  const handleKeyDown = (e: any) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!sending) {
@@ -161,6 +172,11 @@ export function ConversationPanel({
       </div>
     );
   }
+
+  // Helper: find the last message sent BY ME
+  const lastSentByMe = [...messages].reverse().find(
+    (m) => m.sender_type === currentRole
+  );
 
   return (
     <div className="flex h-[420px] flex-col rounded-2xl border border-slate-800 bg-slate-950/80">
@@ -185,6 +201,28 @@ export function ConversationPanel({
               : 'bg-slate-800 text-slate-50';
             const metaAlign = isMine ? 'text-right' : 'text-left';
 
+            const createdLabel = new Date(m.created_at).toLocaleString(
+              'en-US',
+              {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+              }
+            );
+
+            // Read receipt text for *my* messages
+            let statusLabel: string | null = null;
+            if (isMine) {
+              if (m.read_at) {
+                statusLabel = 'Seen';
+              } else {
+                statusLabel = 'Sent';
+              }
+            }
+
+            const isLastSentByMe = lastSentByMe && lastSentByMe.id === m.id;
+
             return (
               <div key={m.id} className={`flex flex-col ${align}`}>
                 <div
@@ -195,16 +233,21 @@ export function ConversationPanel({
                 <div
                   className={`mt-0.5 text-[10px] text-slate-500 ${metaAlign}`}
                 >
-                  {new Date(m.created_at).toLocaleString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                  {!isMine && !m.read_at && (
-                    <span className="ml-1 text-amber-300">
-                      • Unread by you
-                    </span>
+                  {createdLabel}
+                  {isMine && statusLabel && (
+                    <>
+                      {' '}
+                      •{' '}
+                      <span
+                        className={
+                          isLastSentByMe && m.read_at
+                            ? 'text-emerald-400'
+                            : 'text-slate-400'
+                        }
+                      >
+                        {statusLabel}
+                      </span>
+                    </>
                   )}
                 </div>
               </div>
