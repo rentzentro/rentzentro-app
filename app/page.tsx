@@ -161,6 +161,18 @@ export default function HomePage() {
                     maintenance board instantly.
                   </p>
                 </div>
+
+                {/* NEW: landlord messaging feature */}
+                <div className="flex items-start gap-2 text-xs text-slate-200">
+                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                    ✓
+                  </span>
+                  <p>
+                    Built-in messaging with each tenant, so questions, updates,
+                    and photos stay in one thread instead of scattered across
+                    texts and emails.
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -196,6 +208,18 @@ export default function HomePage() {
                   <p>
                     Access files and important documents in one place instead of
                     digging through old email threads.
+                  </p>
+                </div>
+
+                {/* NEW: tenant messaging feature */}
+                <div className="flex items-start gap-2 text-xs text-slate-200">
+                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                    ✓
+                  </span>
+                  <p>
+                    Secure in-app messaging to ask questions or share photos
+                    with your landlord—without hunting through old text
+                    messages.
                   </p>
                 </div>
               </div>
