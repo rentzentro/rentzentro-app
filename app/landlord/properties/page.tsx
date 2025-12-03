@@ -306,18 +306,21 @@ export default function LandlordPropertiesPage() {
                         </p>
                       )}
                     </div>
+
+                    {/* BUTTONS — updated to blue EDIT */}
                     <div className="flex flex-col gap-1">
                       <button
                         type="button"
                         onClick={() => beginEdit(p)}
-                        className="rounded-full border border-slate-600 px-2 py-0.5 text-[10px] text-slate-100 hover:bg-slate-700"
+                        className="rounded-full border border-sky-500/70 bg-sky-500/10 px-3 py-1 text-[11px] text-sky-200 hover:bg-sky-500/20"
                       >
                         Edit
                       </button>
+
                       <button
                         type="button"
                         onClick={() => handleDelete(p.id)}
-                        className="rounded-full border border-rose-600 px-2 py-0.5 text-[10px] text-rose-100 hover:bg-rose-700"
+                        className="rounded-full border border-rose-500/70 bg-rose-500/10 px-3 py-1 text-[11px] text-rose-200 hover:bg-rose-500/20"
                       >
                         Delete
                       </button>

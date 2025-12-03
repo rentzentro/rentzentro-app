@@ -55,6 +55,7 @@ export default function LandlordMaintenancePage() {
 
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [lastSavedId, setLastSavedId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [requests, setRequests] = useState<MaintenanceRow[]>([]);
@@ -135,9 +136,12 @@ export default function LandlordMaintenancePage() {
 
   const updateRequest = async (
     id: number,
-    updates: Partial<Pick<MaintenanceRow, 'status' | 'priority' | 'resolution_note'>>
+    updates: Partial<
+      Pick<MaintenanceRow, 'status' | 'priority' | 'resolution_note'>
+    >
   ) => {
     setSavingId(id);
+    setLastSavedId(null);
     setError(null);
 
     try {
@@ -152,6 +156,7 @@ export default function LandlordMaintenancePage() {
       setRequests((prev) =>
         prev.map((r) => (r.id === id ? { ...r, ...updates } : r))
       );
+      setLastSavedId(id);
     } catch (err: any) {
       console.error(err);
       setError(
@@ -178,7 +183,7 @@ export default function LandlordMaintenancePage() {
     }));
   };
 
-  const handleResolutionBlur = (id: number) => {
+  const handleResolutionSave = (id: number) => {
     const draft = resolutionDrafts[id] ?? '';
     updateRequest(id, { resolution_note: draft });
   };
@@ -254,6 +259,7 @@ export default function LandlordMaintenancePage() {
                 const t = r.tenant_id ? tenantById.get(r.tenant_id) : null;
                 const p = r.property_id ? propertyById.get(r.property_id) : null;
                 const saving = savingId === r.id;
+                const justSaved = lastSavedId === r.id && !saving;
 
                 return (
                   <div
@@ -348,13 +354,26 @@ export default function LandlordMaintenancePage() {
                         onChange={(e) =>
                           handleResolutionChange(r.id, e.target.value)
                         }
-                        onBlur={() => handleResolutionBlur(r.id)}
                         placeholder="Ex: Scheduled plumber for Tuesday."
                         className="w-full rounded-2xl border border-slate-800 bg-slate-950 px-3 py-2 text-[11px] text-slate-50 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                       />
-                      {saving && (
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleResolutionSave(r.id)}
+                          disabled={saving}
+                          className="inline-flex items-center justify-center rounded-full border border-emerald-500/70 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {saving ? 'Saving…' : 'Save note'}
+                        </button>
+                        <p className="text-[10px] text-slate-500 text-right">
+                          Saved notes are immediately visible in the tenant
+                          portal.
+                        </p>
+                      </div>
+                      {justSaved && (
                         <p className="mt-1 text-[10px] text-emerald-300">
-                          Saving…
+                          Saved.
                         </p>
                       )}
                     </div>
