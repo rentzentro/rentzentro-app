@@ -126,8 +126,13 @@ export default function LandlordSettingsPage() {
     }
   };
 
-  const handleBack = () => {
+  const handleBackToDashboard = () => {
     router.push('/landlord');
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/landlord/login');
   };
 
   if (loading) {
@@ -147,7 +152,7 @@ export default function LandlordSettingsPage() {
               'We could not find a landlord profile for this account. Please contact support.'}
           </p>
           <button
-            onClick={handleBack}
+            onClick={handleBackToDashboard}
             className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
           >
             Back to dashboard
@@ -164,29 +169,46 @@ export default function LandlordSettingsPage() {
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto max-w-4xl space-y-5">
         {/* Header / breadcrumb */}
-        <header className="flex items-center justify-between gap-3">
-          <div className="space-y-1">
-            <button
-              type="button"
-              onClick={handleBack}
-              className="text-[11px] text-slate-500 hover:text-emerald-300"
-            >
-              ← Back to dashboard
-            </button>
-            <h1 className="text-lg font-semibold text-slate-50">
+        <header className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="md:max-w-xl">
+            <div className="text-xs text-slate-500 flex gap-1 items-center">
+              <Link href="/landlord" className="hover:text-emerald-400">
+                Landlord
+              </Link>
+              <span>/</span>
+              <span className="text-slate-300">Settings</span>
+            </div>
+            <h1 className="mt-1 text-lg font-semibold text-slate-50">
               Landlord settings
             </h1>
             <p className="text-[11px] text-slate-400">
-              This is where new landlords should start: connect payouts so tenant
-              payments can be deposited, then manage your RentZentro plan and billing.
+              Connect payouts so rent can be deposited to your bank, then manage
+              your RentZentro plan and billing.
+            </p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Signed in as{' '}
+              <span className="text-slate-300">
+                {landlord.name ? `${landlord.name} · ${landlord.email}` : landlord.email}
+              </span>
             </p>
           </div>
 
-          <div className="text-right text-xs">
-            <p className="font-medium text-slate-100">
-              {landlord.name || 'Landlord account'}
-            </p>
-            <p className="text-slate-400">{landlord.email}</p>
+          {/* Buttons: stack on mobile, row on md+ */}
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-end">
+            <button
+              type="button"
+              onClick={handleBackToDashboard}
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            >
+              Back to dashboard
+            </button>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+            >
+              Log out
+            </button>
           </div>
         </header>
 
@@ -280,7 +302,7 @@ export default function LandlordSettingsPage() {
               href="/landlord/subscription"
               className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800"
             >
-              Open subscription & billing
+              Open subscription &amp; billing
             </Link>
           </div>
         </section>
