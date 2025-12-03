@@ -11,7 +11,6 @@ type LandlordRow = {
   id: number;
   email: string;
   name: string | null;
-  user_id: string | null; // auth UID for this landlord
   subscription_status: string | null;
   subscription_current_period_end: string | null;
   trial_active: boolean | null;
@@ -102,7 +101,7 @@ export default function LandlordDashboardPage() {
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRow[]>([]);
-  const [newMessageCount, setNewMessageCount] = useState(0);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
   // ---------- Load landlord + data ----------
@@ -122,7 +121,7 @@ export default function LandlordDashboardPage() {
           throw new Error('Unable to load landlord account. Please log in again.');
         }
 
-        // 2) Load landlord row (including trial + subscription fields + user_id)
+        // 2) Load landlord row (including trial + subscription fields)
         const { data: landlordRow, error: landlordError } = await supabase
           .from('landlords')
           .select(
@@ -130,7 +129,6 @@ export default function LandlordDashboardPage() {
             id,
             email,
             name,
-            user_id,
             subscription_status,
             subscription_current_period_end,
             trial_active,
@@ -181,22 +179,21 @@ export default function LandlordDashboardPage() {
         setPayments((paymentRes.data || []) as PaymentRow[]);
         setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
 
-        // 4) Unread messages for this landlord (tenant -> landlord)
-        if (landlordTyped.user_id) {
-          const { data: unreadRows, error: unreadError } = await supabase
-            .from('messages')
-            .select('id')
-            .eq('landlord_user_id', landlordTyped.user_id)
-            .eq('sender_type', 'tenant')
-            .is('read_at', null);
+        // 4) Unread messages count for this landlord (non-breaking)
+        try {
+          const { data: msgRows, error: msgError } = await supabase
+            .from('landlord_messages')
+            .select('id, is_read, recipient_role')
+            .eq('recipient_role', 'landlord')
+            .eq('is_read', false);
 
-          if (unreadError) {
-            console.error('Unread messages query error:', unreadError);
-          } else {
-            setNewMessageCount((unreadRows || []).length);
+          if (msgError) {
+            console.error('Unread messages query error:', msgError);
+          } else if (msgRows) {
+            setUnreadMessagesCount(msgRows.length);
           }
-        } else {
-          setNewMessageCount(0);
+        } catch (msgErr) {
+          console.error('Unread messages query threw:', msgErr);
         }
       } catch (err: any) {
         console.error(err);
@@ -403,50 +400,8 @@ export default function LandlordDashboardPage() {
             </p>
           </div>
 
+          {/* Top-right: only Log out pill now */}
           <div className="flex flex-wrap gap-2 md:justify-end">
-            {/* Settings */}
-            <Link
-              href="/landlord/settings"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
-            >
-              Settings
-            </Link>
-
-            {/* Documents */}
-            <Link
-              href="/landlord/documents"
-              className="text-xs px-3 py-2 rounded-full border border-emerald-600 bg-slate-900 text-emerald-300 hover:bg-slate-800 hover:text-emerald-200"
-            >
-              Documents
-            </Link>
-
-            {/* Messages with badge */}
-            <Link
-              href="/landlord/messages"
-              className="relative flex items-center gap-1 text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
-            >
-              <span>Messages</span>
-              {newMessageCount > 0 && (
-                <span className="ml-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
-                  {newMessageCount}
-                </span>
-              )}
-            </Link>
-
-            {/* Maintenance with badge */}
-            <Link
-              href="/landlord/maintenance"
-              className="relative flex items-center gap-1 text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
-            >
-              <span>Maintenance</span>
-              {newMaintenanceCount > 0 && (
-                <span className="ml-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
-                  {newMaintenanceCount}
-                </span>
-              )}
-            </Link>
-
-            {/* Sign out */}
             <button
               type="button"
               onClick={handleSignOut}
@@ -502,6 +457,144 @@ export default function LandlordDashboardPage() {
             </p>
           </div>
         </div>
+
+        {/* NEW: Quick actions grid */}
+        <section className="mb-6 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Quick actions
+              </p>
+              <p className="mt-1 text-sm text-slate-200">
+                Jump straight to the tools you use the most.
+              </p>
+            </div>
+            <span className="hidden text-[11px] text-slate-500 sm:inline">
+              Drag & drop coming in a future update.
+            </span>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Link
+              href="/landlord/properties"
+              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+            >
+              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+                  🏠
+                </span>
+                Manage properties
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Add units, update rent, and keep your portfolio organized.
+              </p>
+            </Link>
+
+            <Link
+              href="/landlord/tenants"
+              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+            >
+              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+                  👤
+                </span>
+                Manage tenants
+              </p>
+              <p className="text-[11px] text-slate-400">
+                View tenants, invite new ones, and keep contact details current.
+              </p>
+            </Link>
+
+            <Link
+              href="/landlord/payments"
+              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+            >
+              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+                  💳
+                </span>
+                Payments & rent
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Review recent payments and see who has paid or is still due.
+              </p>
+            </Link>
+
+            <Link
+              href="/landlord/maintenance"
+              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+            >
+              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+                  🛠️
+                </span>
+                <span className="flex items-center gap-2">
+                  <span>Maintenance requests</span>
+                  {newMaintenanceCount > 0 && (
+                    <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-slate-950">
+                      {newMaintenanceCount}
+                    </span>
+                  )}
+                </span>
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Track new, in-progress, and resolved issues across your units.
+              </p>
+            </Link>
+
+            <Link
+              href="/landlord/messages"
+              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+            >
+              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+                  💬
+                </span>
+                <span className="flex items-center gap-2">
+                  <span>Messages</span>
+                  {unreadMessagesCount > 0 && (
+                    <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-slate-950">
+                      {unreadMessagesCount}
+                    </span>
+                  )}
+                </span>
+              </p>
+              <p className="text-[11px] text-slate-400">
+                View and reply to portal messages from your tenants in one place.
+              </p>
+            </Link>
+
+            <Link
+              href="/landlord/documents"
+              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+            >
+              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+                  📄
+                </span>
+                Documents
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Upload and share leases, notices, and other files with tenants.
+              </p>
+            </Link>
+
+            <Link
+              href="/landlord/settings"
+              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+            >
+              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+                  ⚙️
+                </span>
+                Account & billing
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Update your account details, billing info, and subscription.
+              </p>
+            </Link>
+          </div>
+        </section>
 
         {/* Rent status: overdue / upcoming / not due yet */}
         <section className="mb-6 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm">
