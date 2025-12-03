@@ -185,6 +185,13 @@ export default function LandlordTenantsPage() {
     load();
   }, [router]);
 
+  // ---------- Actions: Sign out ----------
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/landlord/login');
+  };
+
   // ---------- Actions: Add tenant ----------
 
   const resetForm = () => {
@@ -449,19 +456,19 @@ export default function LandlordTenantsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
-            <button
-              type="button"
-              onClick={() => setShowForm((prev) => !prev)}
-              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
-            >
-              {showForm ? 'Close add tenant form' : 'Add tenant'}
-            </button>
             <Link
               href="/landlord"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
             >
               Back to dashboard
             </Link>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+            >
+              Log out
+            </button>
           </div>
         </header>
 
@@ -734,6 +741,13 @@ export default function LandlordTenantsPage() {
                 All tenants linked to your properties
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setShowForm((prev) => !prev)}
+              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
+            >
+              {showForm ? 'Close add tenant form' : 'Add tenant'}
+            </button>
           </div>
 
           {tenants.length === 0 ? (
