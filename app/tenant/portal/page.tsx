@@ -201,7 +201,9 @@ export default function TenantPortalPage() {
             .from('tenants')
             .update({ user_id: authUserId })
             .eq('id', t.id)
-            .select('id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id')
+            .select(
+              'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id'
+            )
             .maybeSingle();
 
           if (updateError) {
@@ -224,7 +226,10 @@ export default function TenantPortalPage() {
             .maybeSingle();
 
           if (propError) {
-            console.error('Tenant portal property lookup (by id) error:', propError);
+            console.error(
+              'Tenant portal property lookup (by id) error:',
+              propError
+            );
           } else if (propRow) {
             prop = propRow as PropertyRow;
           }
@@ -234,7 +239,9 @@ export default function TenantPortalPage() {
         if (!prop && t.owner_id) {
           const { data: propRows2, error: propError2 } = await supabase
             .from('properties')
-            .select('id, name, unit_label, monthly_rent, next_due_date, owner_id')
+            .select(
+              'id, name, unit_label, monthly_rent, next_due_date, owner_id'
+            )
             .eq('owner_id', t.owner_id)
             .order('created_at', { ascending: true })
             .limit(1);
@@ -267,9 +274,7 @@ export default function TenantPortalPage() {
         // Documents (by property OR tenant)
         let docQuery = supabase
           .from('documents')
-          .select(
-            'id, created_at, title, file_url, property_id, tenant_id'
-          )
+          .select('id, created_at, title, file_url, property_id, tenant_id')
           .order('created_at', { ascending: false });
 
         if (prop?.id) {
@@ -346,10 +351,7 @@ export default function TenantPortalPage() {
   const handlePayWithCard = async () => {
     if (!tenant) return;
 
-    const amount =
-      property?.monthly_rent ??
-      tenant.monthly_rent ??
-      0;
+    const amount = property?.monthly_rent ?? tenant.monthly_rent ?? 0;
 
     if (!amount || amount <= 0) {
       setError(
@@ -407,9 +409,7 @@ export default function TenantPortalPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <p className="text-sm text-slate-400">
-          Loading your tenant portal…
-        </p>
+        <p className="text-sm text-slate-400">Loading your tenant portal…</p>
       </main>
     );
   }
@@ -435,9 +435,33 @@ export default function TenantPortalPage() {
   }
 
   const currentRent =
-    property?.monthly_rent ??
-    tenant.monthly_rent ??
-    null;
+    property?.monthly_rent ?? tenant.monthly_rent ?? null;
+
+  // ---------- Derived account / standing status ----------
+
+  let isRentOverdue = false;
+  if (property?.next_due_date) {
+    const due = new Date(property.next_due_date);
+    if (!Number.isNaN(due.getTime())) {
+      const today = new Date();
+      // Compare dates ignoring time zone edge issues a bit
+      isRentOverdue = due.getTime() < today.getTime();
+    }
+  }
+
+  const accountStatusLabel = isRentOverdue
+    ? 'Rent overdue'
+    : tenant.status?.toLowerCase() === 'current'
+    ? 'Current tenant in good standing'
+    : tenant.status || 'Status not set';
+
+  const accountStatusClasses = isRentOverdue
+    ? 'mt-3 inline-flex items-center gap-2 rounded-full border border-red-500/50 bg-red-950/70 px-3 py-1 text-[11px] text-red-100'
+    : 'mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3 py-1 text-[11px] text-emerald-100';
+
+  const accountStatusDotClasses = isRentOverdue
+    ? 'inline-block h-1.5 w-1.5 rounded-full bg-red-400'
+    : 'inline-block h-1.5 w-1.5 rounded-full bg-emerald-400';
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -468,7 +492,8 @@ export default function TenantPortalPage() {
               Tenant portal
             </h1>
             <p className="text-[11px] text-slate-400">
-              View your rent details, lease info, documents, and payment history.
+              View your rent details, lease info, documents, and payment
+              history.
             </p>
           </div>
           <div className="flex flex-col items-end gap-2 text-right">
@@ -535,13 +560,15 @@ export default function TenantPortalPage() {
                   disabled={paying}
                   className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {paying ? 'Starting payment…' : 'Pay rent securely with Card / ACH'}
+                  {paying
+                    ? 'Starting payment…'
+                    : 'Pay rent securely with Card / ACH'}
                 </button>
               </div>
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Card / ACH  payments are processed securely by Stripe. You&apos;ll get
-                a confirmation once your payment is completed.
+                Card / ACH payments are processed securely by Stripe. You&apos;ll
+                get a confirmation once your payment is completed.
               </p>
             </section>
 
@@ -606,11 +633,9 @@ export default function TenantPortalPage() {
               </h2>
               <p className="mt-1 text-xs text-slate-400">{tenant.email}</p>
 
-              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3 py-1 text-[11px] text-emerald-100">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                {tenant.status?.toLowerCase() === 'current'
-                  ? 'Current tenant in good standing'
-                  : tenant.status || 'Status not set'}
+              <div className={accountStatusClasses}>
+                <span className={accountStatusDotClasses} />
+                {accountStatusLabel}
               </div>
 
               <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-[11px]">
