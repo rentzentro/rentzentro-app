@@ -559,7 +559,7 @@ export default function LandlordDashboardPage() {
           </div>
         </div>
 
-        {/* NEW: Quick actions grid */}
+        {/* Quick actions grid */}
         <section className="mb-6 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm p-4">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -677,6 +677,22 @@ export default function LandlordDashboardPage() {
               </p>
               <p className="text-[11px] text-slate-400">
                 Upload and share leases, notices, and other files with tenants.
+              </p>
+            </Link>
+
+            {/* NEW: Team members quick action */}
+            <Link
+              href="/landlord/team"
+              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+            >
+              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+                  👥
+                </span>
+                Team members
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Add coworkers and manage their access.
               </p>
             </Link>
 
