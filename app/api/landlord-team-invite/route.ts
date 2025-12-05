@@ -35,7 +35,9 @@ export async function POST(req: Request) {
         : 'Manager — full access';
 
     const fromName = ownerName || ownerEmail || 'RentZentro landlord';
-    const inviteLink = `${APP_URL}/landlord/login?team_invite=${inviteId}`;
+
+    // 🔴 IMPORTANT: send them to the dedicated team-accept page
+    const inviteLink = `${APP_URL}/landlord/team-accept?invite=${inviteId}`;
 
     const subject = `You’ve been invited to help manage rentals on RentZentro`;
 
@@ -78,7 +80,7 @@ ${inviteLink}
     `.trim();
 
     const sendResult = await resend.emails.send({
-      from: 'RentZentro Team <notifications@rentzentro.com>',
+      from: 'RentZentro Team <team@rentzentro.com>',
       to: inviteEmail,
       subject,
       html,
