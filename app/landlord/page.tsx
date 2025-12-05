@@ -11,6 +11,7 @@ type LandlordRow = {
   id: number;
   email: string;
   name: string | null;
+  user_id: string | null;
   subscription_status: string | null;
   subscription_current_period_end: string | null;
   trial_active: boolean | null;
@@ -49,6 +50,12 @@ type PaymentRow = {
 type MaintenanceRow = {
   id: number;
   status: string | null;
+};
+
+// For the team lookup
+type TeamMemberRow = {
+  id: number;
+  landlord_id: number | null;
 };
 
 // ---------- Helpers ----------
@@ -114,41 +121,135 @@ export default function LandlordDashboardPage() {
       try {
         // 1) Get auth user
         const { data: authData, error: authError } = await supabase.auth.getUser();
-        if (authError) throw authError;
+        if (authError || !authData.user) {
+          router.push('/landlord/login');
+          return;
+        }
 
-        const email = authData.user?.email;
+        const user = authData.user;
+        const userId = user.id;
+        const email = user.email;
+
         if (!email) {
           throw new Error('Unable to load landlord account. Please log in again.');
         }
 
         // 2) Load landlord row (including trial + subscription fields)
-        const { data: landlordRow, error: landlordError } = await supabase
-          .from('landlords')
-          .select(
-            `
-            id,
-            email,
-            name,
-            subscription_status,
-            subscription_current_period_end,
-            trial_active,
-            trial_end
-          `
-          )
-          .eq('email', email)
-          .maybeSingle();
+        let landlordRow: LandlordRow | null = null;
 
-        if (landlordError) throw landlordError;
+        // First, try by user_id (recommended / new)
+        {
+          const { data, error } = await supabase
+            .from('landlords')
+            .select(
+              `
+              id,
+              email,
+              name,
+              user_id,
+              subscription_status,
+              subscription_current_period_end,
+              trial_active,
+              trial_end
+            `
+            )
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (error) {
+            console.error('Error loading landlord by user_id:', error);
+            throw error;
+          }
+          if (data) {
+            landlordRow = data as LandlordRow;
+          }
+        }
+
+        // Fallback: older rows may not have user_id set, so try by email
+        if (!landlordRow) {
+          const { data, error } = await supabase
+            .from('landlords')
+            .select(
+              `
+              id,
+              email,
+              name,
+              user_id,
+              subscription_status,
+              subscription_current_period_end,
+              trial_active,
+              trial_end
+            `
+            )
+            .eq('email', email)
+            .maybeSingle();
+
+          if (error) {
+            console.error('Error loading landlord by email:', error);
+            throw error;
+          }
+          if (data) {
+            landlordRow = data as LandlordRow;
+          }
+        }
+
+        // If still not found, check if this user is a team member
+        if (!landlordRow) {
+          const { data: teamRow, error: teamError } = await supabase
+            .from('team_members')
+            .select('id, landlord_id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (teamError) {
+            console.error('Error loading team member record:', teamError);
+            throw teamError;
+          }
+
+          const teamMember = teamRow as TeamMemberRow | null;
+
+          if (teamMember?.landlord_id) {
+            const { data: landlordFromTeam, error: landlordFromTeamError } =
+              await supabase
+                .from('landlords')
+                .select(
+                  `
+                  id,
+                  email,
+                  name,
+                  user_id,
+                  subscription_status,
+                  subscription_current_period_end,
+                  trial_active,
+                  trial_end
+                `
+                )
+                .eq('id', teamMember.landlord_id)
+                .maybeSingle();
+
+            if (landlordFromTeamError) {
+              console.error(
+                'Error loading landlord via team_members.landlord_id:',
+                landlordFromTeamError
+              );
+              throw landlordFromTeamError;
+            }
+
+            if (landlordFromTeam) {
+              landlordRow = landlordFromTeam as LandlordRow;
+            }
+          }
+        }
+
         if (!landlordRow) {
           throw new Error(
-            'Landlord record not found for this account. Please contact support if this seems wrong.'
+            'Landlord record not found for this account. If you were invited as a team member, ask the landlord to resend your invite.'
           );
         }
 
-        const landlordTyped = landlordRow as LandlordRow;
-        setLandlord(landlordTyped);
+        setLandlord(landlordRow);
 
-        // 3) Load dashboard data (we'll gate in the UI)
+        // 3) Load dashboard data (RLS will ensure team members see the right rows)
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase
             .from('properties')
@@ -179,7 +280,7 @@ export default function LandlordDashboardPage() {
         setPayments((paymentRes.data || []) as PaymentRow[]);
         setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
 
-        // 4) Unread messages count for this landlord (non-breaking)
+        // 4) Unread messages count for this landlord / team (non-breaking)
         try {
           const { data: msgRows, error: msgError } = await supabase
             .from('landlord_messages')
@@ -204,7 +305,7 @@ export default function LandlordDashboardPage() {
     };
 
     load();
-  }, []);
+  }, [router]);
 
   // ---------- Metrics & subscription / trial logic ----------
 
@@ -458,7 +559,7 @@ export default function LandlordDashboardPage() {
           </div>
         </div>
 
-        {/* Quick actions grid */}
+        {/* NEW: Quick actions grid */}
         <section className="mb-6 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm p-4">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -576,22 +677,6 @@ export default function LandlordDashboardPage() {
               </p>
               <p className="text-[11px] text-slate-400">
                 Upload and share leases, notices, and other files with tenants.
-              </p>
-            </Link>
-
-            {/* NEW: Team members quick action */}
-            <Link
-              href="/landlord/team"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  👥
-                </span>
-                Team members
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Add coworkers and give them access to help manage properties and tenants.
               </p>
             </Link>
 
