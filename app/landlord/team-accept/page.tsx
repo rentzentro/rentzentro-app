@@ -30,10 +30,16 @@ export default function LandlordTeamAcceptPage() {
     setStatus('ready');
   }, [searchParams]);
 
-  // Link invite to current user and redirect to team dashboard
+  // Helper: link invite row to current user and redirect
   const linkInviteAndRedirect = async (id: string) => {
     setStatus('linking');
     setError(null);
+
+    // Make sure the ID is numeric (matches bigint PK)
+    const inviteNumericId = Number(id);
+    if (!Number.isFinite(inviteNumericId)) {
+      throw new Error('This invite link is invalid.');
+    }
 
     // 1) Get current auth user
     const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -43,12 +49,16 @@ export default function LandlordTeamAcceptPage() {
     }
 
     const user = authData.user;
+    if (!user.email) {
+      throw new Error('Your account does not have an email address. Please contact support.');
+    }
+    const userEmail = user.email.toLowerCase();
 
-    // 2) Load invite row
+    // 2) Load invite row from landlord_team_members
     const { data: inviteRow, error: inviteError } = await supabase
       .from('landlord_team_members')
-      .select('id, email')
-      .eq('id', id)
+      .select('id, owner_user_id, invite_email, member_email, status')
+      .eq('id', inviteNumericId)
       .maybeSingle();
 
     if (inviteError || !inviteRow) {
@@ -56,8 +66,15 @@ export default function LandlordTeamAcceptPage() {
       throw new Error('This invite could not be found. It may have been revoked.');
     }
 
-    const inviteEmail = (inviteRow.email || '').toLowerCase();
-    const userEmail = (user.email || '').toLowerCase();
+    if (inviteRow.status && inviteRow.status !== 'pending') {
+      throw new Error('This invite has already been used or was revoked.');
+    }
+
+    const inviteEmail = (
+      inviteRow.invite_email ||
+      inviteRow.member_email ||
+      ''
+    ).toLowerCase();
 
     if (inviteEmail && inviteEmail !== userEmail) {
       throw new Error(
@@ -65,14 +82,16 @@ export default function LandlordTeamAcceptPage() {
       );
     }
 
-    // 3) Attach user_id + accepted_at
+    // 3) Attach member_user_id + member_email + accepted_at + mark active
     const { error: updateError } = await supabase
       .from('landlord_team_members')
       .update({
-        user_id: user.id,
+        member_user_id: user.id,
+        member_email: user.email,
         accepted_at: new Date().toISOString(),
+        status: 'active',
       })
-      .eq('id', id);
+      .eq('id', inviteNumericId);
 
     if (updateError) {
       console.error('Error updating invite row:', updateError);
