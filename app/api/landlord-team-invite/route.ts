@@ -78,7 +78,7 @@ ${inviteLink}
     `.trim();
 
     const sendResult = await resend.emails.send({
-      from: 'RentZentro Team <team@rentzentro.com>',
+      from: 'RentZentro Team <notifications@rentzentro.com>',
       to: inviteEmail,
       subject,
       html,
