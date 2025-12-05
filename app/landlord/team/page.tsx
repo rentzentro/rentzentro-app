@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
@@ -18,32 +18,45 @@ type TeamMemberRow = {
   id: number;
   owner_user_id: string;
   member_user_id: string | null;
+  member_email: string;
+  invite_email: string;
+  role: string | null;
+  status: string | null;
   invited_at: string | null;
   accepted_at: string | null;
   created_at: string | null;
-  member_email: string | null;
-  invite_email: string | null;
-  role: string | null; // 'manager' | 'viewer'
-  status: string | null; // 'pending' | 'active' | 'removed'
+};
+
+// ---------- Helpers ----------
+
+const formatDate = (iso: string | null | undefined) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 };
 
 // ---------- Component ----------
 
-export default function LandlordTeamPage() {
+export default function LandlordTeamAccessPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberRow[]>([]);
+
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('manager');
+  const [savingInvite, setSavingInvite] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Invite form
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'manager' | 'viewer'>('manager');
-  const [savingInvite, setSavingInvite] = useState(false);
-
-  // ---------- Load landlord + team ----------
+  // ---------- Load landlord + current team ----------
 
   useEffect(() => {
     const load = async () => {
@@ -52,17 +65,18 @@ export default function LandlordTeamPage() {
       setSuccess(null);
 
       try {
-        // 1) Auth user
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
+
         if (authError || !authData.user?.email) {
           router.push('/landlord/login');
           return;
         }
 
         const user = authData.user;
+        const email = user.email!;
 
-        // 2) Landlord row with user_id
+        // 1) Landlord by user_id
         let { data: landlordRow, error: landlordError } = await supabase
           .from('landlords')
           .select('id, email, name, user_id')
@@ -74,12 +88,12 @@ export default function LandlordTeamPage() {
           throw new Error('Unable to load landlord account.');
         }
 
+        // 2) Fallback by email (older rows)
         if (!landlordRow) {
-          // Fallback by email (older rows)
           const byEmail = await supabase
             .from('landlords')
             .select('id, email, name, user_id')
-            .eq('email', user.email)
+            .eq('email', email)
             .maybeSingle();
 
           if (byEmail.error) {
@@ -90,31 +104,30 @@ export default function LandlordTeamPage() {
           landlordRow = byEmail.data;
         }
 
-        if (!landlordRow || !landlordRow.user_id) {
-          throw new Error(
-            'Landlord account not found or missing user ID. Please contact support.'
-          );
+        if (!landlordRow) {
+          throw new Error('Landlord account not found.');
         }
 
         const landlordTyped = landlordRow as LandlordRow;
         setLandlord(landlordTyped);
 
-        // 3) Team members for this landlord
-        const ownerUuid = landlordTyped.user_id;
-        const { data: tmRows, error: tmError } = await supabase
+        const ownerUuid = landlordTyped.user_id || authData.user.id;
+
+        // 3) Load team members for this owner
+        const { data: teamRows, error: teamError } = await supabase
           .from('landlord_team_members')
           .select(
-            'id, owner_user_id, member_user_id, invited_at, accepted_at, created_at, member_email, invite_email, role, status'
+            'id, owner_user_id, member_user_id, member_email, invite_email, role, status, invited_at, accepted_at, created_at'
           )
           .eq('owner_user_id', ownerUuid)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: true });
 
-        if (tmError) {
-          console.error('Error loading team members:', tmError);
-          throw new Error('Failed to load team members.');
+        if (teamError) {
+          console.error('Error loading team rows:', teamError);
+          throw new Error('Unable to load team member list.');
         }
 
-        setTeamMembers((tmRows || []) as TeamMemberRow[]);
+        setTeamMembers((teamRows || []) as TeamMemberRow[]);
       } catch (err: any) {
         console.error(err);
         setError(
@@ -129,122 +142,138 @@ export default function LandlordTeamPage() {
     load();
   }, [router]);
 
-  const activeMembers = teamMembers.filter(
-    (t) => (t.status || '').toLowerCase() === 'active'
-  );
-  const pendingInvites = teamMembers.filter(
-    (t) => (t.status || '').toLowerCase() === 'pending'
-  );
-
   // ---------- Actions ----------
-
-  const handleBack = () => {
-    router.push('/landlord');
-  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/landlord/login');
   };
 
-  const handleInviteSubmit = async (e: FormEvent) => {
+  const handleInvite = async (e: FormEvent) => {
     e.preventDefault();
-    if (!landlord || !landlord.user_id) return;
+    if (!landlord) return;
 
+    const trimmedEmail = inviteEmail.trim().toLowerCase();
+
+    if (!trimmedEmail) {
+      setError('Please enter an email address to invite.');
+      setSuccess(null);
+      return;
+    }
+
+    setSavingInvite(true);
     setError(null);
     setSuccess(null);
-    setSavingInvite(true);
 
     try {
-      const email = inviteEmail.trim();
-      if (!email) {
-        throw new Error('Teammate email is required.');
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        throw new Error('Not signed in.');
       }
 
-      // 1) Insert pending invite in Supabase
-      const { data, error: insertError } = await supabase
+      const ownerUuid = landlord.user_id || authData.user.id;
+
+      // 1) Save invite in landlord_team_members.
+      //    member_email is required in your schema, so for "pending"
+      //    we store the invite email in BOTH member_email and invite_email.
+      const { data: insertRow, error: insertError } = await supabase
         .from('landlord_team_members')
         .insert({
-          owner_user_id: landlord.user_id,
-          invite_email: email,
+          owner_user_id: ownerUuid,
+          member_user_id: null,
+          member_email: trimmedEmail,
+          invite_email: trimmedEmail,
           role: inviteRole,
           status: 'pending',
+          invited_at: new Date().toISOString(),
         })
         .select(
-          'id, owner_user_id, member_user_id, invited_at, accepted_at, created_at, member_email, invite_email, role, status'
+          'id, owner_user_id, member_user_id, member_email, invite_email, role, status, invited_at, accepted_at, created_at'
         )
         .single();
 
       if (insertError) {
         console.error('Error inserting team invite:', insertError);
-        throw new Error(insertError.message || 'Failed to create team invite.');
+        throw new Error(insertError.message || 'Failed to save invite.');
       }
 
-      setTeamMembers((prev) => [data as TeamMemberRow, ...prev]);
+      const newInvite = insertRow as TeamMemberRow;
 
-      // 2) Send email via API route (Resend)
-      const res = await fetch('/api/landlord-team-invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inviteEmail: email,
-          landlordName: landlord.name || landlord.email,
-        }),
-      });
+      // Update local list
+      setTeamMembers((prev) => [...prev, newInvite]);
+      setInviteEmail('');
 
-      const json = await res.json().catch(() => ({}));
+      // 2) Try to send email via API.
+      //    We try two possible paths so it still works if the API file is
+      //    /api/landlord-team-invite or /api/landlord/team-invite.
+      let emailSent = false;
+      const payload = {
+        inviteId: newInvite.id,
+        inviteEmail: trimmedEmail,
+        role: inviteRole,
+        ownerEmail: landlord.email,
+        ownerName: landlord.name ?? landlord.email,
+      };
 
-      if (!res.ok || json?.error) {
-        console.error('Team invite email error:', json);
+      try {
+        // First, preferred path:
+        const res1 = await fetch('/api/landlord-team-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (res1.ok) {
+          emailSent = true;
+        } else {
+          // Fallback legacy path:
+          const res2 = await fetch('/api/landlord/team-invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (res2.ok) {
+            emailSent = true;
+          }
+        }
+      } catch (apiErr) {
+        console.error('Error calling invite email API:', apiErr);
+      }
+
+      if (emailSent) {
         setSuccess(
-          'Invite saved, but there was an issue sending the email. Ask your teammate to log in with that email, or try again later.'
+          `Invite sent to ${trimmedEmail}. They can log in with that email to access your account.`
         );
       } else {
         setSuccess(
-          'Team invite sent! Your teammate will get an email with next steps.'
+          `Invite saved, but there was an issue sending the email. Ask your teammate to sign up or log in as a landlord using ${trimmedEmail}, and RentZentro will automatically link them to your account.`
         );
       }
-
-      setInviteEmail('');
     } catch (err: any) {
-      setError(err?.message || 'Failed to send team invite.');
+      console.error(err);
+      setError(
+        err?.message ||
+          'Something went wrong while creating the invite. Please try again.'
+      );
     } finally {
       setSavingInvite(false);
     }
   };
 
-  // Optional: revoke pending invite
-  const handleRevokeInvite = async (id: number) => {
-    if (!confirm('Cancel this invite?')) return;
-    setError(null);
-    setSuccess(null);
+  const activeMembers = teamMembers.filter(
+    (m) => (m.status || '').toLowerCase() === 'active'
+  );
+  const pendingInvites = teamMembers.filter(
+    (m) => (m.status || '').toLowerCase() === 'pending'
+  );
 
-    try {
-      const { error: delError } = await supabase
-        .from('landlord_team_members')
-        .delete()
-        .eq('id', id);
+  // ---------- UI ----------
 
-      if (delError) {
-        console.error('Error revoking invite:', delError);
-        throw new Error(delError.message || 'Failed to revoke invite.');
-      }
-
-      setTeamMembers((prev) => prev.filter((t) => t.id !== id));
-      setSuccess('Invite revoked.');
-    } catch (err: any) {
-      setError(err?.message || 'Unable to revoke invite.');
-    }
-  };
-
-  // ---------- Render ----------
-
-  if (loading && !landlord) {
+  if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
-        <p className="text-sm text-slate-400">
-          Loading RentZentro team access…
-        </p>
+        <p className="text-sm text-slate-400">Loading team access…</p>
       </main>
     );
   }
@@ -255,10 +284,10 @@ export default function LandlordTeamPage() {
         <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-700 p-6 shadow-xl space-y-4">
           <p className="text-sm text-red-400">
             {error ||
-              'We could not load your landlord account. Please sign in again.'}
+              'We could not find a landlord profile for this account. Please contact support.'}
           </p>
           <button
-            onClick={() => router.push('/landlord/login')}
+            onClick={handleSignOut}
             className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
           >
             Back to login
@@ -271,7 +300,7 @@ export default function LandlordTeamPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto max-w-5xl space-y-5">
-        {/* Header */}
+        {/* Header / breadcrumb */}
         <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="text-xs text-slate-500 flex gap-1 items-center">
@@ -291,24 +320,22 @@ export default function LandlordTeamPage() {
             <p className="mt-1 text-[11px] text-slate-500">
               Signed in as{' '}
               <span className="font-medium text-slate-200">
-                {landlord.name || 'RentZentro'}
-              </span>{' '}
-              • {landlord.email}
+                {landlord.name || 'RentZentro'} · {landlord.email}
+              </span>
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
-            <button
-              type="button"
-              onClick={handleBack}
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            <Link
+              href="/landlord"
+              className="text-xs px-4 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
             >
               Back to dashboard
-            </button>
+            </Link>
             <button
               type="button"
               onClick={handleSignOut}
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+              className="text-xs px-4 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
             >
               Log out
             </button>
@@ -328,7 +355,7 @@ export default function LandlordTeamPage() {
           </div>
         )}
 
-        {/* Invite card */}
+        {/* Invite form */}
         <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -337,105 +364,102 @@ export default function LandlordTeamPage() {
               </p>
               <p className="mt-1 text-sm text-slate-200">
                 Send an invite to someone who helps you manage rent collection.
-                They&apos;ll see your properties and tenants when they log in
-                with this email.
+                They’ll see your properties and tenants when they log in with
+                this email.
               </p>
             </div>
           </div>
 
           <form
-            onSubmit={handleInviteSubmit}
-            className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] text-xs items-center"
+            onSubmit={handleInvite}
+            className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)_auto] text-xs"
           >
             <div className="space-y-1">
               <label className="block text-slate-300">
-                Teammate email<span className="text-red-400"> *</span>
+                Teammate email <span className="text-red-400">*</span>
               </label>
               <input
                 type="email"
-                required
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 placeholder="name@example.com"
+                required
               />
+              <p className="text-[11px] text-slate-500">
+                After you create an invite, ask your teammate to sign up or sign
+                in as a landlord using the same email. When they log in,
+                RentZentro will automatically link them to your account.
+              </p>
             </div>
 
             <div className="space-y-1">
               <label className="block text-slate-300">Role</label>
               <select
                 value={inviteRole}
-                onChange={(e) =>
-                  setInviteRole(e.target.value as 'manager' | 'viewer')
-                }
+                onChange={(e) => setInviteRole(e.target.value)}
                 className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               >
-                <option value="manager">Manager – full access</option>
-                <option value="viewer">
-                  Viewer – read-only access (future)
-                </option>
+                <option value="manager">Manager — full access</option>
+                <option value="viewer">Viewer — read-only</option>
               </select>
             </div>
 
-            <div className="mt-5 md:mt-0 flex items-end">
+            <div className="flex items-end">
               <button
                 type="submit"
                 disabled={savingInvite}
-                className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full md:w-auto rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {savingInvite ? 'Sending…' : 'Send invite'}
               </button>
             </div>
           </form>
-
-          <p className="text-[11px] text-slate-500">
-            After you create an invite, ask your teammate to sign up or sign in
-            as a landlord using the same email. When they log in, RentZentro
-            will automatically link them to your account.
-          </p>
         </section>
 
-        {/* Active members */}
+        {/* Active team members */}
         <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm space-y-3">
-          <p className="text-xs text-slate-500 uppercase tracking-wide">
-            Active team members
-          </p>
-          <p className="text-sm text-slate-200">
-            People who can currently access your landlord account.
-          </p>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wide">
+              Active team members
+            </p>
+            <p className="mt-1 text-sm text-slate-200">
+              People who can currently access your landlord account.
+            </p>
+          </div>
 
           {activeMembers.length === 0 ? (
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="text-xs text-slate-500">
               You don&apos;t have any active team members yet.
             </p>
           ) : (
-            <div className="mt-3 space-y-2 text-xs">
+            <div className="space-y-2 text-xs">
               {activeMembers.map((m) => (
                 <div
                   key={m.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
+                  className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 flex items-center justify-between gap-3"
                 >
                   <div>
-                    <p className="font-medium text-slate-50">
-                      {m.member_email || m.invite_email}
+                    <p className="text-[13px] font-medium text-slate-50">
+                      {m.member_email}
                     </p>
                     <p className="text-[11px] text-slate-400">
                       Role:{' '}
                       <span className="text-slate-200">
-                        {m.role || 'manager'}
+                        {m.role === 'viewer'
+                          ? 'Viewer — read-only'
+                          : 'Manager — full access'}
                       </span>
                     </p>
                     {m.accepted_at && (
                       <p className="text-[11px] text-slate-500">
-                        Joined:{' '}
-                        {new Date(m.accepted_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
+                        Joined {formatDate(m.accepted_at)}
                       </p>
                     )}
                   </div>
+                  <span className="text-[11px] text-emerald-300">
+                    Active
+                  </span>
                 </div>
               ))}
             </div>
@@ -444,52 +468,47 @@ export default function LandlordTeamPage() {
 
         {/* Pending invites */}
         <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm space-y-3">
-          <p className="text-xs text-slate-500 uppercase tracking-wide">
-            Pending invites
-          </p>
-          <p className="text-sm text-slate-200">
-            People you&apos;ve invited who haven&apos;t logged in yet.
-          </p>
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wide">
+              Pending invites
+            </p>
+            <p className="mt-1 text-sm text-slate-200">
+              People you&apos;ve invited who haven&apos;t logged in yet.
+            </p>
+          </div>
 
           {pendingInvites.length === 0 ? (
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="text-xs text-slate-500">
               You don&apos;t have any pending invites.
             </p>
           ) : (
-            <div className="mt-3 space-y-2 text-xs">
+            <div className="space-y-2 text-xs">
               {pendingInvites.map((m) => (
                 <div
                   key={m.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
+                  className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 flex items-center justify-between gap-3"
                 >
                   <div>
-                    <p className="font-medium text-slate-50">
+                    <p className="text-[13px] font-medium text-slate-50">
                       {m.invite_email}
                     </p>
                     <p className="text-[11px] text-slate-400">
                       Role:{' '}
                       <span className="text-slate-200">
-                        {m.role || 'manager'}
+                        {m.role === 'viewer'
+                          ? 'Viewer — read-only'
+                          : 'Manager — full access'}
                       </span>
                     </p>
                     {m.invited_at && (
                       <p className="text-[11px] text-slate-500">
-                        Invited:{' '}
-                        {new Date(m.invited_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
+                        Invited {formatDate(m.invited_at)}
                       </p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRevokeInvite(m.id)}
-                    className="rounded-full border border-rose-500/60 bg-rose-500/10 px-3 py-1 text-[11px] text-rose-100 hover:bg-rose-500/20"
-                  >
-                    Cancel invite
-                  </button>
+                  <span className="text-[11px] text-amber-300">
+                    Waiting to log in
+                  </span>
                 </div>
               ))}
             </div>
