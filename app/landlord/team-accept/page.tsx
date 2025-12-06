@@ -6,39 +6,97 @@ import { supabase } from '../../supabaseClient';
 
 type InviteStatus = 'checking' | 'ready' | 'linking' | 'done' | 'error';
 
+type TeamInviteRow = {
+  id: number;
+  owner_user_id: string;
+  member_user_id: string | null;
+  invite_email: string;
+  member_email: string;
+  status: string | null;
+};
+
 export default function LandlordTeamAcceptPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [inviteId, setInviteId] = useState<string | null>(null);
+  const [inviteId, setInviteId] = useState<number | null>(null);
+  const [invite, setInvite] = useState<TeamInviteRow | null>(null);
+
   const [status, setStatus] = useState<InviteStatus>('checking');
   const [error, setError] = useState<string | null>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [autoTried, setAutoTried] = useState(false);
 
-  // Read invite ID from URL
+  // ---------- Load invite from URL ----------
+
   useEffect(() => {
-    const id = searchParams.get('invite');
-    if (!id) {
+    const idParam = searchParams.get('invite');
+    if (!idParam) {
       setError('This team invite link is missing an invite ID.');
       setStatus('error');
       return;
     }
-    setInviteId(id);
-    setStatus('ready');
+
+    const numericId = Number(idParam);
+    if (!Number.isFinite(numericId)) {
+      setError('This team invite link is invalid.');
+      setStatus('error');
+      return;
+    }
+
+    setInviteId(numericId);
+
+    const loadInvite = async () => {
+      try {
+        const { data, error: inviteError } = await supabase
+          .from('landlord_team_members')
+          .select(
+            'id, owner_user_id, member_user_id, invite_email, member_email, status'
+          )
+          .eq('id', numericId)
+          .maybeSingle();
+
+        if (inviteError || !data) {
+          console.error('Error loading invite row:', inviteError);
+          setError('This invite could not be found. It may have been revoked.');
+          setStatus('error');
+          return;
+        }
+
+        const row = data as TeamInviteRow;
+
+        // If invite already removed, stop here.
+        const st = (row.status || '').toLowerCase();
+        if (st === 'removed') {
+          setError('This team invite has been revoked by the owner.');
+          setStatus('error');
+          return;
+        }
+
+        setInvite(row);
+        setEmail((row.invite_email || row.member_email || '').toLowerCase());
+        setStatus('ready');
+      } catch (err: any) {
+        console.error(err);
+        setError(
+          err?.message ||
+            'There was a problem loading this invite. Please try the link again.'
+        );
+        setStatus('error');
+      }
+    };
+
+    loadInvite();
   }, [searchParams]);
 
-  // Core helper: load invite, verify email, attach user_id, mark active, redirect
-  const linkInviteAndRedirect = async (idString: string) => {
+  // ---------- Core linking logic ----------
+
+  const linkInviteAndRedirect = async (row: TeamInviteRow) => {
     setStatus('linking');
     setError(null);
-
-    const inviteIdNumber = Number(idString);
-    if (!Number.isFinite(inviteIdNumber)) {
-      throw new Error('This invite link is invalid.');
-    }
 
     // 1) Get current auth user
     const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -48,65 +106,65 @@ export default function LandlordTeamAcceptPage() {
     }
 
     const user = authData.user;
-
-    // 2) Load invite row (NOTE: correct column names: invite_email, not email)
-    const { data: inviteRow, error: inviteError } = await supabase
-      .from('landlord_team_members')
-      .select('id, invite_email, status')
-      .eq('id', inviteIdNumber)
-      .maybeSingle();
-
-    if (inviteError || !inviteRow) {
-      console.error('Error loading invite row:', inviteError);
-      throw new Error('This invite could not be found. It may have been revoked.');
-    }
-
-    if (inviteRow.status && inviteRow.status === 'removed') {
-      throw new Error('This invite has been revoked by the account owner.');
-    }
-
-    const inviteEmail = (inviteRow.invite_email || '').toLowerCase();
     const userEmail = (user.email || '').toLowerCase();
+    const inviteEmail = (row.invite_email || row.member_email || '').toLowerCase();
 
-    if (inviteEmail && inviteEmail !== userEmail) {
+    if (!userEmail || inviteEmail !== userEmail) {
       throw new Error(
         'This invite was sent to a different email. Please log in using the email that received the invite.'
       );
     }
 
-    // 3) Attach member_user_id + member_email + accepted_at + status=active
+    // 2) Attach member_user_id + accepted_at + status = active
+    const nowIso = new Date().toISOString();
     const { error: updateError } = await supabase
       .from('landlord_team_members')
       .update({
         member_user_id: user.id,
-        member_email: user.email,
-        accepted_at: new Date().toISOString(),
+        member_email: userEmail,
+        accepted_at: nowIso,
         status: 'active',
       })
-      .eq('id', inviteIdNumber);
+      .eq('id', row.id);
 
     if (updateError) {
       console.error('Error updating invite row:', updateError);
-      throw new Error('Failed to attach this invite to your account. Please try again.');
+      throw new Error(
+        'Failed to attach this invite to your account. Please try again.'
+      );
+    }
+
+    // 3) Make sure the *owner* landlord account exists.
+    //    IMPORTANT: we match on landlords.user_id (NOT id).
+    const { data: ownerLandlord, error: ownerError } = await supabase
+      .from('landlords')
+      .select('id, user_id')
+      .eq('user_id', row.owner_user_id)
+      .maybeSingle();
+
+    if (ownerError || !ownerLandlord) {
+      console.error('Owner landlord lookup error:', ownerError, ownerLandlord);
+      throw new Error(
+        'Your team access is active, but the owner landlord account could not be found.'
+      );
     }
 
     setStatus('done');
-
-    // 4) Send them into the landlord area (for now main dashboard)
     router.push('/landlord');
   };
 
-  // If they open the link while already logged in, auto-accept
+  // ---------- Auto-accept if they are already logged in ----------
+
   useEffect(() => {
-    const tryAutoLink = async () => {
-      if (!inviteId) return;
+    const tryAuto = async () => {
+      if (!invite || autoTried || status !== 'ready') return;
+      setAutoTried(true);
+
       try {
         const { data: authData } = await supabase.auth.getUser();
-        if (!authData.user) {
-          // not logged in → show form
-          return;
-        }
-        await linkInviteAndRedirect(inviteId);
+        if (!authData.user) return; // not logged in → show form
+
+        await linkInviteAndRedirect(invite);
       } catch (err: any) {
         console.error(err);
         setError(err?.message || 'Failed to accept this invite.');
@@ -114,16 +172,14 @@ export default function LandlordTeamAcceptPage() {
       }
     };
 
-    if (status === 'ready' && inviteId) {
-      void tryAutoLink();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, inviteId]);
+    tryAuto();
+  }, [invite, autoTried, status]);
 
-  // Unified "login or sign up" handler for team members
+  // ---------- Unified login / signup + accept handler ----------
+
   const handleAuthAndAccept = async (e: FormEvent) => {
     e.preventDefault();
-    if (!inviteId) return;
+    if (!inviteId || !invite) return;
 
     setSubmitting(true);
     setError(null);
@@ -136,7 +192,7 @@ export default function LandlordTeamAcceptPage() {
         throw new Error('Please enter both email and password.');
       }
 
-      // First, try to sign in
+      // 1) Try sign-in first
       const signInRes = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
         password: trimmedPassword,
@@ -145,13 +201,12 @@ export default function LandlordTeamAcceptPage() {
       if (signInRes.error) {
         const msg = signInRes.error.message.toLowerCase();
 
-        // If credentials are wrong / user not found → create account
+        // If it's "invalid credentials", create account instead
         if (msg.includes('invalid login credentials') || msg.includes('invalid login')) {
           const signUpRes = await supabase.auth.signUp({
             email: trimmedEmail,
             password: trimmedPassword,
           });
-
           if (signUpRes.error) {
             throw signUpRes.error;
           }
@@ -160,8 +215,8 @@ export default function LandlordTeamAcceptPage() {
         }
       }
 
-      // At this point, user should be authenticated → link invite to user
-      await linkInviteAndRedirect(inviteId);
+      // 2) Now that we're authenticated, link invite → team member
+      await linkInviteAndRedirect(invite);
     } catch (err: any) {
       console.error(err);
       setError(
@@ -209,7 +264,7 @@ export default function LandlordTeamAcceptPage() {
           </p>
         </header>
 
-        {/* Error / status */}
+        {/* Error / success banner */}
         {(error || status === 'done') && (
           <div
             className={`rounded-2xl border px-4 py-2 text-sm ${
@@ -219,12 +274,12 @@ export default function LandlordTeamAcceptPage() {
             }`}
           >
             {status === 'done'
-              ? 'Invite accepted! Redirecting you to your dashboard…'
+              ? 'Invite accepted! Redirecting you to the landlord portal…'
               : error}
           </div>
         )}
 
-        {/* Auth + accept form (only if not already auto-accepted) */}
+        {/* Auth + accept form (hide once done) */}
         {status !== 'done' && (
           <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 shadow-sm space-y-4">
             <div>
@@ -232,8 +287,9 @@ export default function LandlordTeamAcceptPage() {
                 Step 1: Sign in or create login
               </p>
               <p className="mt-1 text-sm text-slate-200">
-                Use the <span className="font-semibold">same email</span> this invite
-                was sent to. We&apos;ll automatically link your account to this team.
+                Use the <span className="font-semibold">same email</span> this
+                invite was sent to. We&apos;ll automatically link your account to
+                this team.
               </p>
             </div>
 
@@ -269,7 +325,7 @@ export default function LandlordTeamAcceptPage() {
 
               <button
                 type="submit"
-                disabled={submitting || !inviteId}
+                disabled={submitting || !inviteId || !invite}
                 className="mt-2 w-full rounded-full bg-emerald-500 px-4 py-2.5 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {submitting ? 'Connecting your account…' : 'Continue & accept invite'}
