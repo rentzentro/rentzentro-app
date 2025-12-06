@@ -68,7 +68,6 @@ export default function LandlordTeamAcceptPage() {
 
         const row = data as TeamInviteRow;
 
-        // If invite already removed, stop here.
         const st = (row.status || '').toLowerCase();
         if (st === 'removed') {
           setError('This team invite has been revoked by the owner.');
@@ -92,7 +91,7 @@ export default function LandlordTeamAcceptPage() {
     loadInvite();
   }, [searchParams]);
 
-  // ---------- Core linking logic ----------
+  // ---------- Core linking logic (NO landlord lookup) ----------
 
   const linkInviteAndRedirect = async (row: TeamInviteRow) => {
     setStatus('linking');
@@ -134,26 +133,12 @@ export default function LandlordTeamAcceptPage() {
       );
     }
 
-    // 3) Make sure the *owner* landlord account exists.
-    //    IMPORTANT: we match on landlords.user_id (NOT id).
-    const { data: ownerLandlord, error: ownerError } = await supabase
-      .from('landlords')
-      .select('id, user_id')
-      .eq('user_id', row.owner_user_id)
-      .maybeSingle();
-
-    if (ownerError || !ownerLandlord) {
-      console.error('Owner landlord lookup error:', ownerError, ownerLandlord);
-      throw new Error(
-        'Your team access is active, but the owner landlord account could not be found.'
-      );
-    }
-
+    // 3) We’re done — don’t try to read the owner landlord (RLS blocks that).
     setStatus('done');
     router.push('/landlord');
   };
 
-  // ---------- Auto-accept if they are already logged in ----------
+  // ---------- Auto-accept if already logged in ----------
 
   useEffect(() => {
     const tryAuto = async () => {
@@ -175,7 +160,7 @@ export default function LandlordTeamAcceptPage() {
     tryAuto();
   }, [invite, autoTried, status]);
 
-  // ---------- Unified login / signup + accept handler ----------
+  // ---------- Login / signup + accept ----------
 
   const handleAuthAndAccept = async (e: FormEvent) => {
     e.preventDefault();
@@ -190,7 +175,7 @@ export default function LandlordTeamAcceptPage() {
 
       if (!trimmedEmail || !trimmedPassword) {
         throw new Error('Please enter both email and password.');
-      }
+        }
 
       // 1) Try sign-in first
       const signInRes = await supabase.auth.signInWithPassword({
