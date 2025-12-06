@@ -11,11 +11,11 @@ type LandlordRow = {
   id: number;
   email: string;
   name: string | null;
+  user_id: string | null;
   subscription_status: string | null;
   subscription_current_period_end: string | null;
   trial_active: boolean | null;
   trial_end: string | null;
-  user_id?: string | null;
 };
 
 type PropertyRow = {
@@ -49,15 +49,6 @@ type PaymentRow = {
 
 type MaintenanceRow = {
   id: number;
-  status: string | null;
-};
-
-type TeamLinkRow = {
-  id: number;
-  owner_user_id: string | null;
-  owner_landlord_id: number | null;
-  member_user_id: string | null;
-  member_email: string | null;
   status: string | null;
 };
 
@@ -107,6 +98,8 @@ export default function LandlordDashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
+  const [actingAsTeamMember, setActingAsTeamMember] = useState(false);
+
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
@@ -114,7 +107,7 @@ export default function LandlordDashboardPage() {
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------- Load landlord + data (owner OR team member) ----------
+  // ---------- Load landlord (owner OR team member) + data ----------
 
   useEffect(() => {
     const load = async () => {
@@ -127,211 +120,114 @@ export default function LandlordDashboardPage() {
         if (authError) throw authError;
 
         const user = authData.user;
-        const email = authData.user?.email || '';
-        if (!user || !email) {
+        if (!user || !user.email) {
           throw new Error('Unable to load landlord account. Please log in again.');
         }
 
-        // 2) Try to load as a direct landlord (owner)
+        const email = user.email;
         let landlordRow: LandlordRow | null = null;
+        let isTeamMember = false;
 
-        // by user_id first
-        const { data: byUserId, error: byUserErr } = await supabase
+        // 2) Try landlord by user_id first
+        const { data: byUser, error: byUserErr } = await supabase
           .from('landlords')
           .select(
             `
             id,
             email,
             name,
+            user_id,
             subscription_status,
             subscription_current_period_end,
             trial_active,
-            trial_end,
-            user_id
+            trial_end
           `
           )
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (byUserErr) {
-          console.error('Error loading landlord by user_id:', byUserErr);
-          throw new Error('Unable to load landlord account.');
+        if (byUserErr) throw byUserErr;
+        if (byUser) {
+          landlordRow = byUser as LandlordRow;
         }
 
-        if (byUserId) {
-          landlordRow = byUserId as LandlordRow;
-        }
-
-        // fallback by email (old rows)
+        // 3) Fallback: landlord by email (older rows without user_id)
         if (!landlordRow) {
           const { data: byEmail, error: byEmailErr } = await supabase
             .from('landlords')
             .select(
               `
-              id,
-              email,
-              name,
-              subscription_status,
-              subscription_current_period_end,
-              trial_active,
-              trial_end,
-              user_id
-            `
+            id,
+            email,
+            name,
+            user_id,
+            subscription_status,
+            subscription_current_period_end,
+            trial_active,
+            trial_end
+          `
             )
             .eq('email', email)
             .maybeSingle();
 
-          if (byEmailErr) {
-            console.error('Error loading landlord by email:', byEmailErr);
-            throw new Error('Unable to load landlord account.');
-          }
-
+          if (byEmailErr) throw byEmailErr;
           if (byEmail) {
             landlordRow = byEmail as LandlordRow;
           }
         }
 
-        // 3) If still no landlord, treat as team member and resolve owner landlord
+        // 4) Still nothing? Try team member flow
         if (!landlordRow) {
-          // Active membership by member_user_id
-          const { data: teamRows, error: teamErr } = await supabase
+          const { data: teamRow, error: teamErr } = await supabase
             .from('landlord_team_members')
-            .select(
-              `
-              id,
-              owner_user_id,
-              owner_landlord_id,
-              member_user_id,
-              member_email,
-              status
-            `
-            )
+            .select('owner_user_id, status')
             .eq('member_user_id', user.id)
-            .in('status', ['active', 'pending'])
-            .order('created_at', { ascending: false });
+            .maybeSingle();
 
-          if (teamErr) {
-            console.error('Error loading team membership:', teamErr);
-            throw new Error('Unable to load team membership.');
-          }
+          if (teamErr) throw teamErr;
 
-          let link: TeamLinkRow | null = null;
+          if (teamRow && (teamRow.status || '').toLowerCase() === 'active') {
+            isTeamMember = true;
 
-          if (teamRows && teamRows.length > 0) {
-            link = teamRows[0] as TeamLinkRow;
-          } else {
-            // Fallback: rows that don’t yet have member_user_id but match email
-            const { data: teamByEmail, error: teamByEmailErr } = await supabase
-              .from('landlord_team_members')
-              .select(
-                `
-                id,
-                owner_user_id,
-                owner_landlord_id,
-                member_user_id,
-                member_email,
-                status
-              `
-              )
-              .eq('member_email', email.toLowerCase())
-              .in('status', ['active', 'pending'])
-              .order('created_at', { ascending: false });
-
-            if (teamByEmailErr) {
-              console.error('Error loading team membership by email:', teamByEmailErr);
-              throw new Error('Unable to load team membership.');
-            }
-
-            if (teamByEmail && teamByEmail.length > 0) {
-              link = teamByEmail[0] as TeamLinkRow;
-            }
-          }
-
-          if (!link) {
-            // Not an owner landlord, not a team member → treat as no landlord
-            throw new Error(
-              'Landlord account not found for this login. If you were invited as a team member, make sure you used the email that received the invite.'
-            );
-          }
-
-          // Now resolve the *owner* landlord account using owner_landlord_id first
-          let ownerLandlord: LandlordRow | null = null;
-
-          if (link.owner_landlord_id != null) {
-            const { data: lById, error: lByIdErr } = await supabase
+            const { data: ownerLandlord, error: ownerErr } = await supabase
               .from('landlords')
               .select(
                 `
-                id,
-                email,
-                name,
-                subscription_status,
-                subscription_current_period_end,
-                trial_active,
-                trial_end,
-                user_id
-              `
+              id,
+              email,
+              name,
+              user_id,
+              subscription_status,
+              subscription_current_period_end,
+              trial_active,
+              trial_end
+            `
               )
-              .eq('id', link.owner_landlord_id)
+              .eq('user_id', teamRow.owner_user_id)
               .maybeSingle();
 
-            if (lByIdErr) {
-              console.error('Error loading owner landlord by id:', lByIdErr);
-              throw new Error('Unable to load the owner landlord account.');
+            if (ownerErr) throw ownerErr;
+
+            if (!ownerLandlord) {
+              throw new Error(
+                'Your team access is active, but the owner landlord account could not be found.'
+              );
             }
 
-            if (lById) {
-              ownerLandlord = lById as LandlordRow;
-            }
+            landlordRow = ownerLandlord as LandlordRow;
           }
-
-          // Fallback: look up by owner_user_id
-          if (!ownerLandlord && link.owner_user_id) {
-            const { data: lByUser, error: lByUserErr } = await supabase
-              .from('landlords')
-              .select(
-                `
-                id,
-                email,
-                name,
-                subscription_status,
-                subscription_current_period_end,
-                trial_active,
-                trial_end,
-                user_id
-              `
-              )
-              .eq('user_id', link.owner_user_id)
-              .maybeSingle();
-
-            if (lByUserErr) {
-              console.error('Error loading owner landlord by user_id:', lByUserErr);
-              throw new Error('Unable to load the owner landlord account.');
-            }
-
-            if (lByUser) {
-              ownerLandlord = lByUser as LandlordRow;
-            }
-          }
-
-          if (!ownerLandlord) {
-            throw new Error(
-              'Your team access is active, but the owner landlord account could not be found.'
-            );
-          }
-
-          landlordRow = ownerLandlord;
         }
 
         if (!landlordRow) {
           throw new Error(
-            'Landlord record not found for this account. Please contact support if this seems wrong.'
+            'Landlord account not found for this login. If you are a landlord, please create your account first.'
           );
         }
 
         setLandlord(landlordRow);
+        setActingAsTeamMember(isTeamMember);
 
-        // 4) Load dashboard data (we'll gate in the UI)
+        // 5) Load dashboard data (RLS will scope data to the owner)
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase
             .from('properties')
@@ -362,7 +258,7 @@ export default function LandlordDashboardPage() {
         setPayments((paymentRes.data || []) as PaymentRow[]);
         setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
 
-        // 5) Unread messages count for this landlord (non-breaking)
+        // 6) Unread messages count (non-blocking)
         try {
           const { data: msgRows, error: msgError } = await supabase
             .from('landlord_messages')
@@ -380,8 +276,10 @@ export default function LandlordDashboardPage() {
         }
       } catch (err: any) {
         console.error(err);
-        setError(err.message || 'Failed to load landlord dashboard data.');
-        setLandlord(null);
+        setError(
+          err.message ||
+            'Failed to load landlord dashboard data. Please log out and try again.'
+        );
       } finally {
         setLoading(false);
       }
@@ -581,6 +479,15 @@ export default function LandlordDashboardPage() {
             </h1>
             <p className="text-[13px] text-slate-400">
               Overview of your units, rent status, and recent payments.
+              {actingAsTeamMember && (
+                <span className="block text-[11px] text-slate-500 mt-1">
+                  You&apos;re viewing this dashboard as a{' '}
+                  <span className="font-semibold text-emerald-300">
+                    team member
+                  </span>{' '}
+                  for the owner&apos;s account.
+                </span>
+              )}
             </p>
           </div>
 
@@ -654,7 +561,7 @@ export default function LandlordDashboardPage() {
               </p>
             </div>
             <span className="hidden text-[11px] text-slate-500 sm:inline">
-              Drag &amp; drop coming in a future update.
+              Drag & drop coming in a future update.
             </span>
           </div>
 
@@ -697,7 +604,7 @@ export default function LandlordDashboardPage() {
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
                   💳
                 </span>
-                Payments &amp; rent
+                Payments & rent
               </p>
               <p className="text-[11px] text-slate-400">
                 Review recent payments and see who has paid or is still due.
@@ -771,10 +678,10 @@ export default function LandlordDashboardPage() {
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
                   👥
                 </span>
-                Team members
+                Team access
               </p>
               <p className="text-[11px] text-slate-400">
-                Invite teammates and manage who can access your account.
+                Invite teammates and manage who can access this account.
               </p>
             </Link>
 
@@ -786,7 +693,7 @@ export default function LandlordDashboardPage() {
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
                   ⚙️
                 </span>
-                Account &amp; billing
+                Account & billing
               </p>
               <p className="text-[11px] text-slate-400">
                 Update your account details, billing info, and subscription.
@@ -794,9 +701,6 @@ export default function LandlordDashboardPage() {
             </Link>
           </div>
         </section>
-
-        {/* Rent status section, Properties, Recent payments */}
-        {/* (unchanged from your version) */}
 
         {/* Rent status: overdue / upcoming / not due yet */}
         <section className="mb-6 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm">
@@ -945,7 +849,7 @@ export default function LandlordDashboardPage() {
                   Properties
                 </p>
                 <p className="mt-1 text-sm font-medium text-slate-50">
-                  Units &amp; rent
+                  Units & rent
                 </p>
               </div>
               <Link
