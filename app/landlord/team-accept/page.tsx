@@ -30,14 +30,13 @@ export default function LandlordTeamAcceptPage() {
     setStatus('ready');
   }, [searchParams]);
 
-  // Helper: link invite row to current user and redirect
-  const linkInviteAndRedirect = async (id: string) => {
+  // Core helper: load invite, verify email, attach user_id, mark active, redirect
+  const linkInviteAndRedirect = async (idString: string) => {
     setStatus('linking');
     setError(null);
 
-    // Make sure the ID is numeric (matches bigint PK)
-    const inviteNumericId = Number(id);
-    if (!Number.isFinite(inviteNumericId)) {
+    const inviteIdNumber = Number(idString);
+    if (!Number.isFinite(inviteIdNumber)) {
       throw new Error('This invite link is invalid.');
     }
 
@@ -49,16 +48,12 @@ export default function LandlordTeamAcceptPage() {
     }
 
     const user = authData.user;
-    if (!user.email) {
-      throw new Error('Your account does not have an email address. Please contact support.');
-    }
-    const userEmail = user.email.toLowerCase();
 
-    // 2) Load invite row from landlord_team_members
+    // 2) Load invite row (NOTE: correct column names: invite_email, not email)
     const { data: inviteRow, error: inviteError } = await supabase
       .from('landlord_team_members')
-      .select('id, owner_user_id, invite_email, member_email, status')
-      .eq('id', inviteNumericId)
+      .select('id, invite_email, status')
+      .eq('id', inviteIdNumber)
       .maybeSingle();
 
     if (inviteError || !inviteRow) {
@@ -66,15 +61,12 @@ export default function LandlordTeamAcceptPage() {
       throw new Error('This invite could not be found. It may have been revoked.');
     }
 
-    if (inviteRow.status && inviteRow.status !== 'pending') {
-      throw new Error('This invite has already been used or was revoked.');
+    if (inviteRow.status && inviteRow.status === 'removed') {
+      throw new Error('This invite has been revoked by the account owner.');
     }
 
-    const inviteEmail = (
-      inviteRow.invite_email ||
-      inviteRow.member_email ||
-      ''
-    ).toLowerCase();
+    const inviteEmail = (inviteRow.invite_email || '').toLowerCase();
+    const userEmail = (user.email || '').toLowerCase();
 
     if (inviteEmail && inviteEmail !== userEmail) {
       throw new Error(
@@ -82,7 +74,7 @@ export default function LandlordTeamAcceptPage() {
       );
     }
 
-    // 3) Attach member_user_id + member_email + accepted_at + mark active
+    // 3) Attach member_user_id + member_email + accepted_at + status=active
     const { error: updateError } = await supabase
       .from('landlord_team_members')
       .update({
@@ -91,7 +83,7 @@ export default function LandlordTeamAcceptPage() {
         accepted_at: new Date().toISOString(),
         status: 'active',
       })
-      .eq('id', inviteNumericId);
+      .eq('id', inviteIdNumber);
 
     if (updateError) {
       console.error('Error updating invite row:', updateError);
@@ -99,8 +91,9 @@ export default function LandlordTeamAcceptPage() {
     }
 
     setStatus('done');
-    // 4) Send them to the team dashboard
-    router.push('/landlord/team');
+
+    // 4) Send them into the landlord area (for now main dashboard)
+    router.push('/landlord');
   };
 
   // If they open the link while already logged in, auto-accept
@@ -122,7 +115,7 @@ export default function LandlordTeamAcceptPage() {
     };
 
     if (status === 'ready' && inviteId) {
-      tryAutoLink();
+      void tryAutoLink();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, inviteId]);
@@ -152,7 +145,7 @@ export default function LandlordTeamAcceptPage() {
       if (signInRes.error) {
         const msg = signInRes.error.message.toLowerCase();
 
-        // If credentials are wrong, try creating an account for this team member
+        // If credentials are wrong / user not found → create account
         if (msg.includes('invalid login credentials') || msg.includes('invalid login')) {
           const signUpRes = await supabase.auth.signUp({
             email: trimmedEmail,
@@ -226,7 +219,7 @@ export default function LandlordTeamAcceptPage() {
             }`}
           >
             {status === 'done'
-              ? 'Invite accepted! Redirecting you to the team dashboard…'
+              ? 'Invite accepted! Redirecting you to your dashboard…'
               : error}
           </div>
         )}
