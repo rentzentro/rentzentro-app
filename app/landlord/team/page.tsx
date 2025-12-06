@@ -56,6 +56,9 @@ export default function LandlordTeamAccessPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // for revoke / cancel actions
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+
   // ---------- Load landlord + current team ----------
 
   useEffect(() => {
@@ -175,8 +178,7 @@ export default function LandlordTeamAccessPage() {
       const ownerUuid = landlord.user_id || authData.user.id;
 
       // 1) Save invite in landlord_team_members.
-      //    member_email is required in your schema, so for "pending"
-      //    we store the invite email in BOTH member_email and invite_email.
+      //    member_email is required, so for pending we mirror invite_email.
       const { data: insertRow, error: insertError } = await supabase
         .from('landlord_team_members')
         .insert({
@@ -205,8 +207,6 @@ export default function LandlordTeamAccessPage() {
       setInviteEmail('');
 
       // 2) Try to send email via API.
-      //    We try two possible paths so it still works if the API file is
-      //    /api/landlord-team-invite or /api/landlord/team-invite.
       let emailSent = false;
       const payload = {
         inviteId: newInvite.id,
@@ -217,7 +217,7 @@ export default function LandlordTeamAccessPage() {
       };
 
       try {
-        // First, preferred path:
+        // Preferred path
         const res1 = await fetch('/api/landlord-team-invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -227,7 +227,7 @@ export default function LandlordTeamAccessPage() {
         if (res1.ok) {
           emailSent = true;
         } else {
-          // Fallback legacy path:
+          // Fallback path
           const res2 = await fetch('/api/landlord/team-invite', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -258,6 +258,89 @@ export default function LandlordTeamAccessPage() {
       );
     } finally {
       setSavingInvite(false);
+    }
+  };
+
+  // Revoke access for an active team member
+  const handleRevokeAccess = async (memberId: number) => {
+    if (!landlord) return;
+    const confirmRevoke = window.confirm(
+      'Remove this team member’s access? They will no longer be able to view your account.'
+    );
+    if (!confirmRevoke) return;
+
+    setUpdatingId(memberId);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const { error: updateError } = await supabase
+        .from('landlord_team_members')
+        .update({ status: 'removed' })
+        .eq('id', memberId);
+
+      if (updateError) {
+        console.error('Error revoking team member:', updateError);
+        throw new Error('Failed to revoke access. Please try again.');
+      }
+
+      // Update local list
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.id === memberId ? { ...m, status: 'removed' } : m
+        )
+      );
+
+      setSuccess('Team member access revoked.');
+    } catch (err: any) {
+      console.error(err);
+      setError(
+        err?.message ||
+          'Something went wrong while revoking access. Please try again.'
+      );
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  // Cancel a pending invite
+  const handleCancelInvite = async (memberId: number) => {
+    if (!landlord) return;
+    const confirmCancel = window.confirm(
+      'Cancel this invite? The link in their email will no longer work.'
+    );
+    if (!confirmCancel) return;
+
+    setUpdatingId(memberId);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const { error: updateError } = await supabase
+        .from('landlord_team_members')
+        .update({ status: 'removed' })
+        .eq('id', memberId);
+
+      if (updateError) {
+        console.error('Error cancelling invite:', updateError);
+        throw new Error('Failed to cancel invite. Please try again.');
+      }
+
+      setTeamMembers((prev) =>
+        prev.map((m) =>
+          m.id === memberId ? { ...m, status: 'removed' } : m
+        )
+      );
+
+      setSuccess('Invite cancelled.');
+    } catch (err: any) {
+      console.error(err);
+      setError(
+        err?.message ||
+          'Something went wrong while cancelling the invite. Please try again.'
+      );
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -457,9 +540,20 @@ export default function LandlordTeamAccessPage() {
                       </p>
                     )}
                   </div>
-                  <span className="text-[11px] text-emerald-300">
-                    Active
-                  </span>
+
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[11px] text-emerald-300">
+                      Active
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRevokeAccess(m.id)}
+                      disabled={updatingId === m.id}
+                      className="text-[11px] px-3 py-1 rounded-full border border-rose-500/70 text-rose-200 bg-rose-950/30 hover:bg-rose-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {updatingId === m.id ? 'Revoking…' : 'Revoke access'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -506,9 +600,20 @@ export default function LandlordTeamAccessPage() {
                       </p>
                     )}
                   </div>
-                  <span className="text-[11px] text-amber-300">
-                    Waiting to log in
-                  </span>
+
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[11px] text-amber-300">
+                      Waiting to log in
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCancelInvite(m.id)}
+                      disabled={updatingId === m.id}
+                      className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {updatingId === m.id ? 'Cancelling…' : 'Cancel invite'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
