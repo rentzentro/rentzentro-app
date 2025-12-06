@@ -17,9 +17,10 @@ type LandlordRow = {
 type TeamMemberRow = {
   id: number;
   owner_user_id: string;
+  owner_landlord_id: number | null;
   member_user_id: string | null;
-  member_email: string;
-  invite_email: string;
+  member_email: string | null;
+  invite_email: string | null;
   role: string | null;
   status: string | null;
   invited_at: string | null;
@@ -56,8 +57,7 @@ export default function LandlordTeamAccessPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // for revoke / cancel actions
-  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [pendingActionId, setPendingActionId] = useState<number | null>(null);
 
   // ---------- Load landlord + current team ----------
 
@@ -120,7 +120,19 @@ export default function LandlordTeamAccessPage() {
         const { data: teamRows, error: teamError } = await supabase
           .from('landlord_team_members')
           .select(
-            'id, owner_user_id, member_user_id, member_email, invite_email, role, status, invited_at, accepted_at, created_at'
+            `
+              id,
+              owner_user_id,
+              owner_landlord_id,
+              member_user_id,
+              member_email,
+              invite_email,
+              role,
+              status,
+              invited_at,
+              accepted_at,
+              created_at
+            `
           )
           .eq('owner_user_id', ownerUuid)
           .order('created_at', { ascending: true });
@@ -178,11 +190,11 @@ export default function LandlordTeamAccessPage() {
       const ownerUuid = landlord.user_id || authData.user.id;
 
       // 1) Save invite in landlord_team_members.
-      //    member_email is required, so for pending we mirror invite_email.
       const { data: insertRow, error: insertError } = await supabase
         .from('landlord_team_members')
         .insert({
           owner_user_id: ownerUuid,
+          owner_landlord_id: landlord.id, // NEW: store explicit owner landlord id
           member_user_id: null,
           member_email: trimmedEmail,
           invite_email: trimmedEmail,
@@ -191,7 +203,19 @@ export default function LandlordTeamAccessPage() {
           invited_at: new Date().toISOString(),
         })
         .select(
-          'id, owner_user_id, member_user_id, member_email, invite_email, role, status, invited_at, accepted_at, created_at'
+          `
+            id,
+            owner_user_id,
+            owner_landlord_id,
+            member_user_id,
+            member_email,
+            invite_email,
+            role,
+            status,
+            invited_at,
+            accepted_at,
+            created_at
+          `
         )
         .single();
 
@@ -217,7 +241,7 @@ export default function LandlordTeamAccessPage() {
       };
 
       try {
-        // Preferred path
+        // Preferred path:
         const res1 = await fetch('/api/landlord-team-invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -227,7 +251,7 @@ export default function LandlordTeamAccessPage() {
         if (res1.ok) {
           emailSent = true;
         } else {
-          // Fallback path
+          // Fallback legacy path:
           const res2 = await fetch('/api/landlord/team-invite', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -247,7 +271,7 @@ export default function LandlordTeamAccessPage() {
         );
       } else {
         setSuccess(
-          `Invite saved, but there was an issue sending the email. Ask your teammate to sign up or log in as a landlord using ${trimmedEmail}, and RentZentro will automatically link them to your account.`
+          `Invite saved, but there was an issue sending the email. Ask your teammate to open the invite email or sign in with ${trimmedEmail}, and RentZentro will link them automatically.`
         );
       }
     } catch (err: any) {
@@ -261,86 +285,76 @@ export default function LandlordTeamAccessPage() {
     }
   };
 
-  // Revoke access for an active team member
-  const handleRevokeAccess = async (memberId: number) => {
-    if (!landlord) return;
-    const confirmRevoke = window.confirm(
-      'Remove this team member’s access? They will no longer be able to view your account.'
-    );
-    if (!confirmRevoke) return;
-
-    setUpdatingId(memberId);
+  const handleCancelInvite = async (id: number) => {
+    setPendingActionId(id);
     setError(null);
     setSuccess(null);
 
     try {
-      const { error: updateError } = await supabase
+      const { error: delError } = await supabase
         .from('landlord_team_members')
-        .update({ status: 'removed' })
-        .eq('id', memberId);
+        .delete()
+        .eq('id', id);
 
-      if (updateError) {
-        console.error('Error revoking team member:', updateError);
-        throw new Error('Failed to revoke access. Please try again.');
-      }
-
-      // Update local list
-      setTeamMembers((prev) =>
-        prev.map((m) =>
-          m.id === memberId ? { ...m, status: 'removed' } : m
-        )
-      );
-
-      setSuccess('Team member access revoked.');
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.message ||
-          'Something went wrong while revoking access. Please try again.'
-      );
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  // Cancel a pending invite
-  const handleCancelInvite = async (memberId: number) => {
-    if (!landlord) return;
-    const confirmCancel = window.confirm(
-      'Cancel this invite? The link in their email will no longer work.'
-    );
-    if (!confirmCancel) return;
-
-    setUpdatingId(memberId);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const { error: updateError } = await supabase
-        .from('landlord_team_members')
-        .update({ status: 'removed' })
-        .eq('id', memberId);
-
-      if (updateError) {
-        console.error('Error cancelling invite:', updateError);
+      if (delError) {
+        console.error('Error cancelling invite:', delError);
         throw new Error('Failed to cancel invite. Please try again.');
       }
 
-      setTeamMembers((prev) =>
-        prev.map((m) =>
-          m.id === memberId ? { ...m, status: 'removed' } : m
-        )
-      );
-
+      setTeamMembers((prev) => prev.filter((m) => m.id !== id));
       setSuccess('Invite cancelled.');
     } catch (err: any) {
       console.error(err);
-      setError(
-        err?.message ||
-          'Something went wrong while cancelling the invite. Please try again.'
-      );
+      setError(err?.message || 'Something went wrong cancelling invite.');
     } finally {
-      setUpdatingId(null);
+      setPendingActionId(null);
+    }
+  };
+
+  const handleRevokeAccess = async (id: number) => {
+    setPendingActionId(id);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const { data: updated, error: updError } = await supabase
+        .from('landlord_team_members')
+        .update({
+          status: 'removed',
+        })
+        .eq('id', id)
+        .select(
+          `
+            id,
+            owner_user_id,
+            owner_landlord_id,
+            member_user_id,
+            member_email,
+            invite_email,
+            role,
+            status,
+            invited_at,
+            accepted_at,
+            created_at
+          `
+        )
+        .single();
+
+      if (updError) {
+        console.error('Error revoking access:', updError);
+        throw new Error('Failed to revoke access. Please try again.');
+      }
+
+      const updatedRow = updated as TeamMemberRow;
+      setTeamMembers((prev) =>
+        prev.map((m) => (m.id === id ? updatedRow : m))
+      );
+      setSuccess('Team member access revoked.');
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || 'Something went wrong revoking access.');
+    } finally {
+      setPendingActionId(null);
     }
   };
 
@@ -446,9 +460,9 @@ export default function LandlordTeamAccessPage() {
                 Invite a teammate
               </p>
               <p className="mt-1 text-sm text-slate-200">
-                Send an invite to someone who helps you manage rent collection.
-                They’ll see your properties and tenants when they log in with
-                this email.
+                Send an invite to someone who helps you manage rent
+                collection. They’ll see your properties and tenants when
+                they log in with this email.
               </p>
             </div>
           </div>
@@ -470,9 +484,9 @@ export default function LandlordTeamAccessPage() {
                 required
               />
               <p className="text-[11px] text-slate-500">
-                After you create an invite, ask your teammate to sign up or sign
-                in as a landlord using the same email. When they log in,
-                RentZentro will automatically link them to your account.
+                After you create an invite, your teammate just opens the
+                email and signs in with that same address. RentZentro
+                will automatically link them to your account.
               </p>
             </div>
 
@@ -524,7 +538,7 @@ export default function LandlordTeamAccessPage() {
                 >
                   <div>
                     <p className="text-[13px] font-medium text-slate-50">
-                      {m.member_email}
+                      {m.member_email || m.invite_email}
                     </p>
                     <p className="text-[11px] text-slate-400">
                       Role:{' '}
@@ -540,18 +554,19 @@ export default function LandlordTeamAccessPage() {
                       </p>
                     )}
                   </div>
-
-                  <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-3">
                     <span className="text-[11px] text-emerald-300">
                       Active
                     </span>
                     <button
                       type="button"
                       onClick={() => handleRevokeAccess(m.id)}
-                      disabled={updatingId === m.id}
-                      className="text-[11px] px-3 py-1 rounded-full border border-rose-500/70 text-rose-200 bg-rose-950/30 hover:bg-rose-900/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                      disabled={pendingActionId === m.id}
+                      className="text-[11px] px-3 py-1 rounded-full border border-rose-500/60 text-rose-200 hover:bg-rose-950/40 disabled:opacity-60"
                     >
-                      {updatingId === m.id ? 'Revoking…' : 'Revoke access'}
+                      {pendingActionId === m.id
+                        ? 'Revoking…'
+                        : 'Revoke access'}
                     </button>
                   </div>
                 </div>
@@ -600,20 +615,16 @@ export default function LandlordTeamAccessPage() {
                       </p>
                     )}
                   </div>
-
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="text-[11px] text-amber-300">
-                      Waiting to log in
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCancelInvite(m.id)}
-                      disabled={updatingId === m.id}
-                      className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {updatingId === m.id ? 'Cancelling…' : 'Cancel invite'}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCancelInvite(m.id)}
+                    disabled={pendingActionId === m.id}
+                    className="text-[11px] px-3 py-1 rounded-full border border-slate-600 text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                  >
+                    {pendingActionId === m.id
+                      ? 'Cancelling…'
+                      : 'Cancel invite'}
+                  </button>
                 </div>
               ))}
             </div>
