@@ -15,7 +15,7 @@ type LandlordRow = {
   subscription_current_period_end: string | null;
   trial_active: boolean | null;
   trial_end: string | null;
-  user_id?: string | null; // owner auth.users UUID
+  user_id: string | null; // NEW: used to link owner user_id
 };
 
 type PropertyRow = {
@@ -54,8 +54,6 @@ type MaintenanceRow = {
 
 type TeamMembershipRow = {
   owner_user_id: string;
-  member_user_id: string | null;
-  role: string | null;
   status: string | null;
 };
 
@@ -105,15 +103,16 @@ export default function LandlordDashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
-  const [isTeamMember, setIsTeamMember] = useState(false);
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
-  const [maintenanceRequests, setMaintenanceRequests] = useState<MaintenanceRow[]>([]);
-  const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
+  const [maintenanceRequests, setMaintenanceRequests] =
+    useState<MaintenanceRow[]>([]);
+  const [unreadMessagesCount, setUnreadMessagesCount] =
+    useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------- Load landlord OR team-owner + data ----------
+  // ---------- Load landlord + data (handles owner OR team member) ----------
 
   useEffect(() => {
     const load = async () => {
@@ -122,21 +121,23 @@ export default function LandlordDashboardPage() {
 
       try {
         // 1) Get auth user
-        const { data: authData, error: authError } = await supabase.auth.getUser();
+        const { data: authData, error: authError } =
+          await supabase.auth.getUser();
         if (authError) throw authError;
 
         const user = authData.user;
-        if (!user || !user.email) {
-          throw new Error('Unable to load landlord account. Please log in again.');
+        const email = user?.email;
+        if (!user || !email) {
+          throw new Error(
+            'Unable to load landlord account. Please log in again.'
+          );
         }
 
-        const email = user.email;
-        const userId = user.id;
-
-        // 2) Try to load as OWNER landlord (by user_id first, then email)
+        // 2) Try to load landlord row as OWNER (by user_id, then by email)
         let landlordRow: LandlordRow | null = null;
+        let teamRow: TeamMembershipRow | null = null;
 
-        const { data: byUser, error: landlordByUserError } = await supabase
+        const { data: byUser, error: byUserError } = await supabase
           .from('landlords')
           .select(
             `
@@ -150,18 +151,16 @@ export default function LandlordDashboardPage() {
             user_id
           `
           )
-          .eq('user_id', userId)
+          .eq('user_id', user.id)
           .maybeSingle();
 
-        if (landlordByUserError) throw landlordByUserError;
+        if (byUserError) throw byUserError;
         if (byUser) {
           landlordRow = byUser as LandlordRow;
-          setIsTeamMember(false);
         }
 
-        // Fallback: old rows that were created before user_id existed
         if (!landlordRow) {
-          const { data: byEmail, error: landlordByEmailError } = await supabase
+          const { data: byEmail, error: byEmailError } = await supabase
             .from('landlords')
             .select(
               `
@@ -178,85 +177,90 @@ export default function LandlordDashboardPage() {
             .eq('email', email)
             .maybeSingle();
 
-          if (landlordByEmailError) throw landlordByEmailError;
+          if (byEmailError) throw byEmailError;
           if (byEmail) {
             landlordRow = byEmail as LandlordRow;
-            setIsTeamMember(false);
           }
         }
 
-        // 3) If still no landlord row → see if this user is an ACTIVE TEAM MEMBER
+        // 3) If still no landlordRow, try to treat user as TEAM MEMBER
         if (!landlordRow) {
-          const { data: teamRow, error: teamError } = await supabase
+          const { data: teamData, error: teamError } = await supabase
             .from('landlord_team_members')
-            .select('owner_user_id, member_user_id, role, status')
-            .eq('member_user_id', userId)
-            .eq('status', 'active')
+            .select('owner_user_id, status')
+            .eq('member_user_id', user.id)
             .maybeSingle();
 
           if (teamError) throw teamError;
 
-          const teamMembership = teamRow as TeamMembershipRow | null;
+          if (teamData) {
+            teamRow = teamData as TeamMembershipRow;
+            const statusLower = (teamRow.status || '').toLowerCase();
 
-          if (teamMembership && teamMembership.owner_user_id) {
-            // Load the OWNER landlord row using owner_user_id
-            const { data: ownerLandlord, error: ownerLandlordError } =
-              await supabase
-                .from('landlords')
-                .select(
+            if (statusLower === 'active') {
+              const ownerUuid = teamRow.owner_user_id;
+
+              const { data: ownerRow, error: ownerError } =
+                await supabase
+                  .from('landlords')
+                  .select(
+                    `
+                    id,
+                    email,
+                    name,
+                    subscription_status,
+                    subscription_current_period_end,
+                    trial_active,
+                    trial_end,
+                    user_id
                   `
-                  id,
-                  email,
-                  name,
-                  subscription_status,
-                  subscription_current_period_end,
-                  trial_active,
-                  trial_end,
-                  user_id
-                `
-                )
-                .eq('user_id', teamMembership.owner_user_id)
-                .maybeSingle();
+                  )
+                  .eq('user_id', ownerUuid)
+                  .maybeSingle();
 
-            if (ownerLandlordError) throw ownerLandlordError;
+              if (ownerError) throw ownerError;
+              if (!ownerRow) {
+                // Special message when team membership exists but owner is missing
+                throw new Error(
+                  'Your team access is active, but the owner landlord account could not be found.'
+                );
+              }
 
-            if (ownerLandlord) {
-              landlordRow = ownerLandlord as LandlordRow;
-              setIsTeamMember(true);
+              landlordRow = ownerRow as LandlordRow;
             }
           }
         }
 
         if (!landlordRow) {
-          // No owner landlord row and no team mapping that resolved
           throw new Error(
-            'Your team access is active, but the owner landlord account could not be found.'
+            'Landlord record not found for this account. Please contact support if this seems wrong.'
           );
         }
 
         const landlordTyped = landlordRow as LandlordRow;
         setLandlord(landlordTyped);
 
-        // 4) Load dashboard data (RLS will scope to owner/team automatically)
-        const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
-          supabase
-            .from('properties')
-            .select('*')
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('tenants')
-            .select('*')
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('payments')
-            .select('*')
-            .order('paid_on', { ascending: false })
-            .limit(10),
-          supabase
-            .from('maintenance_requests')
-            .select('id, status')
-            .order('created_at', { ascending: false }),
-        ]);
+        // 4) Load dashboard data (RLS will filter correctly for owner vs team)
+        const [propRes, tenantRes, paymentRes, maintRes] =
+          await Promise.all([
+            supabase
+              .from('properties')
+              .select('*')
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('tenants')
+              .select('*')
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('payments')
+              .select('*')
+              .order('paid_on', { ascending: false })
+              .limit(10),
+            supabase
+              .from('maintenance_requests')
+              .select('id, status')
+              .order('created_at', { ascending: false }),
+          ]);
 
         if (propRes.error) throw propRes.error;
         if (tenantRes.error) throw tenantRes.error;
@@ -266,9 +270,11 @@ export default function LandlordDashboardPage() {
         setProperties((propRes.data || []) as PropertyRow[]);
         setTenants((tenantRes.data || []) as TenantRow[]);
         setPayments((paymentRes.data || []) as PaymentRow[]);
-        setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
+        setMaintenanceRequests(
+          (maintRes.data || []) as MaintenanceRow[]
+        );
 
-        // 5) Unread messages count for this landlord (non-breaking)
+        // 5) Unread messages count (non-breaking)
         try {
           const { data: msgRows, error: msgError } = await supabase
             .from('landlord_messages')
@@ -286,7 +292,9 @@ export default function LandlordDashboardPage() {
         }
       } catch (err: any) {
         console.error(err);
-        setError(err.message || 'Failed to load landlord dashboard data.');
+        setError(
+          err.message || 'Failed to load landlord dashboard data.'
+        );
       } finally {
         setLoading(false);
       }
@@ -392,7 +400,9 @@ export default function LandlordDashboardPage() {
   if (loading && !landlord) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-50 p-6 flex items-center justify-center">
-        <p className="text-sm text-slate-400">Loading landlord dashboard…</p>
+        <p className="text-sm text-slate-400">
+          Loading landlord dashboard…
+        </p>
       </div>
     );
   }
@@ -428,9 +438,10 @@ export default function LandlordDashboardPage() {
             Unlock your RentZentro landlord tools
           </h1>
           <p className="text-sm text-slate-300">
-            Your landlord account is created, but your subscription isn&apos;t active
-            and your free promo period has ended. To access your dashboard, properties,
-            tenants, and online rent collection, please activate the{' '}
+            Your landlord account is created, but your subscription
+            isn&apos;t active and your free promo period has ended. To
+            access your dashboard, properties, tenants, and online rent
+            collection, please activate the{' '}
             <span className="font-semibold text-emerald-300">
               $29.95/mo RentZentro Landlord Plan
             </span>
@@ -487,11 +498,6 @@ export default function LandlordDashboardPage() {
             <p className="text-[13px] text-slate-400">
               Overview of your units, rent status, and recent payments.
             </p>
-            {isTeamMember && (
-              <p className="mt-1 text-[11px] text-emerald-300">
-                You&apos;re viewing this dashboard as a team member.
-              </p>
-            )}
           </div>
 
           {/* Top-right: only Log out pill now */}
@@ -552,7 +558,7 @@ export default function LandlordDashboardPage() {
           </div>
         </div>
 
-        {/* Quick actions grid */}
+        {/* NEW: Quick actions grid (with Team access card added) */}
         <section className="mb-6 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm p-4">
           <div className="mb-3 flex items-center justify-between">
             <div>
@@ -595,7 +601,8 @@ export default function LandlordDashboardPage() {
                 Manage tenants
               </p>
               <p className="text-[11px] text-slate-400">
-                View tenants, invite new ones, and keep contact details current.
+                View tenants, invite new ones, and keep contact details
+                current.
               </p>
             </Link>
 
@@ -610,7 +617,8 @@ export default function LandlordDashboardPage() {
                 Payments &amp; rent
               </p>
               <p className="text-[11px] text-slate-400">
-                Review recent payments and see who has paid or is still due.
+                Review recent payments and see who has paid or is still
+                due.
               </p>
             </Link>
 
@@ -632,7 +640,8 @@ export default function LandlordDashboardPage() {
                 </span>
               </p>
               <p className="text-[11px] text-slate-400">
-                Track new, in-progress, and resolved issues across your units.
+                Track new, in-progress, and resolved issues across your
+                units.
               </p>
             </Link>
 
@@ -654,7 +663,8 @@ export default function LandlordDashboardPage() {
                 </span>
               </p>
               <p className="text-[11px] text-slate-400">
-                View and reply to portal messages from your tenants in one place.
+                View and reply to portal messages from your tenants in one
+                place.
               </p>
             </Link>
 
@@ -669,10 +679,12 @@ export default function LandlordDashboardPage() {
                 Documents
               </p>
               <p className="text-[11px] text-slate-400">
-                Upload and share leases, notices, and other files with tenants.
+                Upload and share leases, notices, and other files with
+                tenants.
               </p>
             </Link>
 
+            {/* NEW: Team access quick action */}
             <Link
               href="/landlord/team"
               className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
@@ -684,7 +696,8 @@ export default function LandlordDashboardPage() {
                 Team access
               </p>
               <p className="text-[11px] text-slate-400">
-                Invite teammates to help manage properties, tenants, and maintenance.
+                Invite teammates and manage who can access your
+                RentZentro account.
               </p>
             </Link>
 
@@ -699,7 +712,8 @@ export default function LandlordDashboardPage() {
                 Account &amp; billing
               </p>
               <p className="text-[11px] text-slate-400">
-                Update your account details, billing info, and subscription.
+                Update your account details, billing info, and
+                subscription.
               </p>
             </Link>
           </div>
@@ -786,7 +800,7 @@ export default function LandlordDashboardPage() {
                   {upcoming7.map((p) => (
                     <div
                       key={p.id}
-                      className="rounded-xl bg-amber-950/40 border border-amber-500/40 px-2 py-1.5"
+                      className="rounded-2xl bg-amber-950/40 border border-amber-500/40 px-2 py-1.5"
                     >
                       <p className="text-[11px] text-amber-50 font-medium">
                         {p.name || 'Property'}{' '}
@@ -821,7 +835,7 @@ export default function LandlordDashboardPage() {
                   {notDueYet.map((p) => (
                     <div
                       key={p.id}
-                      className="rounded-xl bg-emerald-950/40 border border-emerald-500/40 px-2 py-1.5"
+                      className="rounded-2xl bg-emerald-950/40 border border-emerald-500/40 px-2 py-1.5"
                     >
                       <p className="text-[11px] text-emerald-50 font-medium">
                         {p.name || 'Property'}{' '}
@@ -865,8 +879,8 @@ export default function LandlordDashboardPage() {
 
             {properties.length === 0 ? (
               <p className="mt-4 text-xs text-slate-500">
-                No properties yet. Add your first unit from the properties
-                screen.
+                No properties yet. Add your first unit from the
+                properties screen.
               </p>
             ) : (
               <div className="mt-3 space-y-2">
@@ -929,7 +943,9 @@ export default function LandlordDashboardPage() {
             ) : (
               <div className="mt-3 space-y-2">
                 {payments.map((p) => {
-                  const t = p.tenant_id ? tenantById.get(p.tenant_id) : null;
+                  const t = p.tenant_id
+                    ? tenantById.get(p.tenant_id)
+                    : null;
                   const prop = p.property_id
                     ? propertyById.get(p.property_id)
                     : null;
@@ -981,8 +997,8 @@ export default function LandlordDashboardPage() {
             )}
 
             <p className="mt-3 text-[11px] text-slate-500">
-              Card payments from tenants are recorded here automatically after
-              Stripe confirms the payment.
+              Card payments from tenants are recorded here
+              automatically after Stripe confirms the payment.
             </p>
           </section>
         </div>
