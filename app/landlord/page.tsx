@@ -11,11 +11,11 @@ type LandlordRow = {
   id: number;
   email: string;
   name: string | null;
-  user_id: string | null;
   subscription_status: string | null;
   subscription_current_period_end: string | null;
   trial_active: boolean | null;
   trial_end: string | null;
+  user_id: string | null; // NEW: needed so we can handle team access cleanly
 };
 
 type PropertyRow = {
@@ -49,6 +49,13 @@ type PaymentRow = {
 
 type MaintenanceRow = {
   id: number;
+  status: string | null;
+};
+
+type TeamMembershipRow = {
+  id: string;
+  owner_user_id: string;
+  role: string | null;
   status: string | null;
 };
 
@@ -98,8 +105,6 @@ export default function LandlordDashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
-  const [actingAsTeamMember, setActingAsTeamMember] = useState(false);
-
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
@@ -107,7 +112,11 @@ export default function LandlordDashboardPage() {
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------- Load landlord (owner OR team member) + data ----------
+  // NEW: track when someone is in via team access
+  const [isTeamMember, setIsTeamMember] = useState(false);
+  const [teamRole, setTeamRole] = useState<string | null>(null);
+
+  // ---------- Load landlord + data ----------
 
   useEffect(() => {
     const load = async () => {
@@ -120,97 +129,111 @@ export default function LandlordDashboardPage() {
         if (authError) throw authError;
 
         const user = authData.user;
-        if (!user || !user.email) {
+        const email = user?.email;
+        if (!user || !email) {
           throw new Error('Unable to load landlord account. Please log in again.');
         }
 
-        const email = user.email;
         let landlordRow: LandlordRow | null = null;
-        let isTeamMember = false;
+        let actingAsTeamMember = false;
+        let teamRoleLocal: string | null = null;
 
-        // 2) Try landlord by user_id first
-        const { data: byUser, error: byUserErr } = await supabase
-          .from('landlords')
-          .select(
-            `
-            id,
-            email,
-            name,
-            user_id,
-            subscription_status,
-            subscription_current_period_end,
-            trial_active,
-            trial_end
-          `
-          )
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (byUserErr) throw byUserErr;
-        if (byUser) {
-          landlordRow = byUser as LandlordRow;
-        }
-
-        // 3) Fallback: landlord by email (older rows without user_id)
-        if (!landlordRow) {
-          const { data: byEmail, error: byEmailErr } = await supabase
+        // 2) Try to load landlord by user_id first (owner landlord)
+        const { data: landlordByUserId, error: landlordByUserIdError } =
+          await supabase
             .from('landlords')
             .select(
               `
-            id,
-            email,
-            name,
-            user_id,
-            subscription_status,
-            subscription_current_period_end,
-            trial_active,
-            trial_end
-          `
-            )
-            .eq('email', email)
-            .maybeSingle();
-
-          if (byEmailErr) throw byEmailErr;
-          if (byEmail) {
-            landlordRow = byEmail as LandlordRow;
-          }
-        }
-
-        // 4) Still nothing? Try team member flow
-        if (!landlordRow) {
-          const { data: teamRow, error: teamErr } = await supabase
-            .from('landlord_team_members')
-            .select('owner_user_id, status')
-            .eq('member_user_id', user.id)
-            .maybeSingle();
-
-          if (teamErr) throw teamErr;
-
-          if (teamRow && (teamRow.status || '').toLowerCase() === 'active') {
-            isTeamMember = true;
-
-            const { data: ownerLandlord, error: ownerErr } = await supabase
-              .from('landlords')
-              .select(
-                `
               id,
               email,
               name,
-              user_id,
               subscription_status,
               subscription_current_period_end,
               trial_active,
-              trial_end
+              trial_end,
+              user_id
             `
+            )
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+        if (landlordByUserIdError) throw landlordByUserIdError;
+
+        if (landlordByUserId) {
+          landlordRow = landlordByUserId as LandlordRow;
+        } else {
+          // 3) Fallback: landlord by email (older rows before user_id was set)
+          const { data: landlordByEmail, error: landlordByEmailError } =
+            await supabase
+              .from('landlords')
+              .select(
+                `
+                id,
+                email,
+                name,
+                subscription_status,
+                subscription_current_period_end,
+                trial_active,
+                trial_end,
+                user_id
+              `
               )
-              .eq('user_id', teamRow.owner_user_id)
+              .eq('email', email)
               .maybeSingle();
 
-            if (ownerErr) throw ownerErr;
+          if (landlordByEmailError) throw landlordByEmailError;
+
+          if (landlordByEmail) {
+            landlordRow = landlordByEmail as LandlordRow;
+          }
+        }
+
+        // 4) If still no landlord row, this may be a TEAM MEMBER login
+        if (!landlordRow) {
+          const { data: teamRow, error: teamError } = await supabase
+            .from('landlord_team_members')
+            .select('id, owner_user_id, role, status')
+            .eq('member_user_id', user.id)
+            .eq('status', 'active')
+            .maybeSingle();
+
+          if (teamError) {
+            console.error('Error loading team membership:', teamError);
+            throw new Error('Unable to load team membership for this account.');
+          }
+
+          if (teamRow) {
+            const tm = teamRow as TeamMembershipRow;
+            actingAsTeamMember = true;
+            teamRoleLocal = tm.role;
+
+            // Look up the landlord row for the OWNER this team member belongs to
+            const { data: ownerLandlord, error: ownerLandlordError } =
+              await supabase
+                .from('landlords')
+                .select(
+                  `
+                  id,
+                  email,
+                  name,
+                  subscription_status,
+                  subscription_current_period_end,
+                  trial_active,
+                  trial_end,
+                  user_id
+                `
+                )
+                .eq('user_id', tm.owner_user_id)
+                .maybeSingle();
+
+            if (ownerLandlordError) {
+              console.error('Error loading owner landlord for team member:', ownerLandlordError);
+              throw new Error('Unable to load the landlord account for this team access.');
+            }
 
             if (!ownerLandlord) {
               throw new Error(
-                'Your team access is active, but the owner landlord account could not be found.'
+                'We found your team access, but could not find the landlord account it belongs to. Ask the landlord to log in once and try again.'
               );
             }
 
@@ -220,14 +243,16 @@ export default function LandlordDashboardPage() {
 
         if (!landlordRow) {
           throw new Error(
-            'Landlord account not found for this login. If you are a landlord, please create your account first.'
+            'Landlord record not found for this account. If you were invited as a teammate, ask the landlord to send a new invite.'
           );
         }
 
-        setLandlord(landlordRow);
-        setActingAsTeamMember(isTeamMember);
+        const landlordTyped = landlordRow as LandlordRow;
+        setLandlord(landlordTyped);
+        setIsTeamMember(actingAsTeamMember);
+        setTeamRole(teamRoleLocal);
 
-        // 5) Load dashboard data (RLS will scope data to the owner)
+        // 5) Load dashboard data (RLS will decide what this user can see)
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase
             .from('properties')
@@ -276,10 +301,7 @@ export default function LandlordDashboardPage() {
         }
       } catch (err: any) {
         console.error(err);
-        setError(
-          err.message ||
-            'Failed to load landlord dashboard data. Please log out and try again.'
-        );
+        setError(err.message || 'Failed to load landlord dashboard data.');
       } finally {
         setLoading(false);
       }
@@ -361,7 +383,6 @@ export default function LandlordDashboardPage() {
         );
         hasActiveTrial = trialEndDateOnly >= todayDateOnly;
       } else {
-        // trial_active true but no end date: treat as active (defensive)
         hasActiveTrial = true;
       }
     }
@@ -382,7 +403,7 @@ export default function LandlordDashboardPage() {
 
   // ---------- UI ----------
 
-  if (loading && !landlord && !error) {
+  if (loading && !landlord) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-50 p-6 flex items-center justify-center">
         <p className="text-sm text-slate-400">Loading landlord dashboard…</p>
@@ -479,16 +500,16 @@ export default function LandlordDashboardPage() {
             </h1>
             <p className="text-[13px] text-slate-400">
               Overview of your units, rent status, and recent payments.
-              {actingAsTeamMember && (
-                <span className="block text-[11px] text-slate-500 mt-1">
-                  You&apos;re viewing this dashboard as a{' '}
-                  <span className="font-semibold text-emerald-300">
-                    team member
-                  </span>{' '}
-                  for the owner&apos;s account.
-                </span>
-              )}
             </p>
+            {isTeamMember && (
+              <p className="mt-1 text-[11px] text-emerald-300">
+                You&apos;re logged in as a{' '}
+                {teamRole === 'viewer'
+                  ? 'viewer (read-only)'
+                  : 'manager team member'}{' '}
+                for <span className="font-semibold">{landlord.email}</span>.
+              </p>
+            )}
           </div>
 
           {/* Top-right: only Log out pill now */}
@@ -681,7 +702,7 @@ export default function LandlordDashboardPage() {
                 Team access
               </p>
               <p className="text-[11px] text-slate-400">
-                Invite teammates and manage who can access this account.
+                Invite or manage teammates who help manage your rentals.
               </p>
             </Link>
 
