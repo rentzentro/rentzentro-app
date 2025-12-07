@@ -101,10 +101,10 @@ export default function LandlordMessagesPage() {
         }
         const user = authData.user;
 
-        // 1) Try as owner landlord (landlords.user_id = auth.uid)
-        let ownerLandlord: LandlordRow | null = null;
+        let resolvedLandlord: LandlordRow | null = null;
         let teamFlag = false;
 
+        // 1) Try as owner landlord (user_id = auth user)
         const { data: landlordByUser, error: landlordUserError } =
           await supabase
             .from('landlords')
@@ -118,10 +118,11 @@ export default function LandlordMessagesPage() {
         }
 
         if (landlordByUser) {
-          ownerLandlord = landlordByUser as LandlordRow;
+          // Logged in as the owner
+          resolvedLandlord = landlordByUser as LandlordRow;
           teamFlag = false;
         } else {
-          // 2) If not an owner, try as ACTIVE team member
+          // 2) Try as ACTIVE team member for some owner
           const { data: teamRow, error: teamError } = await supabase
             .from('landlord_team_members')
             .select('id, owner_user_id, member_user_id, status')
@@ -142,6 +143,7 @@ export default function LandlordMessagesPage() {
 
           const typedTeam = teamRow as TeamMemberRow;
 
+          // 2a) Try to find the landlord row for this owner
           const { data: landlordOwner, error: landlordOwnerError } =
             await supabase
               .from('landlords')
@@ -150,28 +152,40 @@ export default function LandlordMessagesPage() {
               .maybeSingle();
 
           if (landlordOwnerError) {
-            console.error('Error loading owner landlord row:', landlordOwnerError);
-            throw new Error('Unable to load team owner landlord account.');
-          }
-
-          if (!landlordOwner) {
-            throw new Error(
-              'Landlord account for this team owner could not be found.'
+            console.error(
+              'Error loading owner landlord row for messages:',
+              landlordOwnerError
             );
           }
 
-          ownerLandlord = landlordOwner as LandlordRow;
+          if (landlordOwner) {
+            // Normal case: owner has a landlord row
+            resolvedLandlord = landlordOwner as LandlordRow;
+          } else {
+            // Fallback: create a lightweight landlord object so messages still work
+            resolvedLandlord = {
+              id: -1,
+              name: null,
+              email: 'Landlord account',
+              user_id: typedTeam.owner_user_id,
+            };
+          }
+
           teamFlag = true;
         }
 
-        setLandlord(ownerLandlord);
+        if (!resolvedLandlord) {
+          throw new Error('Landlord account could not be found.');
+        }
+
+        setLandlord(resolvedLandlord);
         setIsTeamMember(teamFlag);
 
-        // 3) Load tenants for this landlord (ownerLandlord.user_id = owner_id)
+        // 3) Load tenants for this landlord (owner id = landlord.user_id)
         const { data: tenantRows, error: tenantsError } = await supabase
           .from('tenants')
           .select('id, name, email, user_id')
-          .eq('owner_id', ownerLandlord.user_id)
+          .eq('owner_id', resolvedLandlord.user_id)
           .order('name', { ascending: true });
 
         if (tenantsError) {
@@ -226,7 +240,7 @@ export default function LandlordMessagesPage() {
         const messageList = (rows || []) as MessageRow[];
         setMessages(messageList);
 
-        // Mark tenant messages as read for this landlord/team (optional but helps badges)
+        // Mark tenant messages as read for this conversation
         const unreadTenantMessages = messageList.filter(
           (m) => m.sender_type === 'tenant' && !m.read_at
         );
@@ -277,8 +291,8 @@ export default function LandlordMessagesPage() {
       if (!tenant) throw new Error('Tenant not found for this conversation.');
 
       const insertPayload = {
-        landlord_id: landlord.id,
-        landlord_user_id: landlord.user_id, // ALWAYS owner user id (important for team RLS)
+        landlord_id: landlord.id > 0 ? landlord.id : null,
+        landlord_user_id: landlord.user_id,
         tenant_id: tenant.id,
         tenant_user_id: tenant.user_id,
         body,
@@ -304,10 +318,8 @@ export default function LandlordMessagesPage() {
       setMessages((prev) => [...prev, newRow]);
       setNewMessage('');
 
-      // OPTIONAL: call your existing email notification route
-      // If you already had something like /api/landlord-message-email before,
-      // re-enable it here by replacing the path below.
-      //
+      // NOTE: email notification call is currently disabled.
+      // Once we're happy with sending, we can re-enable your old API route here.
       // try {
       //   await fetch('/api/landlord-message-email', {
       //     method: 'POST',
