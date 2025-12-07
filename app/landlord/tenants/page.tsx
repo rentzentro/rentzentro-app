@@ -13,16 +13,6 @@ type LandlordRow = {
   user_id: string | null; // auth.users UUID
 };
 
-type LandlordTeamMemberRow = {
-  id: number;
-  owner_user_id: string; // landlord's auth.user id
-  member_user_id: string | null;
-  member_email: string | null;
-  invite_email: string | null;
-  role: string | null;
-  status: string | null; // 'pending' | 'active' | 'removed' etc
-};
-
 type PropertyRow = {
   id: number;
   owner_id: string | null; // stored as landlord.user_id (UUID)
@@ -45,6 +35,12 @@ type TenantRow = {
   lease_end: string | null;
 };
 
+type TeamMemberRow = {
+  owner_user_id: string;
+  member_user_id: string | null;
+  status: string | null;
+};
+
 // ---------- Helpers ----------
 
 const formatCurrency = (v: number | null | undefined) =>
@@ -59,7 +55,7 @@ const formatCurrency = (v: number | null | undefined) =>
 // Normalize a date from Supabase for <input type="date">
 const toDateInputValue = (iso: string | null | undefined): string => {
   if (!iso) return '';
-  // Handles both "YYYY-MM-DD" and full ISO timestamps
+  // Handles both "YYYY-MM-DD" and ISO timestamps
   return iso.slice(0, 10);
 };
 
@@ -98,7 +94,7 @@ export default function LandlordTenantsPage() {
   const [editLeaseEnd, setEditLeaseEnd] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
-  // ---------- Load landlord (team member first) + data ----------
+  // ---------- Load landlord / team owner + data ----------
 
   useEffect(() => {
     const load = async () => {
@@ -118,106 +114,79 @@ export default function LandlordTenantsPage() {
         const user = authData.user;
         const email = user.email!;
 
-        let landlordRow: LandlordRow | null = null;
-        let ownerUuid: string | null = null;
+        // We want an "acting owner" user_id to drive all queries.
+        let actingOwnerUserId: string | null = null;
+        let landlordRecord: LandlordRow | null = null;
 
-        // ---- 1) Prefer: team member membership ----
-        let memberRow: LandlordTeamMemberRow | null = null;
-
-        // Already-linked membership
-        const { data: memberByUser, error: memberError } = await supabase
-          .from('landlord_team_members')
-          .select('*')
-          .eq('member_user_id', user.id)
-          .neq('status', 'removed')
+        // 1) Try: this user IS the landlord (user_id on landlords)
+        let { data: landlordRow, error: landlordError } = await supabase
+          .from('landlords')
+          .select('id, email, user_id')
+          .eq('user_id', user.id)
           .maybeSingle();
 
-        if (memberError) {
-          console.error('Error loading team member by user_id:', memberError);
+        if (landlordError) {
+          console.error('Error loading landlord by user_id:', landlordError);
           throw new Error('Unable to load landlord account.');
         }
 
-        if (memberByUser) {
-          memberRow = memberByUser as LandlordTeamMemberRow;
+        if (landlordRow) {
+          const typed = landlordRow as LandlordRow;
+          actingOwnerUserId = typed.user_id;
+          landlordRecord = typed;
         } else {
-          // Pending invite by email
-          const { data: inviteRow, error: inviteError } = await supabase
+          // 2) No landlord row on this user → check if they are a team member
+          const { data: teamRow, error: teamError } = await supabase
             .from('landlord_team_members')
-            .select('*')
-            .eq('invite_email', email)
-            .neq('status', 'removed')
+            .select('owner_user_id, member_user_id, status')
+            .eq('member_user_id', user.id)
+            .eq('status', 'active')
             .maybeSingle();
 
-          if (inviteError) {
-            console.error(
-              'Error loading team member by invite_email:',
-              inviteError
-            );
-            throw new Error('Unable to load landlord account.');
-          }
-
-          if (inviteRow) {
-            // Auto-link this invite to the logged-in user
-            const { data: updatedRow, error: linkError } = await supabase
-              .from('landlord_team_members')
-              .update({
-                member_user_id: user.id,
-                member_email: email,
-                accepted_at: new Date().toISOString(),
-                status: 'active',
-              })
-              .eq('id', inviteRow.id)
-              .select('*')
-              .single();
-
-            if (linkError) {
-              console.error('Error linking team member:', linkError);
-              throw new Error(
-                linkError.message ||
-                  'Unable to complete team member setup. Please try again.'
-              );
-            }
-
-            memberRow = updatedRow as LandlordTeamMemberRow;
-          }
-        }
-
-        if (memberRow) {
-          // This user is a team member → use the owner's portfolio
-          ownerUuid = memberRow.owner_user_id;
-
-          const { data: ownerLandlord, error: ownerError } = await supabase
-            .from('landlords')
-            .select('id, email, user_id')
-            .eq('user_id', ownerUuid)
-            .maybeSingle();
-
-          if (ownerError) {
-            console.error('Error loading owner landlord row:', ownerError);
-            throw new Error('Unable to load landlord account.');
-          }
-
-          if (!ownerLandlord) {
+          if (teamError) {
+            console.error('Error loading team membership:', teamError);
             throw new Error(
-              'Landlord account for this team owner could not be found.'
+              'Unable to load team membership for this account.'
             );
           }
 
-          landlordRow = ownerLandlord as LandlordRow;
-        } else {
-          // ---- 2) Fallback: this user IS the landlord (owner) ----
-          let { data: landlordByUser, error: landlordError } = await supabase
-            .from('landlords')
-            .select('id, email, user_id')
-            .eq('user_id', user.id)
-            .maybeSingle();
+          if (teamRow) {
+            const ownerUserId = (teamRow as TeamMemberRow).owner_user_id;
+            actingOwnerUserId = ownerUserId;
 
-          if (landlordError) {
-            console.error('Error loading landlord by user_id:', landlordError);
-            throw new Error('Unable to load landlord account.');
-          }
+            // Try to load the owning landlord row by that owner_user_id.
+            const {
+              data: ownerLandlord,
+              error: ownerLandlordError,
+            } = await supabase
+              .from('landlords')
+              .select('id, email, user_id')
+              .eq('user_id', ownerUserId)
+              .maybeSingle();
 
-          if (!landlordByUser) {
+            if (ownerLandlordError) {
+              console.error(
+                'Error loading owner landlord from team row:',
+                ownerLandlordError
+              );
+              // Fallback: still allow access using ownerUserId only.
+              landlordRecord = {
+                id: 0,
+                email: 'Team owner',
+                user_id: ownerUserId,
+              };
+            } else if (!ownerLandlord) {
+              // Fallback: allow access with a stub landlord record instead of throwing.
+              landlordRecord = {
+                id: 0,
+                email: 'Team owner',
+                user_id: ownerUserId,
+              };
+            } else {
+              landlordRecord = ownerLandlord as LandlordRow;
+            }
+          } else {
+            // 3) As a last fallback, try older landlord rows by email
             const byEmail = await supabase
               .from('landlords')
               .select('id, email, user_id')
@@ -229,50 +198,47 @@ export default function LandlordTenantsPage() {
               throw new Error('Unable to load landlord account.');
             }
 
-            landlordByUser = byEmail.data as LandlordRow | null;
-          }
+            if (!byEmail.data) {
+              throw new Error(
+                'Landlord account could not be found for this login.'
+              );
+            }
 
-          if (!landlordByUser || !landlordByUser.user_id) {
-            throw new Error(
-              'Landlord account not found. If you were invited as a team member, ask the owner to resend your invite.'
-            );
+            const typedByEmail = byEmail.data as LandlordRow;
+            actingOwnerUserId = typedByEmail.user_id;
+            landlordRecord = typedByEmail;
           }
-
-          landlordRow = landlordByUser as LandlordRow;
-          ownerUuid = landlordRow.user_id;
         }
 
-        if (!landlordRow || !ownerUuid) {
-          throw new Error(
-            'Your landlord account is missing a user ID. Please contact support.'
-          );
+        if (!actingOwnerUserId) {
+          throw new Error('Unable to determine landlord for this account.');
         }
 
-        setLandlord(landlordRow);
+        setLandlord(landlordRecord);
 
-        // ---- 3) Load properties + tenants for that ownerUuid ----
-        const [propRows, tenantRows] = await Promise.all([
-          supabase
-            .from('properties')
-            .select(
-              'id, owner_id, name, unit_label, monthly_rent, status'
-            )
-            .eq('owner_id', ownerUuid)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('tenants')
-            .select(
-              'id, owner_id, name, email, phone, property_id, status, monthly_rent, lease_start, lease_end'
-            )
-            .eq('owner_id', ownerUuid)
-            .order('created_at', { ascending: false }),
-        ]);
+        const ownerUuid = actingOwnerUserId; // used as FK in properties/tenants
 
-        if (propRows.error) throw propRows.error;
-        if (tenantRows.error) throw tenantRows.error;
+        // Properties for this landlord (or team owner)
+        const { data: propRows, error: propError } = await supabase
+          .from('properties')
+          .select('id, owner_id, name, unit_label, monthly_rent, status')
+          .eq('owner_id', ownerUuid)
+          .order('created_at', { ascending: false });
 
-        setProperties((propRows.data || []) as PropertyRow[]);
-        setTenants((tenantRows.data || []) as TenantRow[]);
+        if (propError) throw propError;
+        setProperties((propRows || []) as PropertyRow[]);
+
+        // Tenants for this landlord (or team owner)
+        const { data: tenantRows, error: tenantError } = await supabase
+          .from('tenants')
+          .select(
+            'id, owner_id, name, email, phone, property_id, status, monthly_rent, lease_start, lease_end'
+          )
+          .eq('owner_id', ownerUuid)
+          .order('created_at', { ascending: false });
+
+        if (tenantError) throw tenantError;
+        setTenants((tenantRows || []) as TenantRow[]);
       } catch (err: any) {
         console.error(err);
         setError(
@@ -286,7 +252,7 @@ export default function LandlordTenantsPage() {
     load();
   }, [router]);
 
-  // ---------- Actions: auth ----------
+  // ---------- Actions: global ----------
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -513,13 +479,12 @@ export default function LandlordTenantsPage() {
     );
   }
 
-  if (!landlord) {
+  if (error && !landlord) {
+    // Only block the page if we truly couldn't resolve *any* landlord context
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
         <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-700 p-6 shadow-xl space-y-4">
-          <p className="text-sm text-red-400">
-            {error || 'Unable to load landlord account.'}
-          </p>
+          <p className="text-sm text-red-400">{error}</p>
           <button
             onClick={() => router.push('/landlord/login')}
             className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
@@ -557,6 +522,13 @@ export default function LandlordTenantsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
+            <button
+              type="button"
+              onClick={() => setShowForm((prev) => !prev)}
+              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
+            >
+              {showForm ? 'Close add tenant form' : 'Add tenant'}
+            </button>
             <Link
               href="/landlord"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
@@ -676,7 +648,7 @@ export default function LandlordTenantsPage() {
                     type="date"
                     value={formLeaseStart}
                     onChange={(e) => setFormLeaseStart(e.target.value)}
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
                 <div className="space-y-1 md:col-span-1">
@@ -685,7 +657,7 @@ export default function LandlordTenantsPage() {
                     type="date"
                     value={formLeaseEnd}
                     onChange={(e) => setFormLeaseEnd(e.target.value)}
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
 
@@ -716,119 +688,119 @@ export default function LandlordTenantsPage() {
         {/* Edit tenant form */}
         {editingTenant && (
           <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">
-                    Edit tenant
-                  </p>
-                  <p className="mt-1 text-sm text-slate-200">
-                    Update details for {editingTenant.name || editingTenant.email}.
-                  </p>
-                </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wide">
+                  Edit tenant
+                </p>
+                <p className="mt-1 text-sm text-slate-200">
+                  Update details for {editingTenant.name || editingTenant.email}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={cancelEditTenant}
+                className="text-[11px] text-slate-400 hover:text-slate-200"
+              >
+                Close
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleUpdateTenant}
+              className="grid gap-3 md:grid-cols-2 text-xs"
+            >
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">Tenant name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">
+                  Tenant email <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="name@example.com"
+                />
+              </div>
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">Tenant phone</label>
+                <input
+                  type="tel"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">Property</label>
+                <select
+                  value={editPropertyId === '' ? '' : String(editPropertyId)}
+                  onChange={(e) =>
+                    setEditPropertyId(
+                      e.target.value ? Number(e.target.value) : ''
+                    )
+                  }
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value="">Not linked</option>
+                  {properties.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name || 'Unnamed property'}
+                      {p.unit_label ? ` · ${p.unit_label}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Lease dates */}
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">Lease start</label>
+                <input
+                  type="date"
+                  value={editLeaseStart}
+                  onChange={(e) => setEditLeaseStart(e.target.value)}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+              <div className="space-y-1 md:col-span-1">
+                <label className="block text-slate-300">Lease end</label>
+                <input
+                  type="date"
+                  value={editLeaseEnd}
+                  onChange={(e) => setEditLeaseEnd(e.target.value)}
+                  className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="md:col-span-2 flex items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={cancelEditTenant}
-                  className="text-[11px] text-slate-400 hover:text-slate-200"
+                  className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs text-slate-200 hover:bg-slate-800"
                 >
-                  Close
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {savingEdit ? 'Saving changes…' : 'Save changes'}
                 </button>
               </div>
-
-              <form
-                onSubmit={handleUpdateTenant}
-                className="grid gap-3 md:grid-cols-2 text-xs"
-              >
-                <div className="space-y-1 md:col-span-1">
-                  <label className="block text-slate-300">Tenant name</label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    placeholder="Optional"
-                  />
-                </div>
-                <div className="space-y-1 md:col-span-1">
-                  <label className="block text-slate-300">
-                    Tenant email <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={editEmail}
-                    onChange={(e) => setEditEmail(e.target.value)}
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    placeholder="name@example.com"
-                  />
-                </div>
-                <div className="space-y-1 md:col-span-1">
-                  <label className="block text-slate-300">Tenant phone</label>
-                  <input
-                    type="tel"
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    placeholder="Optional"
-                  />
-                </div>
-                <div className="space-y-1 md:col-span-1">
-                  <label className="block text-slate-300">Property</label>
-                  <select
-                    value={editPropertyId === '' ? '' : String(editPropertyId)}
-                    onChange={(e) =>
-                      setEditPropertyId(
-                        e.target.value ? Number(e.target.value) : ''
-                      )
-                    }
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  >
-                    <option value="">Not linked</option>
-                    {properties.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name || 'Unnamed property'}
-                        {p.unit_label ? ` · ${p.unit_label}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Lease dates */}
-                <div className="space-y-1 md:col-span-1">
-                  <label className="block text-slate-300">Lease start</label>
-                  <input
-                    type="date"
-                    value={editLeaseStart}
-                    onChange={(e) => setEditLeaseStart(e.target.value)}
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-                <div className="space-y-1 md:col-span-1">
-                  <label className="block text-slate-300">Lease end</label>
-                  <input
-                    type="date"
-                    value={editLeaseEnd}
-                    onChange={(e) => setEditLeaseEnd(e.target.value)}
-                    className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-
-                <div className="md:col-span-2 flex items-center justify-end gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={cancelEditTenant}
-                    className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs text-slate-200 hover:bg-slate-800"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={savingEdit}
-                    className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {savingEdit ? 'Saving changes…' : 'Save changes'}
-                  </button>
-                </div>
-              </form>
+            </form>
           </section>
         )}
 
@@ -843,13 +815,6 @@ export default function LandlordTenantsPage() {
                 All tenants linked to your properties
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowForm((prev) => !prev)}
-              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
-            >
-              {showForm ? 'Close add tenant form' : 'Add tenant'}
-            </button>
           </div>
 
           {tenants.length === 0 ? (

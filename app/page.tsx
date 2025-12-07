@@ -45,6 +45,12 @@ export default function HomePage() {
             >
               Tenant log in
             </Link>
+            <Link
+              href="/team/login"
+              className="rounded-full border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/60 hover:text-emerald-200"
+            >
+              Team member log in
+            </Link>
           </div>
         </header>
 
@@ -122,6 +128,9 @@ export default function HomePage() {
                 No card required for December promo · Cancel anytime
               </span>
             </div>
+            <p className="mt-1 text-[11px] text-emerald-300">
+              Portfolios with 50+ properties are actively managed through RentZentro.
+            </p>
 
             {/* Why RentZentro / feature checks */}
             <div className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
@@ -171,6 +180,17 @@ export default function HomePage() {
                     Built-in messaging with each tenant, so questions, updates,
                     and photos stay in one thread instead of scattered across
                     texts and emails.
+                  </p>
+                </div>
+
+                {/* NEW: team access feature */}
+                <div className="flex items-start gap-2 text-xs text-slate-200">
+                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                    ✓
+                  </span>
+                  <p>
+                    Add trusted team members to help manage rent, maintenance, and
+                    messaging while they share access to your landlord dashboard.
                   </p>
                 </div>
               </div>
