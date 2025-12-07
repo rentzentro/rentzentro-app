@@ -83,17 +83,43 @@ export default function TenantMessagesPage() {
         const user = authData.user;
 
         // 2) Find tenant row for this user
-        const { data: tenantRow, error: tenantError } = await supabase
+        let tenantRow: TenantRow | null = null;
+
+        // 2a) Primary: user_id match (newer tenants)
+        const { data: tenantByUser, error: tenantUserError } = await supabase
           .from('tenants')
           .select('id, name, email, owner_id')
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (tenantError) {
-          console.error('Error loading tenant row:', tenantError);
+        if (tenantUserError) {
+          console.error('Error loading tenant by user_id:', tenantUserError);
           throw new Error(
             'We could not load your tenant account. Please contact your landlord.'
           );
+        }
+
+        if (tenantByUser) {
+          tenantRow = tenantByUser as TenantRow;
+        } else if (user.email) {
+          // 2b) Fallback: email match (older tenants that never got user_id set)
+          const { data: tenantByEmail, error: tenantEmailError } =
+            await supabase
+              .from('tenants')
+              .select('id, name, email, owner_id')
+              .eq('email', user.email)
+              .maybeSingle();
+
+          if (tenantEmailError) {
+            console.error('Error loading tenant by email:', tenantEmailError);
+            throw new Error(
+              'We could not load your tenant account. Please contact your landlord.'
+            );
+          }
+
+          if (tenantByEmail) {
+            tenantRow = tenantByEmail as TenantRow;
+          }
         }
 
         if (!tenantRow) {
@@ -127,7 +153,6 @@ export default function TenantMessagesPage() {
         }
 
         if (!landlordRow) {
-          // IMPORTANT: do NOT invent a fake landlord id here, that breaks FK.
           setLandlordMissing(true);
           throw new Error(
             'Landlord account for this property could not be loaded. Please confirm with your landlord that their RentZentro landlord account is active.'
@@ -250,7 +275,7 @@ export default function TenantMessagesPage() {
       setMessages((prev) => [...prev, inserted as MessageRow]);
       setNewMessage('');
 
-      // If you had an email notification call before, you can call /api/message-email here.
+      // If you wired /api/message-email for tenant → landlord, call it here.
     } catch (err: any) {
       console.error(err);
       setError(
