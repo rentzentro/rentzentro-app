@@ -34,6 +34,7 @@ type MessageRow = {
   tenant_user_id: string | null;
   body: string | null;
   sender_type: 'landlord' | 'tenant' | 'team' | string | null;
+  sender_label: string | null;
   created_at: string;
   read_at: string | null;
 };
@@ -123,10 +124,11 @@ export default function LandlordMessagesPage() {
         }
 
         if (landlordByUser) {
+          // Logged in as the owner
           resolvedLandlord = landlordByUser as LandlordRow;
           teamFlag = false;
         } else {
-          // 2) Try as ACTIVE team member
+          // 2) Try as ACTIVE team member for some owner
           const { data: teamRow, error: teamError } = await supabase
             .from('landlord_team_members')
             .select('id, owner_user_id, member_user_id, status')
@@ -141,13 +143,14 @@ export default function LandlordMessagesPage() {
 
           if (!teamRow) {
             throw new Error(
-              'We could not find an active landlord account for this login.'
+              'We could not find an active landlord account or team membership for this login.'
             );
           }
 
           const typedTeam = teamRow as TeamMemberRow;
+          teamFlag = true;
 
-          // 2a) Try to find the landlord row for this owner
+          // 2a) Load the REAL landlord row for this owner
           const { data: landlordOwner, error: landlordOwnerError } =
             await supabase
               .from('landlords')
@@ -160,21 +163,18 @@ export default function LandlordMessagesPage() {
               'Error loading owner landlord row for messages:',
               landlordOwnerError
             );
+            throw new Error(
+              'Unable to load the landlord account for this team membership.'
+            );
           }
 
-          if (landlordOwner) {
-            resolvedLandlord = landlordOwner as LandlordRow;
-          } else {
-            // Synthetic landlord shell for team members when the owner row is missing
-            resolvedLandlord = {
-              id: -1,
-              name: null,
-              email: 'Landlord account',
-              user_id: typedTeam.owner_user_id,
-            };
+          if (!landlordOwner) {
+            throw new Error(
+              'Landlord account for this team membership could not be found. Please ask the landlord to log in and confirm their account.'
+            );
           }
 
-          teamFlag = true;
+          resolvedLandlord = landlordOwner as LandlordRow;
         }
 
         if (!resolvedLandlord) {
@@ -230,8 +230,9 @@ export default function LandlordMessagesPage() {
         const { data: rows, error: messagesError } = await supabase
           .from('messages')
           .select(
-            'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, created_at, read_at'
+            'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, sender_label, created_at, read_at'
           )
+          .eq('landlord_id', landlord.id)
           .eq('tenant_id', selectedTenantId)
           .order('created_at', { ascending: true });
 
@@ -247,6 +248,7 @@ export default function LandlordMessagesPage() {
         await supabase
           .from('messages')
           .update({ read_at: new Date().toISOString() })
+          .eq('landlord_id', landlord.id)
           .eq('tenant_id', selectedTenantId)
           .eq('sender_type', 'tenant')
           .is('read_at', null);
@@ -264,7 +266,7 @@ export default function LandlordMessagesPage() {
     loadMessages();
   }, [landlord, selectedTenantId]);
 
-  // ---------- Send message ----------
+  // ---------- Send message (landlord / team → tenant) ----------
 
   const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
@@ -286,24 +288,32 @@ export default function LandlordMessagesPage() {
       const tenant = tenants.find((t) => t.id === selectedTenantId);
       if (!tenant) throw new Error('Tenant not found for this conversation.');
 
-      // landlord_id is null for the synthetic (-1) shell so we don’t hit FK errors
-      const landlordIdForInsert =
-        landlord.id && landlord.id > 0 ? landlord.id : null;
+      // Make sure we never insert an invalid landlord_id
+      if (!landlord.id) {
+        throw new Error('Landlord account for this message could not be found.');
+      }
+
+      const senderType: 'landlord' | 'team' = isTeamMember ? 'team' : 'landlord';
+      const senderLabel =
+        senderType === 'team'
+          ? 'Team member'
+          : landlord.name || landlord.email || 'Landlord';
 
       const insertPayload = {
-        landlord_id: landlordIdForInsert,
+        landlord_id: landlord.id,
         landlord_user_id: landlord.user_id,
         tenant_id: tenant.id,
         tenant_user_id: tenant.user_id,
         body,
-        sender_type: (isTeamMember ? 'team' : 'landlord') as 'team' | 'landlord',
+        sender_type: senderType,
+        sender_label: senderLabel,
       };
 
       const { data, error: insertError } = await supabase
         .from('messages')
         .insert(insertPayload)
         .select(
-          'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, created_at, read_at'
+          'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, sender_label, created_at, read_at'
         )
         .single();
 
@@ -316,25 +326,22 @@ export default function LandlordMessagesPage() {
       setMessages((prev) => [...prev, newRow]);
       setNewMessage('');
 
-      // ---------- Email notification: landlord/team -> tenant ----------
-      if (tenant.email) {
-        try {
-          await fetch('/api/message-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              direction: 'landlord_or_team_to_tenant',
-              landlordName:
-                landlord.name || landlord.email || 'Your landlord',
-              landlordEmail: landlord.email,
-              tenantName: tenant.name || tenant.email,
-              tenantEmail: tenant.email,
-              messageBody: body,
-            }),
-          });
-        } catch (emailErr) {
-          console.warn('Landlord/team message email failed (non-blocking):', emailErr);
-        }
+      // Fire-and-forget email notification to tenant
+      try {
+        await fetch('/api/message-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            direction: 'landlord_or_team_to_tenant',
+            landlordName: landlord.name || landlord.email || 'Your landlord',
+            landlordEmail: landlord.email,
+            tenantName: tenant.name || tenant.email,
+            tenantEmail: tenant.email,
+            messageBody: body,
+          }),
+        });
+      } catch (emailErr) {
+        console.warn('Failed to send landlord→tenant email notification:', emailErr);
       }
     } catch (err: any) {
       console.error(err);
