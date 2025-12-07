@@ -123,11 +123,10 @@ export default function LandlordMessagesPage() {
         }
 
         if (landlordByUser) {
-          // Logged in as the owner
           resolvedLandlord = landlordByUser as LandlordRow;
           teamFlag = false;
         } else {
-          // 2) Try as ACTIVE team member for some owner
+          // 2) Try as ACTIVE team member
           const { data: teamRow, error: teamError } = await supabase
             .from('landlord_team_members')
             .select('id, owner_user_id, member_user_id, status')
@@ -166,7 +165,7 @@ export default function LandlordMessagesPage() {
           if (landlordOwner) {
             resolvedLandlord = landlordOwner as LandlordRow;
           } else {
-            // Fallback: “virtual” landlord so messaging still works
+            // Synthetic landlord shell for team members when the owner row is missing
             resolvedLandlord = {
               id: -1,
               name: null,
@@ -287,15 +286,17 @@ export default function LandlordMessagesPage() {
       const tenant = tenants.find((t) => t.id === selectedTenantId);
       if (!tenant) throw new Error('Tenant not found for this conversation.');
 
+      // landlord_id is null for the synthetic (-1) shell so we don’t hit FK errors
+      const landlordIdForInsert =
+        landlord.id && landlord.id > 0 ? landlord.id : null;
+
       const insertPayload = {
-        landlord_id: landlord.id > 0 ? landlord.id : null,
+        landlord_id: landlordIdForInsert,
         landlord_user_id: landlord.user_id,
         tenant_id: tenant.id,
         tenant_user_id: tenant.user_id,
         body,
-        sender_type: (isTeamMember ? 'team' : 'landlord') as
-          | 'team'
-          | 'landlord',
+        sender_type: (isTeamMember ? 'team' : 'landlord') as 'team' | 'landlord',
       };
 
       const { data, error: insertError } = await supabase
@@ -315,20 +316,25 @@ export default function LandlordMessagesPage() {
       setMessages((prev) => [...prev, newRow]);
       setNewMessage('');
 
-      // ---------- Email notification (non-blocking) ----------
-      // This calls your API route which can look up the message by ID,
-      // figure out who should be emailed, and send via Resend.
-      try {
-        await fetch('/api/message-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messageId: newRow.id,
-          }),
-        });
-      } catch (notifyErr) {
-        console.error('Error triggering message email:', notifyErr);
-        // Do NOT throw — message is already saved & shown in UI.
+      // ---------- Email notification: landlord/team -> tenant ----------
+      if (tenant.email) {
+        try {
+          await fetch('/api/messages/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              direction: 'landlord_or_team_to_tenant',
+              landlordName:
+                landlord.name || landlord.email || 'Your landlord',
+              landlordEmail: landlord.email,
+              tenantName: tenant.name || tenant.email,
+              tenantEmail: tenant.email,
+              messageBody: body,
+            }),
+          });
+        } catch (emailErr) {
+          console.warn('Landlord/team message email failed (non-blocking):', emailErr);
+        }
       }
     } catch (err: any) {
       console.error(err);

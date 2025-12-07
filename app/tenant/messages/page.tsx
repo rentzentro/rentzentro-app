@@ -12,7 +12,7 @@ type TenantRow = {
   name: string | null;
   email: string;
   owner_id: string | null; // landlord user's UUID
-  user_id: string | null;  // auth.uid() for this tenant
+  user_id: string | null;  // auth.uid() for this tenant (may be null on older rows)
 };
 
 type LandlordRow = {
@@ -24,7 +24,7 @@ type LandlordRow = {
 
 type MessageRow = {
   id: string;
-  landlord_id: number;
+  landlord_id: number | null;
   landlord_user_id: string | null;
   tenant_id: number;
   tenant_user_id: string | null;
@@ -83,10 +83,9 @@ export default function TenantMessagesPage() {
 
         // 2) Find tenant row for this user:
         //    - First by user_id
-        //    - If not found, fallback by email and BACKFILL user_id
+        //    - If not found, fallback by email
         let tenantTyped: TenantRow | null = null;
 
-        // 2a) By user_id
         const {
           data: tenantByUser,
           error: tenantByUserError,
@@ -107,7 +106,6 @@ export default function TenantMessagesPage() {
           tenantTyped = tenantByUser as TenantRow;
         }
 
-        // 2b) Fallback: by email (older / re-invited tenants)
         if (!tenantTyped && email) {
           const {
             data: tenantByEmail,
@@ -127,21 +125,7 @@ export default function TenantMessagesPage() {
 
           if (tenantByEmail) {
             tenantTyped = tenantByEmail as TenantRow;
-
-            // Backfill user_id so this tenant is properly linked going forward
-            if (!tenantTyped.user_id) {
-              try {
-                await supabase
-                  .from('tenants')
-                  .update({ user_id: user.id })
-                  .eq('id', tenantTyped.id);
-              } catch (patchErr) {
-                console.warn(
-                  'Warning: failed to backfill tenant.user_id:',
-                  patchErr
-                );
-              }
-            }
+            // We do NOT try to update user_id here anymore because RLS usually blocks tenants from updating themselves.
           }
         }
 
@@ -177,10 +161,10 @@ export default function TenantMessagesPage() {
         }
 
         if (!landlordRow) {
-          // Soft-failure: tenant can still write, but landlord account is missing
+          // Soft-fail: messaging still works, we just can’t show full landlord profile
           setLandlord(null);
           setError(
-            'Landlord account for this property could not be loaded. Please confirm with your landlord that their RentZentro landlord account is active.'
+            'Landlord account for this property could not be loaded. Messages will still send, but please confirm with your landlord that they can see them.'
           );
         } else {
           const landlordTyped = landlordRow as LandlordRow;
@@ -257,7 +241,7 @@ export default function TenantMessagesPage() {
 
   const handleSend = async (e: FormEvent) => {
     e.preventDefault();
-    if (!tenant) return; // we now allow sending even if landlord is null
+    if (!tenant) return;
 
     const body = newMessage.trim();
     if (!body) return;
@@ -282,7 +266,6 @@ export default function TenantMessagesPage() {
         );
       }
 
-      // Label shown in the thread
       const senderLabel = `${
         tenant.name || tenant.email || user.email || 'You'
       } (Tenant)`;
@@ -313,10 +296,30 @@ export default function TenantMessagesPage() {
         throw new Error('Failed to send your message. Please try again.');
       }
 
-      setMessages((prev) => [...prev, inserted as MessageRow]);
+      const insertedRow = inserted as MessageRow;
+      setMessages((prev) => [...prev, insertedRow]);
       setNewMessage('');
 
-      // TODO: call /api/messages/email if you want tenant->landlord email here
+      // ---------- Email notification: tenant -> landlord ----------
+      // Only fire if we actually know the landlord's email.
+      if (landlord && landlord.email) {
+        try {
+          await fetch('/api/messages/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              direction: 'tenant_to_landlord',
+              landlordName: landlord.name || landlord.email || 'Your landlord',
+              landlordEmail: landlord.email,
+              tenantName: tenant.name || tenant.email,
+              tenantEmail: tenant.email,
+              messageBody: body,
+            }),
+          });
+        } catch (emailErr) {
+          console.warn('Tenant message email failed (non-blocking):', emailErr);
+        }
+      }
     } catch (err: any) {
       console.error(err);
       setError(
