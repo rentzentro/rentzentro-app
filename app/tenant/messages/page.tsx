@@ -78,31 +78,53 @@ export default function TenantMessagesPage() {
           return;
         }
         const user = authData.user;
+        const userEmail = user.email || '';
 
         // 2) Find tenant row for this user
+        let tenantTyped: TenantRow | null = null;
+
+        // 2a) Primary: match by user_id
         const {
-          data: tenantRow,
-          error: tenantError,
+          data: tenantByUser,
+          error: tenantByUserError,
         } = await supabase
           .from('tenants')
           .select('id, name, email, owner_id')
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (tenantError) {
-          console.error('Error loading tenant row:', tenantError);
-          throw new Error(
-            'We could not load your tenant account. Please contact your landlord.'
-          );
+        if (tenantByUserError) {
+          console.error('Error loading tenant by user_id:', tenantByUserError);
         }
 
-        if (!tenantRow) {
+        if (tenantByUser) {
+          tenantTyped = tenantByUser as TenantRow;
+        } else if (userEmail) {
+          // 2b) Fallback: match by email (covers cases where user_id is null)
+          const {
+            data: tenantByEmail,
+            error: tenantByEmailError,
+          } = await supabase
+            .from('tenants')
+            .select('id, name, email, owner_id')
+            .eq('email', userEmail)
+            .maybeSingle();
+
+          if (tenantByEmailError) {
+            console.error('Error loading tenant by email:', tenantByEmailError);
+          }
+
+          if (tenantByEmail) {
+            tenantTyped = tenantByEmail as TenantRow;
+          }
+        }
+
+        if (!tenantTyped) {
           throw new Error(
             'We could not find a tenant account for this login. Please contact your landlord.'
           );
         }
 
-        const tenantTyped = tenantRow as TenantRow;
         setTenant(tenantTyped);
 
         if (!tenantTyped.owner_id) {
@@ -133,7 +155,7 @@ export default function TenantMessagesPage() {
           console.warn('Tenant blocked from landlord table — fallback is required.');
         }
 
-        // Fallback landlord shell — messaging still works perfectly
+        // Fallback landlord shell — messaging still works
         if (!landlordTyped) {
           landlordTyped = {
             id: -1, // synthetic
@@ -272,6 +294,7 @@ export default function TenantMessagesPage() {
   }
 
   if (error && !tenant) {
+    // Hard failure before we even have a tenant record
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
         <div className="max-w-md rounded-2xl bg-slate-900/80 border border-rose-500/60 p-6 shadow-xl space-y-4">
@@ -292,7 +315,7 @@ export default function TenantMessagesPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto max-w-4xl space-y-5">
-        {/* Header */}
+        {/* Header / breadcrumb */}
         <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="text-xs text-slate-500 flex gap-1 items-center">
@@ -341,14 +364,14 @@ export default function TenantMessagesPage() {
           </div>
         </header>
 
-        {/* Error */}
-        {error && (
+        {/* Alerts */}
+        {error && tenant && (
           <div className="rounded-xl border border-rose-500/60 bg-rose-950/40 px-4 py-2 text-sm text-rose-100">
             {error}
           </div>
         )}
 
-        {/* Thread */}
+        {/* Thread + composer */}
         <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 shadow-sm flex flex-col gap-3 min-h-[380px]">
           {/* Messages list */}
           <div className="flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-950/60 p-3 border border-slate-900">
