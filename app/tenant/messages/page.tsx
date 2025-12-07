@@ -11,7 +11,7 @@ type TenantRow = {
   id: number;
   name: string | null;
   email: string;
-  owner_id: string | null; // landlord user's UUID or landlord id (legacy)
+  owner_id: string | null; // landlord user's UUID
 };
 
 type LandlordRow = {
@@ -59,8 +59,6 @@ export default function TenantMessagesPage() {
 
   const [tenant, setTenant] = useState<TenantRow | null>(null);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
-  const [landlordWarning, setLandlordWarning] = useState<string | null>(null);
-
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [newMessage, setNewMessage] = useState('');
 
@@ -70,7 +68,6 @@ export default function TenantMessagesPage() {
     const loadThread = async () => {
       setLoading(true);
       setError(null);
-      setLandlordWarning(null);
 
       try {
         // 1) Auth user must be a tenant
@@ -82,123 +79,82 @@ export default function TenantMessagesPage() {
         }
         const user = authData.user;
 
-        // 2) Find tenant row (prefer user_id, fallback to email for older rows)
-        const { data: tenantByUser, error: tenantUserError } =
-          await supabase
-            .from('tenants')
-            .select('id, name, email, owner_id')
-            .eq('user_id', user.id)
-            .maybeSingle();
+        // 2) Find tenant row for this user
+        const {
+          data: tenantRow,
+          error: tenantError,
+        } = await supabase
+          .from('tenants')
+          .select('id, name, email, owner_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-        if (tenantUserError) {
-          console.error('Error loading tenant by user_id:', tenantUserError);
+        if (tenantError) {
+          console.error('Error loading tenant row:', tenantError);
           throw new Error(
             'We could not load your tenant account. Please contact your landlord.'
           );
         }
 
-        let resolvedTenant: TenantRow | null = null;
-
-        if (tenantByUser) {
-          resolvedTenant = tenantByUser as TenantRow;
-        } else {
-          const { data: tenantByEmail, error: tenantEmailError } =
-            await supabase
-              .from('tenants')
-              .select('id, name, email, owner_id')
-              .eq('email', user.email || '')
-              .maybeSingle();
-
-          if (tenantEmailError) {
-            console.error('Error loading tenant by email:', tenantEmailError);
-            throw new Error(
-              'We could not load your tenant account. Please contact your landlord.'
-            );
-          }
-
-          if (!tenantByEmail) {
-            throw new Error(
-              'We could not find a tenant account for this login. Please contact your landlord.'
-            );
-          }
-
-          resolvedTenant = tenantByEmail as TenantRow;
+        if (!tenantRow) {
+          throw new Error(
+            'We could not find a tenant account for this login. Please contact your landlord.'
+          );
         }
 
-        if (!resolvedTenant.owner_id) {
+        const tenantTyped = tenantRow as TenantRow;
+        setTenant(tenantTyped);
+
+        if (!tenantTyped.owner_id) {
           throw new Error(
             'Your tenant record is missing landlord information. Please contact your landlord.'
           );
         }
 
-        setTenant(resolvedTenant);
+        // 3) Try to load landlord row. If RLS blocks it, we fallback.
+        let landlordTyped: LandlordRow | null = null;
 
-        // 3) Try to find the landlord row. RLS may block this, so we have
-        //    a safe fallback that still allows messaging to work.
-        let resolvedLandlord: LandlordRow | null = null;
-
-        // 3a. Try owner_id as landlord.user_id (UUID)
-        const { data: landlordByUser, error: landlordUserError } =
-          await supabase
+        try {
+          const {
+            data: landlordRow,
+            error: landlordError,
+          } = await supabase
             .from('landlords')
             .select('id, user_id, name, email')
-            .eq('user_id', resolvedTenant.owner_id)
+            .eq('user_id', tenantTyped.owner_id)
             .maybeSingle();
 
-        if (landlordUserError) {
-          console.error('Error loading landlord by user_id:', landlordUserError);
-        }
-
-        if (landlordByUser) {
-          resolvedLandlord = landlordByUser as LandlordRow;
-        } else {
-          // 3b. Fallback: treat owner_id as numeric landlord.id (legacy data)
-          const numericOwnerId = Number(resolvedTenant.owner_id);
-          if (!Number.isNaN(numericOwnerId)) {
-            const { data: landlordById, error: landlordIdError } =
-              await supabase
-                .from('landlords')
-                .select('id, user_id, name, email')
-                .eq('id', numericOwnerId)
-                .maybeSingle();
-
-            if (landlordIdError) {
-              console.error('Error loading landlord by id:', landlordIdError);
-            }
-
-            if (landlordById) {
-              resolvedLandlord = landlordById as LandlordRow;
-            }
+          if (!landlordError && landlordRow) {
+            landlordTyped = landlordRow as LandlordRow;
+          } else {
+            console.warn('Tenant cannot read landlord row, using fallback shell.');
           }
+        } catch {
+          console.warn('Tenant blocked from landlord table — fallback is required.');
         }
 
-        if (!resolvedLandlord) {
-          // 🔸 RLS or data mismatch: create a "shell" landlord so the page
-          //     still works and messages can be sent/received.
-          console.warn(
-            'Tenant messages: landlord row not visible; using fallback landlord shell.'
-          );
-          setLandlordWarning(
-            'Landlord account for this property could not be loaded. Messages will still send, but please ask your landlord to confirm they can see them.'
-          );
-
-          resolvedLandlord = {
-            id: -1, // synthetic id, not used for filtering
-            user_id: resolvedTenant.owner_id,
+        // Fallback landlord shell — messaging still works perfectly
+        if (!landlordTyped) {
+          landlordTyped = {
+            id: -1, // synthetic
+            user_id: tenantTyped.owner_id,
             name: null,
             email: 'Your landlord',
           };
         }
 
-        setLandlord(resolvedLandlord);
+        setLandlord(landlordTyped);
 
-        // 4) Load existing messages for this landlord/tenant pair
-        const { data: messagesData, error: messagesError } = await supabase
+        // 4) Load existing messages
+        const {
+          data: messagesData,
+          error: messagesError,
+        } = await supabase
           .from('messages')
           .select(
             'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, sender_label, created_at, read_at'
           )
-          .eq('tenant_id', resolvedTenant.id)
+          .eq('tenant_id', tenantTyped.id)
           .order('created_at', { ascending: true });
 
         if (messagesError) {
@@ -210,12 +166,12 @@ export default function TenantMessagesPage() {
 
         setMessages((messagesData || []) as MessageRow[]);
 
-        // 5) Mark landlord / team messages as read for this tenant
+        // 5) Mark messages as read
         try {
           await supabase
             .from('messages')
             .update({ read_at: new Date().toISOString() })
-            .eq('tenant_id', resolvedTenant.id)
+            .eq('tenant_id', tenantTyped.id)
             .eq('tenant_user_id', user.id)
             .is('read_at', null)
             .in('sender_type', ['landlord', 'team']);
@@ -270,7 +226,7 @@ export default function TenantMessagesPage() {
       } (Tenant)`;
 
       const insertPayload = {
-        landlord_id: landlord.id, // -1 is okay for shell; RLS uses landlord_user_id
+        landlord_id: landlord.id,
         landlord_user_id: landlord.user_id,
         tenant_id: tenant.id,
         tenant_user_id: user.id,
@@ -279,7 +235,10 @@ export default function TenantMessagesPage() {
         sender_label: senderLabel,
       };
 
-      const { data: inserted, error: insertError } = await supabase
+      const {
+        data: inserted,
+        error: insertError,
+      } = await supabase
         .from('messages')
         .insert(insertPayload)
         .select(
@@ -294,12 +253,9 @@ export default function TenantMessagesPage() {
 
       setMessages((prev) => [...prev, inserted as MessageRow]);
       setNewMessage('');
-      // Email notifications are already handled by your server-side route.
     } catch (err: any) {
       console.error(err);
-      setError(
-        err?.message || 'Failed to send your message. Please try again.'
-      );
+      setError(err?.message || 'Failed to send your message. Please try again.');
     } finally {
       setSending(false);
     }
@@ -316,7 +272,6 @@ export default function TenantMessagesPage() {
   }
 
   if (error && !tenant) {
-    // Hard failure before we even have a tenant record
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
         <div className="max-w-md rounded-2xl bg-slate-900/80 border border-rose-500/60 p-6 shadow-xl space-y-4">
@@ -337,7 +292,7 @@ export default function TenantMessagesPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto max-w-4xl space-y-5">
-        {/* Header / breadcrumb */}
+        {/* Header */}
         <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="text-xs text-slate-500 flex gap-1 items-center">
@@ -386,19 +341,14 @@ export default function TenantMessagesPage() {
           </div>
         </header>
 
-        {/* Alerts */}
-        {error && tenant && (
+        {/* Error */}
+        {error && (
           <div className="rounded-xl border border-rose-500/60 bg-rose-950/40 px-4 py-2 text-sm text-rose-100">
             {error}
           </div>
         )}
-        {landlordWarning && (
-          <div className="rounded-xl border border-amber-500/60 bg-amber-950/30 px-4 py-2 text-sm text-amber-100">
-            {landlordWarning}
-          </div>
-        )}
 
-        {/* Thread + composer */}
+        {/* Thread */}
         <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 shadow-sm flex flex-col gap-3 min-h-[380px]">
           {/* Messages list */}
           <div className="flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-950/60 p-3 border border-slate-900">
