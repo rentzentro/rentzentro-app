@@ -12,6 +12,7 @@ type TenantRow = {
   name: string | null;
   email: string;
   owner_id: string | null; // landlord user's UUID
+  user_id: string | null;
 };
 
 type LandlordRow = {
@@ -79,21 +80,71 @@ export default function TenantMessagesPage() {
         }
         const user = authData.user;
 
-        // 2) Find tenant row for this user
-        const {
-          data: tenantRow,
-          error: tenantError,
-        } = await supabase
-          .from('tenants')
-          .select('id, name, email, owner_id')
-          .eq('user_id', user.id)
-          .maybeSingle();
+        // 2) Find tenant row for this user (primary: user_id, fallback: email)
+        let tenantRow: TenantRow | null = null;
 
-        if (tenantError) {
-          console.error('Error loading tenant row:', tenantError);
-          throw new Error(
-            'We could not load your tenant account. Please contact your landlord.'
-          );
+        // 2a) Primary lookup by user_id
+        {
+          const { data, error: tenantError } = await supabase
+            .from('tenants')
+            .select('id, name, email, owner_id, user_id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          if (tenantError) {
+            console.error('Error loading tenant row by user_id:', tenantError);
+            throw new Error(
+              'We could not load your tenant account. Please contact your landlord.'
+            );
+          }
+
+          if (data) {
+            tenantRow = data as TenantRow;
+          }
+        }
+
+        // 2b) Fallback lookup by email (covers cases where user_id is null)
+        if (!tenantRow && user.email) {
+          const { data, error: tenantByEmailError } = await supabase
+            .from('tenants')
+            .select('id, name, email, owner_id, user_id')
+            .eq('email', user.email)
+            .maybeSingle();
+
+          if (tenantByEmailError) {
+            console.error('Error loading tenant row by email:', tenantByEmailError);
+            throw new Error(
+              'We could not load your tenant account. Please contact your landlord.'
+            );
+          }
+
+          if (data) {
+            tenantRow = data as TenantRow;
+
+            // Best-effort patch: if this tenant row is missing user_id, attach it
+            if (!tenantRow.user_id) {
+              try {
+                const { error: patchError } = await supabase
+                  .from('tenants')
+                  .update({ user_id: user.id })
+                  .eq('id', tenantRow.id);
+
+                if (patchError) {
+                  console.warn(
+                    'Failed to backfill tenant.user_id during messages load:',
+                    patchError
+                  );
+                } else {
+                  tenantRow.user_id = user.id;
+                }
+              } catch (patchErr) {
+                console.warn(
+                  'Exception while backfilling tenant.user_id:',
+                  patchErr
+                );
+              }
+            }
+          }
         }
 
         if (!tenantRow) {
@@ -246,25 +297,10 @@ export default function TenantMessagesPage() {
         throw new Error('Failed to send your message. Please try again.');
       }
 
-      const newRow = inserted as MessageRow;
-      setMessages((prev) => [...prev, newRow]);
+      setMessages((prev) => [...prev, inserted as MessageRow]);
       setNewMessage('');
 
-      // ---------- Email notification (non-blocking) ----------
-      // This mirrors the landlord side: your /api/message-email route
-      // can look up the message by ID and decide who to email.
-      try {
-        await fetch('/api/message-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messageId: newRow.id,
-          }),
-        });
-      } catch (notifyErr) {
-        console.error('Error triggering message email (tenant side):', notifyErr);
-        // Do not throw — the message has already been saved and shown.
-      }
+      // TODO: message email API call happens elsewhere after insert (already wired).
     } catch (err: any) {
       console.error(err);
       setError(
