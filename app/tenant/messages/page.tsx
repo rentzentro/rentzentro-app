@@ -79,30 +79,58 @@ export default function TenantMessagesPage() {
         }
         const user = authData.user;
 
-        // 2) Find tenant row for this user
+        // 2) Find tenant row for this user.
+        // Primary: match on user_id
+        // Fallback: match on email if user_id is not populated yet.
+        let tenantTyped: TenantRow | null = null;
+
         const {
-          data: tenantRow,
-          error: tenantError,
+          data: tenantByUserId,
+          error: tenantUserError,
         } = await supabase
           .from('tenants')
           .select('id, name, email, owner_id')
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (tenantError) {
-          console.error('Error loading tenant row:', tenantError);
+        if (tenantUserError) {
+          console.error('Error loading tenant by user_id:', tenantUserError);
           throw new Error(
             'We could not load your tenant account. Please contact your landlord.'
           );
         }
 
-        if (!tenantRow) {
+        if (tenantByUserId) {
+          tenantTyped = tenantByUserId as TenantRow;
+        } else if (user.email) {
+          // fallback to email
+          const {
+            data: tenantByEmail,
+            error: tenantEmailError,
+          } = await supabase
+            .from('tenants')
+            .select('id, name, email, owner_id')
+            .eq('email', user.email)
+            .maybeSingle();
+
+          if (tenantEmailError) {
+            console.error('Error loading tenant by email:', tenantEmailError);
+            throw new Error(
+              'We could not load your tenant account. Please contact your landlord.'
+            );
+          }
+
+          if (tenantByEmail) {
+            tenantTyped = tenantByEmail as TenantRow;
+          }
+        }
+
+        if (!tenantTyped) {
           throw new Error(
             'We could not find a tenant account for this login. Please contact your landlord.'
           );
         }
 
-        const tenantTyped = tenantRow as TenantRow;
         setTenant(tenantTyped);
 
         if (!tenantTyped.owner_id) {
@@ -112,7 +140,7 @@ export default function TenantMessagesPage() {
         }
 
         // 3) Find the landlord row.
-        // owner_id might be either landlord.user_id (UUID) OR landlord.id (numeric).
+        // owner_id might be either landlord.user_id (UUID) OR landlord.id (numeric FK).
         let landlordTyped: LandlordRow | null = null;
 
         // 3a. Try owner_id as landlord.user_id (UUID)
@@ -277,8 +305,7 @@ export default function TenantMessagesPage() {
       setMessages((prev) => [...prev, inserted as MessageRow]);
       setNewMessage('');
 
-      // TODO: you already wired email notifications through /api/message-email,
-      // so no changes needed here unless you want extra behavior.
+      // Email notifications already wired via /api/message-email.
     } catch (err: any) {
       console.error(err);
       setError(
