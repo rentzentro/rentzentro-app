@@ -319,7 +319,7 @@ export default function LandlordMessagesPage() {
       // ---------- Email notification: landlord/team -> tenant ----------
       if (tenant.email) {
         try {
-          await fetch('/api/messages/email', {
+          await fetch('/api/message-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

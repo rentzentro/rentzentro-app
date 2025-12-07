@@ -304,7 +304,7 @@ export default function TenantMessagesPage() {
       // Only fire if we actually know the landlord's email.
       if (landlord && landlord.email) {
         try {
-          await fetch('/api/messages/email', {
+          await fetch('/api/message-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
