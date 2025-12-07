@@ -315,7 +315,21 @@ export default function LandlordMessagesPage() {
       setMessages((prev) => [...prev, newRow]);
       setNewMessage('');
 
-      // Email notifications can be wired back in here later if needed.
+      // ---------- Email notification (non-blocking) ----------
+      // This calls your API route which can look up the message by ID,
+      // figure out who should be emailed, and send via Resend.
+      try {
+        await fetch('/api/message-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messageId: newRow.id,
+          }),
+        });
+      } catch (notifyErr) {
+        console.error('Error triggering message email:', notifyErr);
+        // Do NOT throw — message is already saved & shown in UI.
+      }
     } catch (err: any) {
       console.error(err);
       setError(

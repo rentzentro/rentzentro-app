@@ -246,11 +246,25 @@ export default function TenantMessagesPage() {
         throw new Error('Failed to send your message. Please try again.');
       }
 
-      setMessages((prev) => [...prev, inserted as MessageRow]);
+      const newRow = inserted as MessageRow;
+      setMessages((prev) => [...prev, newRow]);
       setNewMessage('');
 
-      // TODO: if you previously had an email notification API for messages,
-      // you can re-add that call here, using landlord.email / tenant.email.
+      // ---------- Email notification (non-blocking) ----------
+      // This mirrors the landlord side: your /api/message-email route
+      // can look up the message by ID and decide who to email.
+      try {
+        await fetch('/api/message-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messageId: newRow.id,
+          }),
+        });
+      } catch (notifyErr) {
+        console.error('Error triggering message email (tenant side):', notifyErr);
+        // Do not throw — the message has already been saved and shown.
+      }
     } catch (err: any) {
       console.error(err);
       setError(
