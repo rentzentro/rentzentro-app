@@ -11,13 +11,12 @@ type TenantRow = {
   id: number;
   name: string | null;
   email: string;
-  owner_id: string | null; // landlord user's UUID
-  user_id: string | null;
+  owner_id: string | null; // may be landlord user's UUID OR landlord numeric id
 };
 
 type LandlordRow = {
   id: number;
-  user_id: string;
+  user_id: string | null;
   name: string | null;
   email: string;
 };
@@ -80,71 +79,21 @@ export default function TenantMessagesPage() {
         }
         const user = authData.user;
 
-        // 2) Find tenant row for this user (primary: user_id, fallback: email)
-        let tenantRow: TenantRow | null = null;
+        // 2) Find tenant row for this user
+        const {
+          data: tenantRow,
+          error: tenantError,
+        } = await supabase
+          .from('tenants')
+          .select('id, name, email, owner_id')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-        // 2a) Primary lookup by user_id
-        {
-          const { data, error: tenantError } = await supabase
-            .from('tenants')
-            .select('id, name, email, owner_id, user_id')
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-          if (tenantError) {
-            console.error('Error loading tenant row by user_id:', tenantError);
-            throw new Error(
-              'We could not load your tenant account. Please contact your landlord.'
-            );
-          }
-
-          if (data) {
-            tenantRow = data as TenantRow;
-          }
-        }
-
-        // 2b) Fallback lookup by email (covers cases where user_id is null)
-        if (!tenantRow && user.email) {
-          const { data, error: tenantByEmailError } = await supabase
-            .from('tenants')
-            .select('id, name, email, owner_id, user_id')
-            .eq('email', user.email)
-            .maybeSingle();
-
-          if (tenantByEmailError) {
-            console.error('Error loading tenant row by email:', tenantByEmailError);
-            throw new Error(
-              'We could not load your tenant account. Please contact your landlord.'
-            );
-          }
-
-          if (data) {
-            tenantRow = data as TenantRow;
-
-            // Best-effort patch: if this tenant row is missing user_id, attach it
-            if (!tenantRow.user_id) {
-              try {
-                const { error: patchError } = await supabase
-                  .from('tenants')
-                  .update({ user_id: user.id })
-                  .eq('id', tenantRow.id);
-
-                if (patchError) {
-                  console.warn(
-                    'Failed to backfill tenant.user_id during messages load:',
-                    patchError
-                  );
-                } else {
-                  tenantRow.user_id = user.id;
-                }
-              } catch (patchErr) {
-                console.warn(
-                  'Exception while backfilling tenant.user_id:',
-                  patchErr
-                );
-              }
-            }
-          }
+        if (tenantError) {
+          console.error('Error loading tenant row:', tenantError);
+          throw new Error(
+            'We could not load your tenant account. Please contact your landlord.'
+          );
         }
 
         if (!tenantRow) {
@@ -162,30 +111,58 @@ export default function TenantMessagesPage() {
           );
         }
 
-        // 3) Find the landlord row by owner_id (landlord user UUID)
+        // 3) Find the landlord row.
+        // owner_id might be either landlord.user_id (UUID) OR landlord.id (numeric).
+        let landlordTyped: LandlordRow | null = null;
+
+        // 3a. Try owner_id as landlord.user_id (UUID)
         const {
-          data: landlordRow,
-          error: landlordError,
+          data: landlordByUser,
+          error: landlordByUserError,
         } = await supabase
           .from('landlords')
           .select('id, user_id, name, email')
           .eq('user_id', tenantTyped.owner_id)
           .maybeSingle();
 
-        if (landlordError) {
-          console.error('Error loading landlord row:', landlordError);
-          throw new Error(
-            'We could not load your landlord account. Please contact your landlord.'
-          );
+        if (landlordByUserError) {
+          console.error('Error loading landlord by user_id:', landlordByUserError);
         }
 
-        if (!landlordRow) {
+        if (landlordByUser) {
+          landlordTyped = landlordByUser as LandlordRow;
+        } else {
+          // 3b. Fallback: try owner_id as landlord.id (numeric FK)
+          const numericOwnerId = Number(tenantTyped.owner_id);
+          if (!Number.isNaN(numericOwnerId)) {
+            const {
+              data: landlordById,
+              error: landlordByIdError,
+            } = await supabase
+              .from('landlords')
+              .select('id, user_id, name, email')
+              .eq('id', numericOwnerId)
+              .maybeSingle();
+
+            if (landlordByIdError) {
+              console.error(
+                'Error loading landlord by numeric id (owner_id):',
+                landlordByIdError
+              );
+            }
+
+            if (landlordById) {
+              landlordTyped = landlordById as LandlordRow;
+            }
+          }
+        }
+
+        if (!landlordTyped) {
           throw new Error(
             'Landlord account for this property could not be found. Please contact your landlord.'
           );
         }
 
-        const landlordTyped = landlordRow as LandlordRow;
         setLandlord(landlordTyped);
 
         // 4) Load existing messages for this landlord/tenant pair
@@ -300,7 +277,8 @@ export default function TenantMessagesPage() {
       setMessages((prev) => [...prev, inserted as MessageRow]);
       setNewMessage('');
 
-      // TODO: message email API call happens elsewhere after insert (already wired).
+      // TODO: you already wired email notifications through /api/message-email,
+      // so no changes needed here unless you want extra behavior.
     } catch (err: any) {
       console.error(err);
       setError(
