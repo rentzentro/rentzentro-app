@@ -11,7 +11,7 @@ type TenantRow = {
   id: number;
   name: string | null;
   email: string;
-  owner_id: string | null; // may be landlord user's UUID OR landlord numeric id
+  owner_id: string | null; // landlord.user_id UUID OR legacy landlord.id as string
 };
 
 type LandlordRow = {
@@ -81,7 +81,7 @@ export default function TenantMessagesPage() {
 
         // 2) Find tenant row for this user.
         // Primary: match on user_id
-        // Fallback: match on email if user_id is not populated yet.
+        // Fallback: match on email if user_id not populated yet.
         let tenantTyped: TenantRow | null = null;
 
         const {
@@ -103,7 +103,6 @@ export default function TenantMessagesPage() {
         if (tenantByUserId) {
           tenantTyped = tenantByUserId as TenantRow;
         } else if (user.email) {
-          // fallback to email
           const {
             data: tenantByEmail,
             error: tenantEmailError,
@@ -140,7 +139,7 @@ export default function TenantMessagesPage() {
         }
 
         // 3) Find the landlord row.
-        // owner_id might be either landlord.user_id (UUID) OR landlord.id (numeric FK).
+        // owner_id might be landlord.user_id (UUID) OR landlord.id (numeric FK as string).
         let landlordTyped: LandlordRow | null = null;
 
         // 3a. Try owner_id as landlord.user_id (UUID)
@@ -160,7 +159,7 @@ export default function TenantMessagesPage() {
         if (landlordByUser) {
           landlordTyped = landlordByUser as LandlordRow;
         } else {
-          // 3b. Fallback: try owner_id as landlord.id (numeric FK)
+          // 3b. Fallback: try owner_id as landlord.id (numeric FK stored as text)
           const numericOwnerId = Number(tenantTyped.owner_id);
           if (!Number.isNaN(numericOwnerId)) {
             const {
@@ -184,6 +183,8 @@ export default function TenantMessagesPage() {
             }
           }
         }
+
+        // NO unsafe "take the first landlord" fallback here.
 
         if (!landlordTyped) {
           throw new Error(
@@ -271,7 +272,6 @@ export default function TenantMessagesPage() {
       }
       const user = authData.user;
 
-      // Label shown in the thread
       const senderLabel = `${
         tenant.name || tenant.email || user.email || 'You'
       } (Tenant)`;
@@ -304,8 +304,6 @@ export default function TenantMessagesPage() {
 
       setMessages((prev) => [...prev, inserted as MessageRow]);
       setNewMessage('');
-
-      // Email notifications already wired via /api/message-email.
     } catch (err: any) {
       console.error(err);
       setError(
