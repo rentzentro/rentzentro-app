@@ -85,6 +85,11 @@ export default function LandlordMessagesPage() {
   const isFromLandlordSide = (msg: MessageRow) =>
     msg.sender_type === 'landlord' || msg.sender_type === 'team';
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/landlord/login');
+  };
+
   // ---------- Load landlord / team / tenants ----------
 
   useEffect(() => {
@@ -159,10 +164,9 @@ export default function LandlordMessagesPage() {
           }
 
           if (landlordOwner) {
-            // Normal case: owner has a landlord row
             resolvedLandlord = landlordOwner as LandlordRow;
           } else {
-            // Fallback: create a lightweight landlord object so messages still work
+            // Fallback: “virtual” landlord so messaging still works
             resolvedLandlord = {
               id: -1,
               name: null,
@@ -240,19 +244,13 @@ export default function LandlordMessagesPage() {
         const messageList = (rows || []) as MessageRow[];
         setMessages(messageList);
 
-        // Mark tenant messages as read for this conversation
-        const unreadTenantMessages = messageList.filter(
-          (m) => m.sender_type === 'tenant' && !m.read_at
-        );
-
-        if (unreadTenantMessages.length > 0) {
-          await supabase
-            .from('messages')
-            .update({ read_at: new Date().toISOString() })
-            .eq('tenant_id', selectedTenantId)
-            .eq('sender_type', 'tenant')
-            .is('read_at', null);
-        }
+        // Mark tenant messages as read for this conversation (landlord/team viewing)
+        await supabase
+          .from('messages')
+          .update({ read_at: new Date().toISOString() })
+          .eq('tenant_id', selectedTenantId)
+          .eq('sender_type', 'tenant')
+          .is('read_at', null);
       } catch (err: any) {
         console.error(err);
         setError(
@@ -285,7 +283,6 @@ export default function LandlordMessagesPage() {
       if (authError || !authData.user) {
         throw new Error('Please log in again to send a message.');
       }
-      const user = authData.user;
 
       const tenant = tenants.find((t) => t.id === selectedTenantId);
       if (!tenant) throw new Error('Tenant not found for this conversation.');
@@ -318,17 +315,7 @@ export default function LandlordMessagesPage() {
       setMessages((prev) => [...prev, newRow]);
       setNewMessage('');
 
-      // NOTE: email notification call is currently disabled.
-      // Once we're happy with sending, we can re-enable your old API route here.
-      // try {
-      //   await fetch('/api/landlord-message-email', {
-      //     method: 'POST',
-      //     headers: { 'Content-Type': 'application/json' },
-      //     body: JSON.stringify({ messageId: newRow.id }),
-      //   });
-      // } catch (emailErr) {
-      //   console.error('Error calling message email API:', emailErr);
-      // }
+      // Email notifications can be wired back in here later if needed.
     } catch (err: any) {
       console.error(err);
       setError(
@@ -372,24 +359,25 @@ export default function LandlordMessagesPage() {
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto flex max-w-5xl flex-col gap-4">
         {/* Header */}
-        <header className="flex flex-col gap-2 border-b border-slate-900 pb-3">
-          <div className="text-xs text-slate-500 flex gap-1 items-center">
-            <Link href="/landlord" className="hover:text-emerald-400">
-              Landlord dashboard
-            </Link>
-            <span>/</span>
-            <span className="text-slate-300">Messages</span>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h1 className="text-lg font-semibold text-slate-50">
-                Messages with tenants
-              </h1>
-              <p className="text-[11px] text-slate-400">
-                View and reply to messages from your tenants. Team members share
-                the same inbox and can reply on your behalf.
-              </p>
+        <header className="flex flex-col gap-3 border-b border-slate-900 pb-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-xs text-slate-500 flex gap-1 items-center">
+              <Link href="/landlord" className="hover:text-emerald-400">
+                Landlord dashboard
+              </Link>
+              <span>/</span>
+              <span className="text-slate-300">Messages</span>
             </div>
+            <h1 className="mt-1 text-lg font-semibold text-slate-50">
+              Messages with tenants
+            </h1>
+            <p className="text-[11px] text-slate-400">
+              View and reply to messages from your tenants. Team members share
+              the same inbox and can reply on your behalf.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 md:justify-end">
             {landlord && (
               <div className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-[11px] text-slate-300">
                 {isTeamMember ? 'Team member for ' : 'Signed in as '}{' '}
@@ -398,6 +386,19 @@ export default function LandlordMessagesPage() {
                 </span>
               </div>
             )}
+            <Link
+              href="/landlord"
+              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
+            >
+              Back to dashboard
+            </Link>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
+            >
+              Log out
+            </button>
           </div>
         </header>
 
