@@ -16,7 +16,7 @@ type TenantRow = {
 
 type LandlordRow = {
   id: number;
-  user_id: string;
+  user_id: string | null;
   name: string | null;
   email: string;
 };
@@ -59,6 +59,8 @@ export default function TenantMessagesPage() {
 
   const [tenant, setTenant] = useState<TenantRow | null>(null);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
+  const [landlordMissing, setLandlordMissing] = useState(false);
+
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [newMessage, setNewMessage] = useState('');
 
@@ -68,6 +70,7 @@ export default function TenantMessagesPage() {
     const loadThread = async () => {
       setLoading(true);
       setError(null);
+      setLandlordMissing(false);
 
       try {
         // 1) Auth user must be a tenant
@@ -78,104 +81,69 @@ export default function TenantMessagesPage() {
           return;
         }
         const user = authData.user;
-        const userEmail = user.email || '';
 
         // 2) Find tenant row for this user
-        let tenantTyped: TenantRow | null = null;
-
-        // 2a) Primary: match by user_id
-        const {
-          data: tenantByUser,
-          error: tenantByUserError,
-        } = await supabase
+        const { data: tenantRow, error: tenantError } = await supabase
           .from('tenants')
           .select('id, name, email, owner_id')
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (tenantByUserError) {
-          console.error('Error loading tenant by user_id:', tenantByUserError);
+        if (tenantError) {
+          console.error('Error loading tenant row:', tenantError);
+          throw new Error(
+            'We could not load your tenant account. Please contact your landlord.'
+          );
         }
 
-        if (tenantByUser) {
-          tenantTyped = tenantByUser as TenantRow;
-        } else if (userEmail) {
-          // 2b) Fallback: match by email (covers cases where user_id is null)
-          const {
-            data: tenantByEmail,
-            error: tenantByEmailError,
-          } = await supabase
-            .from('tenants')
-            .select('id, name, email, owner_id')
-            .eq('email', userEmail)
-            .maybeSingle();
-
-          if (tenantByEmailError) {
-            console.error('Error loading tenant by email:', tenantByEmailError);
-          }
-
-          if (tenantByEmail) {
-            tenantTyped = tenantByEmail as TenantRow;
-          }
-        }
-
-        if (!tenantTyped) {
+        if (!tenantRow) {
           throw new Error(
             'We could not find a tenant account for this login. Please contact your landlord.'
           );
         }
 
+        const tenantTyped = tenantRow as TenantRow;
         setTenant(tenantTyped);
 
         if (!tenantTyped.owner_id) {
+          setLandlordMissing(true);
           throw new Error(
-            'Your tenant record is missing landlord information. Please contact your landlord.'
+            'Your tenant record is missing landlord information. Please contact your landlord so they can update your portal link.'
           );
         }
 
-        // 3) Try to load landlord row. If RLS blocks it, we fallback.
-        let landlordTyped: LandlordRow | null = null;
+        // 3) Find the landlord row by owner_id (landlord user UUID)
+        const { data: landlordRow, error: landlordError } = await supabase
+          .from('landlords')
+          .select('id, user_id, name, email')
+          .eq('user_id', tenantTyped.owner_id)
+          .maybeSingle();
 
-        try {
-          const {
-            data: landlordRow,
-            error: landlordError,
-          } = await supabase
-            .from('landlords')
-            .select('id, user_id, name, email')
-            .eq('user_id', tenantTyped.owner_id)
-            .maybeSingle();
-
-          if (!landlordError && landlordRow) {
-            landlordTyped = landlordRow as LandlordRow;
-          } else {
-            console.warn('Tenant cannot read landlord row, using fallback shell.');
-          }
-        } catch {
-          console.warn('Tenant blocked from landlord table — fallback is required.');
+        if (landlordError) {
+          console.error('Error loading landlord row:', landlordError);
+          throw new Error(
+            'We could not load your landlord account. Please contact your landlord.'
+          );
         }
 
-        // Fallback landlord shell — messaging still works
-        if (!landlordTyped) {
-          landlordTyped = {
-            id: -1, // synthetic
-            user_id: tenantTyped.owner_id,
-            name: null,
-            email: 'Your landlord',
-          };
+        if (!landlordRow) {
+          // IMPORTANT: do NOT invent a fake landlord id here, that breaks FK.
+          setLandlordMissing(true);
+          throw new Error(
+            'Landlord account for this property could not be loaded. Please confirm with your landlord that their RentZentro landlord account is active.'
+          );
         }
 
+        const landlordTyped = landlordRow as LandlordRow;
         setLandlord(landlordTyped);
 
-        // 4) Load existing messages
-        const {
-          data: messagesData,
-          error: messagesError,
-        } = await supabase
+        // 4) Load existing messages for this landlord/tenant pair
+        const { data: messagesData, error: messagesError } = await supabase
           .from('messages')
           .select(
             'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, sender_label, created_at, read_at'
           )
+          .eq('landlord_id', landlordTyped.id)
           .eq('tenant_id', tenantTyped.id)
           .order('created_at', { ascending: true });
 
@@ -188,11 +156,12 @@ export default function TenantMessagesPage() {
 
         setMessages((messagesData || []) as MessageRow[]);
 
-        // 5) Mark messages as read
+        // 5) Mark any landlord/team messages as read for this tenant
         try {
           await supabase
             .from('messages')
             .update({ read_at: new Date().toISOString() })
+            .eq('landlord_id', landlordTyped.id)
             .eq('tenant_id', tenantTyped.id)
             .eq('tenant_user_id', user.id)
             .is('read_at', null)
@@ -227,7 +196,14 @@ export default function TenantMessagesPage() {
 
   const handleSend = async (e: FormEvent) => {
     e.preventDefault();
-    if (!tenant || !landlord) return;
+
+    // HARD GUARD: never send if we do not have a real landlord row.
+    if (!tenant || !landlord || landlordMissing) {
+      setError(
+        'We could not connect this message to your landlord account. Please contact your landlord so they can verify your portal link.'
+      );
+      return;
+    }
 
     const body = newMessage.trim();
     if (!body) return;
@@ -243,12 +219,13 @@ export default function TenantMessagesPage() {
       }
       const user = authData.user;
 
+      // Label shown in the thread
       const senderLabel = `${
         tenant.name || tenant.email || user.email || 'You'
       } (Tenant)`;
 
       const insertPayload = {
-        landlord_id: landlord.id,
+        landlord_id: landlord.id, // real FK to landlords.id
         landlord_user_id: landlord.user_id,
         tenant_id: tenant.id,
         tenant_user_id: user.id,
@@ -257,10 +234,7 @@ export default function TenantMessagesPage() {
         sender_label: senderLabel,
       };
 
-      const {
-        data: inserted,
-        error: insertError,
-      } = await supabase
+      const { data: inserted, error: insertError } = await supabase
         .from('messages')
         .insert(insertPayload)
         .select(
@@ -275,9 +249,13 @@ export default function TenantMessagesPage() {
 
       setMessages((prev) => [...prev, inserted as MessageRow]);
       setNewMessage('');
+
+      // If you had an email notification call before, you can call /api/message-email here.
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || 'Failed to send your message. Please try again.');
+      setError(
+        err?.message || 'Failed to send your message. Please try again.'
+      );
     } finally {
       setSending(false);
     }
@@ -332,16 +310,21 @@ export default function TenantMessagesPage() {
             <h1 className="mt-1 text-xl font-semibold text-slate-50">
               Messages with your landlord
             </h1>
-            {tenant && landlord && (
+            {tenant && (
               <p className="mt-1 text-[11px] text-slate-500">
                 Signed in as{' '}
                 <span className="font-medium text-slate-200">
                   {tenant.name || tenant.email}
-                </span>{' '}
-                · Landlord:{' '}
-                <span className="font-medium text-slate-200">
-                  {landlord.name || landlord.email}
                 </span>
+                {landlord && (
+                  <>
+                    {' '}
+                    · Landlord:{' '}
+                    <span className="font-medium text-slate-200">
+                      {landlord.name || landlord.email}
+                    </span>
+                  </>
+                )}
               </p>
             )}
           </div>
@@ -365,8 +348,14 @@ export default function TenantMessagesPage() {
         </header>
 
         {/* Alerts */}
-        {error && tenant && (
-          <div className="rounded-xl border border-rose-500/60 bg-rose-950/40 px-4 py-2 text-sm text-rose-100">
+        {error && (
+          <div
+            className={`rounded-xl px-4 py-2 text-sm ${
+              landlordMissing
+                ? 'border border-amber-500/70 bg-amber-500/10 text-amber-100'
+                : 'border border-rose-500/60 bg-rose-950/40 text-rose-100'
+            }`}
+          >
             {error}
           </div>
         )}
@@ -427,6 +416,7 @@ export default function TenantMessagesPage() {
               rows={3}
               className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               placeholder="Type your question or update…"
+              disabled={landlordMissing}
             />
             <div className="flex items-center justify-between gap-3">
               <p className="text-[10px] text-slate-500">
@@ -435,7 +425,9 @@ export default function TenantMessagesPage() {
               </p>
               <button
                 type="submit"
-                disabled={sending || !tenant || !landlord}
+                disabled={
+                  sending || !tenant || !landlord || landlordMissing
+                }
                 className="rounded-full bg-emerald-500 px-4 py-1.5 text-[12px] font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {sending ? 'Sending…' : 'Send message'}
