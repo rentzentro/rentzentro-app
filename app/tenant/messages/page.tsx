@@ -1,81 +1,76 @@
+// app/tenant/messages/page.tsx
 'use client';
 
 import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
+
+// ---------- Types ----------
 
 type TenantRow = {
   id: number;
   name: string | null;
   email: string;
-  user_id: string | null;
-  owner_id: string | null; // landlord user_id
+  owner_id: string | null; // landlord user's UUID
+};
+
+type LandlordRow = {
+  id: number;
+  user_id: string;
+  name: string | null;
+  email: string;
 };
 
 type MessageRow = {
   id: string;
-  landlord_id: number | null;
+  landlord_id: number;
   landlord_user_id: string | null;
-  tenant_id: number | null;
+  tenant_id: number;
   tenant_user_id: string | null;
-  body: string | null;
-  sender_type: 'landlord' | 'tenant' | 'team' | string | null;
+  body: string;
+  sender_type: 'tenant' | 'landlord' | 'team';
+  sender_label: string | null;
   created_at: string;
   read_at: string | null;
 };
 
-type LoadStatus = 'loading' | 'ready' | 'error';
+// ---------- Helpers ----------
+
+const formatTimestamp = (iso: string | null | undefined) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
+// ---------- Page ----------
 
 export default function TenantMessagesPage() {
   const router = useRouter();
 
-  const [status, setStatus] = useState<LoadStatus>('loading');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [tenant, setTenant] = useState<TenantRow | null>(null);
-  const [landlordUserId, setLandlordUserId] = useState<string | null>(null);
-
+  const [landlord, setLandlord] = useState<LandlordRow | null>(null);
   const [messages, setMessages] = useState<MessageRow[]>([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-
   const [newMessage, setNewMessage] = useState('');
-  const [sending, setSending] = useState(false);
 
-  // ---------- Helpers ----------
-
-  const formatTime = (iso: string) => {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return '';
-    return d.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  };
-
-  const labelForMessage = (msg: MessageRow): string => {
-    if (msg.sender_type === 'tenant') return 'You';
-    if (msg.sender_type === 'team') return 'Team member';
-    return 'Landlord';
-  };
-
-  const isFromTenantSide = (msg: MessageRow) => msg.sender_type === 'tenant';
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/tenant/login');
-  };
-
-  // ---------- Load tenant + landlord id ----------
+  // ---------- Load tenant, landlord, messages ----------
 
   useEffect(() => {
-    const load = async () => {
-      setStatus('loading');
+    const loadThread = async () => {
+      setLoading(true);
       setError(null);
 
       try {
+        // 1) Auth user must be a tenant
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
         if (authError || !authData.user) {
@@ -84,34 +79,21 @@ export default function TenantMessagesPage() {
         }
         const user = authData.user;
 
-        // 1) Try by user_id
-        const { data: byUser, error: byUserError } = await supabase
+        // 2) Find tenant row for this user
+        const {
+          data: tenantRow,
+          error: tenantError,
+        } = await supabase
           .from('tenants')
-          .select('id, name, email, user_id, owner_id')
+          .select('id, name, email, owner_id')
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (byUserError) {
-          console.error('Error loading tenant by user_id:', byUserError);
-          throw new Error('Unable to load tenant account.');
-        }
-
-        let tenantRow = byUser as TenantRow | null;
-
-        // 2) Fallback: match by email (older records)
-        if (!tenantRow && user.email) {
-          const { data: byEmail, error: byEmailError } = await supabase
-            .from('tenants')
-            .select('id, name, email, user_id, owner_id')
-            .eq('email', user.email)
-            .maybeSingle();
-
-          if (byEmailError) {
-            console.error('Error loading tenant by email:', byEmailError);
-            throw new Error('Unable to load tenant account.');
-          }
-
-          tenantRow = byEmail as TenantRow | null;
+        if (tenantError) {
+          console.error('Error loading tenant row:', tenantError);
+          throw new Error(
+            'We could not load your tenant account. Please contact your landlord.'
+          );
         }
 
         if (!tenantRow) {
@@ -120,73 +102,104 @@ export default function TenantMessagesPage() {
           );
         }
 
-        setTenant(tenantRow);
-        setLandlordUserId(tenantRow.owner_id);
-        setStatus('ready');
+        const tenantTyped = tenantRow as TenantRow;
+        setTenant(tenantTyped);
+
+        if (!tenantTyped.owner_id) {
+          throw new Error(
+            'Your tenant record is missing landlord information. Please contact your landlord.'
+          );
+        }
+
+        // 3) Find the landlord row by owner_id (landlord user UUID)
+        const {
+          data: landlordRow,
+          error: landlordError,
+        } = await supabase
+          .from('landlords')
+          .select('id, user_id, name, email')
+          .eq('user_id', tenantTyped.owner_id)
+          .maybeSingle();
+
+        if (landlordError) {
+          console.error('Error loading landlord row:', landlordError);
+          throw new Error(
+            'We could not load your landlord account. Please contact your landlord.'
+          );
+        }
+
+        if (!landlordRow) {
+          throw new Error(
+            'Landlord account for this property could not be found. Please contact your landlord.'
+          );
+        }
+
+        const landlordTyped = landlordRow as LandlordRow;
+        setLandlord(landlordTyped);
+
+        // 4) Load existing messages for this landlord/tenant pair
+        const {
+          data: messagesData,
+          error: messagesError,
+        } = await supabase
+          .from('messages')
+          .select(
+            'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, sender_label, created_at, read_at'
+          )
+          .eq('landlord_id', landlordTyped.id)
+          .eq('tenant_id', tenantTyped.id)
+          .order('created_at', { ascending: true });
+
+        if (messagesError) {
+          console.error('Error loading messages:', messagesError);
+          throw new Error(
+            'We had trouble loading your message history. Please try again.'
+          );
+        }
+
+        setMessages((messagesData || []) as MessageRow[]);
+
+        // 5) Mark any landlord/team messages as read for this tenant
+        try {
+          await supabase
+            .from('messages')
+            .update({ read_at: new Date().toISOString() })
+            .eq('landlord_id', landlordTyped.id)
+            .eq('tenant_id', tenantTyped.id)
+            .eq('tenant_user_id', user.id)
+            .is('read_at', null)
+            .in('sender_type', ['landlord', 'team']);
+        } catch (markErr) {
+          console.warn('Error marking messages as read (tenant):', markErr);
+        }
       } catch (err: any) {
         console.error(err);
         setError(
           err?.message ||
-            'Failed to load your tenant account. Please contact your landlord.'
-        );
-        setStatus('error');
-      }
-    };
-
-    load();
-  }, [router]);
-
-  // ---------- Load messages ----------
-
-  useEffect(() => {
-    const loadMessages = async () => {
-      if (!tenant) return;
-
-      setLoadingMessages(true);
-      setError(null);
-
-      try {
-        const { data: rows, error: messagesError } = await supabase
-          .from('messages')
-          .select(
-            'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, created_at, read_at'
-          )
-          .eq('tenant_id', tenant.id)
-          .order('created_at', { ascending: true });
-
-        if (messagesError) {
-          console.error('Error loading tenant messages:', messagesError);
-          throw new Error('Unable to load your messages.');
-        }
-
-        const list = (rows || []) as MessageRow[];
-        setMessages(list);
-
-        // Mark landlord/team messages as read (tenant viewing)
-        await supabase
-          .from('messages')
-          .update({ read_at: new Date().toISOString() })
-          .eq('tenant_id', tenant.id)
-          .in('sender_type', ['landlord', 'team'])
-          .is('read_at', null);
-      } catch (err: any) {
-        console.error(err);
-        setError(
-          err?.message || 'Failed to load your messages. Please try again.'
+            'Something went wrong loading your messages. Please try again.'
         );
       } finally {
-        setLoadingMessages(false);
+        setLoading(false);
       }
     };
 
-    loadMessages();
-  }, [tenant]);
+    loadThread();
+  }, [router]);
 
-  // ---------- Send message ----------
+  // ---------- Actions ----------
 
-  const handleSendMessage = async (e: FormEvent) => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/tenant/login');
+  };
+
+  const handleBackToDashboard = () => {
+    router.push('/tenant/portal');
+  };
+
+  const handleSend = async (e: FormEvent) => {
     e.preventDefault();
-    if (!tenant || !landlordUserId) return;
+    if (!tenant || !landlord) return;
 
     const body = newMessage.trim();
     if (!body) return;
@@ -198,23 +211,33 @@ export default function TenantMessagesPage() {
       const { data: authData, error: authError } =
         await supabase.auth.getUser();
       if (authError || !authData.user) {
-        throw new Error('Please log in again to send a message.');
+        throw new Error('Please log in again and resend your message.');
       }
+      const user = authData.user;
+
+      // Label shown in the thread
+      const senderLabel = `${
+        tenant.name || tenant.email || user.email || 'You'
+      } (Tenant)`;
 
       const insertPayload = {
-        landlord_id: null, // optional; landlord_user_id is what RLS cares about
-        landlord_user_id: landlordUserId,
+        landlord_id: landlord.id,
+        landlord_user_id: landlord.user_id,
         tenant_id: tenant.id,
-        tenant_user_id: tenant.user_id,
+        tenant_user_id: user.id,
         body,
         sender_type: 'tenant' as const,
+        sender_label: senderLabel,
       };
 
-      const { data, error: insertError } = await supabase
+      const {
+        data: inserted,
+        error: insertError,
+      } = await supabase
         .from('messages')
         .insert(insertPayload)
         .select(
-          'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, created_at, read_at'
+          'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, sender_label, created_at, read_at'
         )
         .single();
 
@@ -223,25 +246,24 @@ export default function TenantMessagesPage() {
         throw new Error('Failed to send your message. Please try again.');
       }
 
-      const newRow = data as MessageRow;
-      setMessages((prev) => [...prev, newRow]);
+      setMessages((prev) => [...prev, inserted as MessageRow]);
       setNewMessage('');
 
-      // Email notification to landlord/team can be added back here later.
+      // TODO: if you previously had an email notification API for messages,
+      // you can re-add that call here, using landlord.email / tenant.email.
     } catch (err: any) {
       console.error(err);
       setError(
-        err?.message ||
-          'Failed to send your message. Please double-check and try again.'
+        err?.message || 'Failed to send your message. Please try again.'
       );
     } finally {
       setSending(false);
     }
   };
 
-  // ---------- UI ----------
+  // ---------- UI States ----------
 
-  if (status === 'loading') {
+  if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center">
         <p className="text-sm text-slate-400">Loading messages…</p>
@@ -249,14 +271,12 @@ export default function TenantMessagesPage() {
     );
   }
 
-  if (status === 'error' && !tenant) {
+  if (error && !tenant) {
+    // Hard failure before we even have a tenant record
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
-        <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-700 p-6 shadow-xl space-y-4">
-          <p className="text-sm text-red-400">
-            {error ||
-              'We could not find a tenant account for this login. Please contact your landlord.'}
-          </p>
+        <div className="max-w-md rounded-2xl bg-slate-900/80 border border-rose-500/60 p-6 shadow-xl space-y-4">
+          <p className="text-sm text-rose-100">{error}</p>
           <button
             onClick={() => router.push('/tenant/login')}
             className="rounded-full bg-slate-800 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
@@ -268,133 +288,133 @@ export default function TenantMessagesPage() {
     );
   }
 
+  // ---------- Main UI ----------
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
-      <div className="mx-auto flex max-w-4xl flex-col gap-4">
-        {/* Header */}
-        <header className="flex flex-col gap-3 border-b border-slate-900 pb-3 md:flex-row md:items-center md:justify-between">
+      <div className="mx-auto max-w-4xl space-y-5">
+        {/* Header / breadcrumb */}
+        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="text-xs text-slate-500 flex gap-1 items-center">
-              <Link href="/tenant/portal" className="hover:text-emerald-400">
-                Tenant portal
-              </Link>
+              <button
+                type="button"
+                onClick={handleBackToDashboard}
+                className="hover:text-emerald-400"
+              >
+                Tenant
+              </button>
               <span>/</span>
               <span className="text-slate-300">Messages</span>
             </div>
-            <h1 className="mt-1 text-lg font-semibold text-slate-50">
+            <h1 className="mt-1 text-xl font-semibold text-slate-50">
               Messages with your landlord
             </h1>
-            <p className="text-[11px] text-slate-400">
-              Ask questions, share updates, or send photos to your landlord or
-              their team. All messages stay in one place.
-            </p>
+            {tenant && landlord && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                Signed in as{' '}
+                <span className="font-medium text-slate-200">
+                  {tenant.name || tenant.email}
+                </span>{' '}
+                · Landlord:{' '}
+                <span className="font-medium text-slate-200">
+                  {landlord.name || landlord.email}
+                </span>
+              </p>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 md:justify-end">
-            {tenant && (
-              <div className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-[11px] text-slate-300">
-                Signed in as{' '}
-                <span className="font-medium">
-                  {tenant.name || tenant.email}
-                </span>
-              </div>
-            )}
-            <Link
-              href="/tenant/portal"
-              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
-            >
-              Back to portal
-            </Link>
+          <div className="flex flex-wrap gap-2 md:justify-end">
             <button
               type="button"
-              onClick={handleSignOut}
-              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
+              onClick={handleBackToDashboard}
+              className="text-xs px-4 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            >
+              Back to dashboard
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-xs px-4 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
             >
               Log out
             </button>
           </div>
         </header>
 
-        {/* Error banner */}
+        {/* Alerts */}
         {error && (
-          <div className="rounded-xl border border-red-500/70 bg-red-500/10 px-4 py-2 text-sm text-red-100">
+          <div className="rounded-xl border border-rose-500/60 bg-rose-950/40 px-4 py-2 text-sm text-rose-100">
             {error}
           </div>
         )}
 
-        {/* Conversation + composer */}
-        <section className="rounded-2xl border border-slate-900 bg-slate-950/80 p-3 sm:p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Conversation
-            </p>
-            {loadingMessages && (
-              <p className="text-[11px] text-slate-500">Loading messages…</p>
-            )}
-          </div>
-
-          <div className="max-h-[420px] flex-1 overflow-y-auto rounded-2xl border border-slate-900 bg-slate-950/90 px-3 py-2 text-[11px] space-y-3">
+        {/* Thread + composer */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 shadow-sm flex flex-col gap-3 min-h-[380px]">
+          {/* Messages list */}
+          <div className="flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-950/60 p-3 border border-slate-900">
             {messages.length === 0 ? (
-              <p className="mt-6 text-center text-[11px] text-slate-500">
-                No messages yet. Send a message to start the conversation.
+              <p className="text-[12px] text-slate-500">
+                No messages yet. Send your landlord a message below to start the
+                conversation.
               </p>
             ) : (
-              messages.map((msg) => {
-                const fromTenant = isFromTenantSide(msg);
-                const label = labelForMessage(msg);
+              messages.map((m) => {
+                const isTenant = m.sender_type === 'tenant';
+                const alignClass = isTenant
+                  ? 'items-end text-right'
+                  : 'items-start text-left';
+                const bubbleClass = isTenant
+                  ? 'bg-emerald-600 text-slate-950'
+                  : 'bg-slate-800 text-slate-50';
+                const metaColor = isTenant
+                  ? 'text-emerald-100/80'
+                  : 'text-slate-400';
+
                 return (
                   <div
-                    key={msg.id}
-                    className={`flex ${
-                      fromTenant ? 'justify-end' : 'justify-start'
-                    }`}
+                    key={m.id}
+                    className={`flex flex-col ${alignClass} gap-0.5 text-[11px]`}
                   >
+                    <span className={`font-medium ${metaColor}`}>
+                      {m.sender_label ||
+                        (isTenant ? 'You (Tenant)' : 'Landlord / Team')}
+                    </span>
                     <div
-                      className={`max-w-[80%] rounded-2xl border px-3 py-2 space-y-1 ${
-                        fromTenant
-                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-50'
-                          : 'border-slate-800 bg-slate-900/90 text-slate-50'
-                      }`}
+                      className={`inline-block max-w-[85%] rounded-2xl px-3 py-1.5 text-[12px] ${bubbleClass}`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-semibold">{label}</p>
-                        <p className="text-[10px] text-slate-400">
-                          {formatTime(msg.created_at)}
-                        </p>
-                      </div>
-                      <p className="whitespace-pre-wrap text-[11px]">
-                        {msg.body}
-                      </p>
+                      {m.body}
                     </div>
+                    <span className="text-[10px] text-slate-500">
+                      {formatTimestamp(m.created_at)}
+                    </span>
                   </div>
                 );
               })
             )}
           </div>
 
-          <form
-            onSubmit={handleSendMessage}
-            className="mt-3 flex flex-col gap-2 border-t border-slate-900 pt-3"
-          >
-            <label className="text-[11px] font-medium text-slate-300">
-              New message
+          {/* Composer */}
+          <form onSubmit={handleSend} className="mt-2 space-y-2">
+            <label className="block text-[11px] text-slate-400 mb-1">
+              Send a message to your landlord
             </label>
             <textarea
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               rows={3}
-              className="w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-[11px] text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              placeholder="Type your message to your landlord…"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              placeholder="Type your question or update…"
             />
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-3">
               <p className="text-[10px] text-slate-500">
-                Replies may come from your landlord or one of their team
-                members. Team replies are labeled “Team member”.
+                Your landlord and any authorized team members for this account
+                will be able to see and reply to this conversation.
               </p>
               <button
                 type="submit"
-                disabled={sending || !newMessage.trim()}
-                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-1.5 text-[11px] font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={sending || !tenant || !landlord}
+                className="rounded-full bg-emerald-500 px-4 py-1.5 text-[12px] font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {sending ? 'Sending…' : 'Send message'}
               </button>
