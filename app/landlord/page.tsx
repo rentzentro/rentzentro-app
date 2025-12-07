@@ -246,8 +246,9 @@ export default function LandlordDashboardPage() {
             if (ownerLandlord) {
               landlordRow = ownerLandlord;
             } else {
-              // Team access but owner landlord row not found:
-              // let them in with a synthetic landlord shell.
+              // 🔴 This is the case that was previously BLOCKING you.
+              // Now we just mark that lookup failed and synthesize a landlord
+              // shell so the dashboard can still load for the teammate.
               console.warn(
                 'Team member login: team access found, but owner landlord row not found. Using fallback landlord shell.'
               );
@@ -257,7 +258,7 @@ export default function LandlordDashboardPage() {
                 id: -1, // synthetic
                 email: 'Linked landlord account',
                 name: null,
-                subscription_status: 'active',
+                subscription_status: 'active', // treat as active so no gate
                 subscription_current_period_end: null,
                 trial_active: false,
                 trial_end: null,
@@ -309,22 +310,43 @@ export default function LandlordDashboardPage() {
         setPayments((paymentRes.data || []) as PaymentRow[]);
         setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
 
-        // 6) Unread messages badge (via API route, non-blocking)
+        // 6) Unread messages (for landlord + team)
         try {
-          const res = await fetch('/api/messages/unread-count?role=landlord');
-          if (!res.ok) {
-            console.error(
-              'Unread messages API returned non-OK status:',
-              res.status
-            );
+          let unreadCount = 0;
+
+          // Prefer landlord_user_id (works for owner + team)
+          if (landlordRow.user_id) {
+            const { data: msgRows, error: msgError } = await supabase
+              .from('messages')
+              .select('id')
+              .eq('landlord_user_id', landlordRow.user_id)
+              .eq('sender_type', 'tenant')
+              .is('read_at', null);
+
+            if (msgError) {
+              console.error('Unread messages query error:', msgError);
+            } else if (msgRows) {
+              unreadCount = msgRows.length;
+            }
           } else {
-            const json = await res.json().catch(() => null);
-            const count =
-              typeof json?.count === 'number' ? json.count : 0;
-            setUnreadMessagesCount(count);
+            // Fallback for any older rows keyed by landlord_id
+            const { data: msgRows, error: msgError } = await supabase
+              .from('messages')
+              .select('id')
+              .eq('landlord_id', landlordRow.id)
+              .eq('sender_type', 'tenant')
+              .is('read_at', null);
+
+            if (msgError) {
+              console.error('Unread messages (fallback) query error:', msgError);
+            } else if (msgRows) {
+              unreadCount = msgRows.length;
+            }
           }
+
+          setUnreadMessagesCount(unreadCount);
         } catch (msgErr) {
-          console.error('Unread messages fetch threw:', msgErr);
+          console.error('Unread messages query threw:', msgErr);
         }
       } catch (err: any) {
         console.error(err);
@@ -765,7 +787,7 @@ export default function LandlordDashboardPage() {
               </p>
             </div>
 
-          <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
               <Link
                 href="/landlord/properties"
                 className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"

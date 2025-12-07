@@ -40,6 +40,14 @@ type TenantRow = {
   email: string;
 };
 
+type TeamMemberRow = {
+  id: number;
+  owner_user_id: string;
+  member_user_id: string | null;
+  member_email: string;
+  status: string | null;
+};
+
 export async function POST(req: Request) {
   if (!resendApiKey) {
     console.error('RESEND_API_KEY is not configured.');
@@ -210,17 +218,60 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // 4) Build email content
-    let to: string;
+    // 4) If tenant → landlord, also load active team members for this landlord
+    let recipients: string[] = [];
+
+    if (direction === 'tenant_to_landlord') {
+      const teamEmails: string[] = [];
+
+      try {
+        const { data: teamRows, error: teamError } = await supabaseAdmin
+          .from('landlord_team_members')
+          .select('member_email, status, owner_user_id')
+          .eq('owner_user_id', landlordRow.user_id)
+          .eq('status', 'active');
+
+        if (teamError) {
+          console.error(
+            'Error loading team members for message email:',
+            teamError
+          );
+        } else if (teamRows && teamRows.length > 0) {
+          for (const row of teamRows as TeamMemberRow[]) {
+            if (row.member_email) {
+              teamEmails.push(row.member_email.toLowerCase());
+            }
+          }
+        }
+      } catch (teamErr) {
+        console.error('Team member lookup threw for message email:', teamErr);
+      }
+
+      // Deduplicate landlord + team emails
+      const uniqueSet = new Set<string>();
+      uniqueSet.add(landlordEmail.toLowerCase());
+      for (const e of teamEmails) {
+        uniqueSet.add(e);
+      }
+      recipients = Array.from(uniqueSet);
+    } else {
+      // Landlord/team → tenant: only email tenant
+      recipients = [tenantEmail];
+    }
+
+    if (recipients.length === 0) {
+      console.error('No recipients resolved for message email.');
+      return NextResponse.json({ ok: true });
+    }
+
+    // 5) Build email content
     let subject: string;
     let introLine: string;
 
     if (direction === 'tenant_to_landlord') {
-      to = landlordEmail;
       subject = `New message from ${tenantName} in RentZentro`;
       introLine = `${tenantName} sent you a new message in your RentZentro portal.`;
     } else {
-      to = tenantEmail;
       subject = `New message from your landlord in RentZentro`;
       introLine = `${landlordName} sent you a new message in your RentZentro portal.`;
     }
@@ -250,7 +301,7 @@ export async function POST(req: Request) {
 
     await resend.emails.send({
       from: FROM_EMAIL,
-      to,
+      to: recipients,
       subject,
       html,
       text,
