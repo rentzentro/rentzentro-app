@@ -18,7 +18,7 @@ type TenantRow = {
   monthly_rent: number | null;
   lease_start: string | null;
   lease_end: string | null;
-  tenant_user_id?: string | null;
+  user_id?: string | null;
 };
 
 type PropertyRow = {
@@ -189,22 +189,21 @@ export default function TenantPortalPage() {
           console.error('link-tenant-user fetch failed:', linkErr);
         }
 
-        // Tenant: prefer tenant_user_id match, fall back to email
+        // Tenant: prefer user_id match, fall back to email
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select(
-            'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, tenant_user_id'
+            'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id'
           )
-          .or(`tenant_user_id.eq.${authUserId},email.eq.${email}`)
+          .or(`user_id.eq.${authUserId},email.eq.${email}`)
           .order('created_at', { ascending: true });
 
         if (tenantError) throw tenantError;
 
         let t: TenantRow | null =
           tenantRows && tenantRows.length > 0
-            ? (tenantRows.find(
-                (row: any) => row.tenant_user_id === authUserId
-              ) ?? tenantRows[0])
+            ? (tenantRows.find((row: any) => row.user_id === authUserId) ??
+              tenantRows[0])
             : null;
 
         if (!t) {
@@ -315,11 +314,11 @@ export default function TenantPortalPage() {
         setMaintenance((maintRows || []) as MaintenanceRow[]);
 
         // Unread messages for this tenant (from landlord)
-        if (t.tenant_user_id) {
+        if (t.user_id) {
           const { data: unreadRows, error: unreadError } = await supabase
             .from('messages')
             .select('id')
-            .eq('tenant_user_id', t.tenant_user_id)
+            .eq('tenant_user_id', t.user_id)
             .eq('sender_type', 'landlord')
             .is('read_at', null);
 

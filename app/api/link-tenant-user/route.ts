@@ -25,15 +25,15 @@ export async function POST(req: Request) {
     }
 
     // Link the auth user to the tenant row by email,
-    // but ONLY where tenant_user_id is currently null.
+    // but ONLY where user_id is currently null.
     const { data, error } = await supabaseAdmin
       .from('tenants')
       .update({
-        tenant_user_id: userId,
+        user_id: userId,
         ...(tenantName ? { name: tenantName } : {}),
       })
       .eq('email', email)
-      .is('tenant_user_id', null)
+      .is('user_id', null)
       .select('id');
 
     if (error) {
