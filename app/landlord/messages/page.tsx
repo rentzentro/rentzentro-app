@@ -14,7 +14,7 @@ type LandlordRow = {
 
 type TeamMemberRow = {
   id: number;
-  owner_user_id: string;
+  owner_user_id: string; // landlord's auth UID
   member_user_id: string | null;
   status: string | null;
 };
@@ -150,15 +150,11 @@ export default function LandlordMessagesPage() {
           const typedTeam = teamRow as TeamMemberRow;
           teamFlag = true;
 
-          // 2a) Load the REAL landlord row for this owner.
-          // owner_user_id might be either:
-          //   - landlord.user_id (auth UID, uuid)
-          //   - landlord.id (numeric)
-          // So we try user_id first, then id if owner_user_id is numeric-like.
-
+          // owner_user_id is the landlord's auth UID (it matches landlords.user_id)
+          // We *try* to load the landlord row for nicer labels, but if RLS blocks us
+          // we fall back to a lightweight landlord object with just user_id.
           let ownerLandlord: LandlordRow | null = null;
 
-          // Try match by landlord.user_id
           const { data: lByUser, error: lByUserErr } = await supabase
             .from('landlords')
             .select('id, name, email, user_id')
@@ -166,34 +162,22 @@ export default function LandlordMessagesPage() {
             .maybeSingle();
 
           if (lByUserErr) {
-            console.error(
-              'Error loading owner landlord by user_id:',
+            console.warn(
+              'Team member could not read landlord row (non-fatal):',
               lByUserErr
             );
           } else if (lByUser) {
             ownerLandlord = lByUser as LandlordRow;
           }
 
-          // If not found and owner_user_id is all digits, try landlord.id
-          if (!ownerLandlord && /^[0-9]+$/.test(typedTeam.owner_user_id)) {
-            const numericId = Number(typedTeam.owner_user_id);
-            const { data: lById, error: lByIdErr } = await supabase
-              .from('landlords')
-              .select('id, name, email, user_id')
-              .eq('id', numericId)
-              .maybeSingle();
-
-            if (lByIdErr) {
-              console.error('Error loading owner landlord by id:', lByIdErr);
-            } else if (lById) {
-              ownerLandlord = lById as LandlordRow;
-            }
-          }
-
           if (!ownerLandlord) {
-            throw new Error(
-              'Unable to load the landlord account for this team membership.'
-            );
+            // Fallback: we still know the landlord user_id; use that as the key
+            ownerLandlord = {
+              id: 0, // dummy; we won't rely on landlord_id in queries
+              name: null,
+              email: '',
+              user_id: typedTeam.owner_user_id,
+            };
           }
 
           resolvedLandlord = ownerLandlord;
@@ -252,12 +236,14 @@ export default function LandlordMessagesPage() {
       setError(null);
 
       try {
+        // We key conversations by landlord_user_id + tenant_id so team
+        // members can see the same thread without needing landlord.id
         const { data: rows, error: messagesError } = await supabase
           .from('messages')
           .select(
             'id, landlord_id, landlord_user_id, tenant_id, tenant_user_id, body, sender_type, sender_label, created_at, read_at'
           )
-          .eq('landlord_id', landlord.id)
+          .eq('landlord_user_id', landlord.user_id)
           .eq('tenant_id', selectedTenantId)
           .order('created_at', { ascending: true });
 
@@ -273,7 +259,7 @@ export default function LandlordMessagesPage() {
         await supabase
           .from('messages')
           .update({ read_at: new Date().toISOString() })
-          .eq('landlord_id', landlord.id)
+          .eq('landlord_user_id', landlord.user_id)
           .eq('tenant_id', selectedTenantId)
           .eq('sender_type', 'tenant')
           .is('read_at', null);
@@ -314,24 +300,22 @@ export default function LandlordMessagesPage() {
       const tenant = tenants.find((t) => t.id === selectedTenantId);
       if (!tenant) throw new Error('Tenant not found for this conversation.');
 
-      if (!landlord.id) {
-        throw new Error('Landlord account for this message could not be found.');
-      }
-
       const senderType: 'landlord' | 'team' = isTeamMember ? 'team' : 'landlord';
       const senderLabel =
         senderType === 'team'
           ? 'Team member'
           : landlord.name || landlord.email || 'Landlord';
 
-      // For team members, landlord_user_id = team member's auth uid
-      const landlordUserForMessage = isTeamMember
-        ? authUser.id
-        : landlord.user_id;
+      // landlord_user_id is the OWNER account key (same for landlord + all team)
+      const landlordUserForConversation = landlord.user_id;
+
+      // landlord_id is nice-to-have; for team with fallback landlord.id=0 it's OK
+      const landlordIdForConversation =
+        landlord.id && landlord.id > 0 ? landlord.id : null;
 
       const insertPayload = {
-        landlord_id: landlord.id,
-        landlord_user_id: landlordUserForMessage,
+        landlord_id: landlordIdForConversation,
+        landlord_user_id: landlordUserForConversation,
         tenant_id: tenant.id,
         tenant_user_id: tenant.user_id,
         body,
@@ -437,7 +421,9 @@ export default function LandlordMessagesPage() {
               <div className="rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1 text-[11px] text-slate-300">
                 {isTeamMember ? 'Team member for ' : 'Signed in as '}{' '}
                 <span className="font-medium">
-                  {landlord.name || landlord.email}
+                  {landlord.name ||
+                    landlord.email ||
+                    'linked landlord account'}
                 </span>
               </div>
             )}
@@ -457,7 +443,7 @@ export default function LandlordMessagesPage() {
           </div>
         </header>
 
-        {/* Error banner */}
+        {/* Error banner (soft) */}
         {error && (
           <div className="rounded-xl border border-red-500/70 bg-red-500/10 px-4 py-2 text-sm text-red-100">
             {error}
