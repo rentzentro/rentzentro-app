@@ -98,6 +98,9 @@ export default function LandlordPaymentsPage() {
   const [editNote, setEditNote] = useState<string>('');
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Delete payment state
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
   // ---------- Load data for this landlord / team owner ----------
 
   useEffect(() => {
@@ -317,7 +320,7 @@ export default function LandlordPaymentsPage() {
       resetForm();
       setShowForm(false);
       setFormMessage('Manual payment recorded.');
-      // Note: due date & tenant status are handled by the DB trigger
+      // Note: due date & tenant status are handled by the DB trigger / logic
     } catch (err: any) {
       console.error(err);
       setError(err?.message || 'Failed to record payment.');
@@ -400,11 +403,46 @@ export default function LandlordPaymentsPage() {
       );
       cancelEditPayment();
       setFormMessage('Payment updated.');
-      // Trigger only runs on INSERT, so due date will not bounce around on edits.
+      // Rent status / due date continue to be determined by your existing logic
     } catch (err: any) {
       console.error(err);
       setError(err?.message || 'Failed to update payment.');
       setSavingEdit(false);
+    }
+  };
+
+  // ---------- Delete payment helpers ----------
+
+  const handleDeletePayment = async (payment: Payment) => {
+    const confirmed = window.confirm(
+      'Delete this payment? If this payment was marking the most recent period as paid, the tenant may show as past due again.'
+    );
+    if (!confirmed) return;
+
+    setError(null);
+    setFormMessage(null);
+    setDeletingId(payment.id);
+
+    try {
+      const { error: delError } = await supabase
+        .from('payments')
+        .delete()
+        .eq('id', payment.id);
+
+      if (delError) {
+        console.error('Error deleting payment:', delError);
+        throw new Error(delError.message || 'Failed to delete payment.');
+      }
+
+      setPayments((prev) => prev.filter((p) => p.id !== payment.id));
+      setFormMessage(
+        'Payment deleted. If this was the payment keeping this period current, the unit will show as past due again based on your existing rent logic.'
+      );
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || 'Failed to delete payment.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -723,6 +761,8 @@ export default function LandlordPaymentsPage() {
                             }`
                           : p.property_id ?? '—';
 
+                        const isDeleting = deletingId === p.id;
+
                         return (
                           <tr
                             key={p.id}
@@ -747,13 +787,23 @@ export default function LandlordPaymentsPage() {
                               {p.note || '—'}
                             </td>
                             <td className="py-2 px-3 align-top">
-                              <button
-                                type="button"
-                                onClick={() => startEditPayment(p)}
-                                className="rounded-full border border-sky-500/70 bg-sky-500/10 px-3 py-1 text-[11px] text-sky-200 hover:bg-sky-500/20"
-                              >
-                                Edit
-                              </button>
+                              <div className="flex flex-wrap gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditPayment(p)}
+                                  className="rounded-full border border-sky-500/70 bg-sky-500/10 px-3 py-1 text-[11px] text-sky-200 hover:bg-sky-500/20"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePayment(p)}
+                                  disabled={isDeleting}
+                                  className="rounded-full border border-rose-500/70 bg-rose-500/10 px-3 py-1 text-[11px] text-rose-200 hover:bg-rose-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  {isDeleting ? 'Deleting…' : 'Delete'}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
