@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
-
-const resendApiKey =
-  process.env.RESEND_API_KEY || process.env.RESEND_API_TOKEN;
+import { resend } from '../../lib/resend';
 
 const FROM_EMAIL =
   process.env.RENTZENTRO_FROM_EMAIL ||
@@ -49,23 +46,13 @@ type TeamMemberRow = {
 };
 
 export async function POST(req: Request) {
-  if (!resendApiKey) {
-    console.error('RESEND_API_KEY is not configured.');
-    return NextResponse.json(
-      { error: 'Email is not configured.' },
-      { status: 500 }
-    );
-  }
-
+  // If Supabase admin is misconfigured, log + no-op so we don't break UI
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    console.error('Supabase admin credentials are not configured.');
-    return NextResponse.json(
-      { error: 'Server configuration error.' },
-      { status: 500 }
+    console.error(
+      'message-email: Supabase admin credentials are not configured.'
     );
+    return NextResponse.json({ ok: true });
   }
-
-  const resend = new Resend(resendApiKey);
 
   try {
     const body = (await req.json()) as { messageId?: string };
@@ -88,28 +75,23 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (msgError) {
-      console.error('Error loading message for email:', msgError);
-      return NextResponse.json(
-        { error: 'Unable to load message.' },
-        { status: 500 }
-      );
+      console.error('message-email: error loading message:', msgError);
+      return NextResponse.json({ ok: true }); // don't break UI
     }
 
     if (!msg) {
-      return NextResponse.json(
-        { error: 'Message not found.' },
-        { status: 404 }
-      );
+      console.error('message-email: message not found for id:', messageId);
+      return NextResponse.json({ ok: true });
     }
 
     const message = msg as MessageRecord;
 
     if (!message.body || !message.sender_type) {
-      console.error('Message missing body or sender_type for email:', message);
-      return NextResponse.json(
-        { error: 'Message not eligible for email notification.' },
-        { status: 400 }
+      console.error(
+        'message-email: missing body or sender_type for message:',
+        message
       );
+      return NextResponse.json({ ok: true });
     }
 
     // 2) Determine direction based on sender_type
@@ -122,15 +104,15 @@ export async function POST(req: Request) {
     ) {
       direction = 'landlord_or_team_to_tenant';
     } else {
-      console.error('Unknown sender_type for message email:', message);
-      return NextResponse.json({ ok: true }); // Do not crash UI
+      console.error('message-email: unknown sender_type:', message);
+      return NextResponse.json({ ok: true });
     }
 
     // 3) Load landlord + tenant rows
     let landlordRow: LandlordRow | null = null;
     let tenantRow: TenantRow | null = null;
 
-    // Landlord
+    // Landlord by landlord_id
     if (message.landlord_id != null) {
       const { data: lRow, error: lErr } = await supabaseAdmin
         .from('landlords')
@@ -139,12 +121,13 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (lErr) {
-        console.error('Error loading landlord for message email:', lErr);
+        console.error('message-email: landlord load error (by id):', lErr);
       } else if (lRow) {
         landlordRow = lRow as LandlordRow;
       }
     }
 
+    // Fallback landlord by landlord_user_id
     if (!landlordRow && message.landlord_user_id) {
       const { data: lRow2, error: lErr2 } = await supabaseAdmin
         .from('landlords')
@@ -154,7 +137,7 @@ export async function POST(req: Request) {
 
       if (lErr2) {
         console.error(
-          'Error loading landlord by user_id for message email:',
+          'message-email: landlord load error (by user_id):',
           lErr2
         );
       } else if (lRow2) {
@@ -162,7 +145,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Tenant
+    // Tenant by tenant_id
     if (message.tenant_id != null) {
       const { data: tRow, error: tErr } = await supabaseAdmin
         .from('tenants')
@@ -171,12 +154,13 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       if (tErr) {
-        console.error('Error loading tenant for message email:', tErr);
+        console.error('message-email: tenant load error (by id):', tErr);
       } else if (tRow) {
         tenantRow = tRow as TenantRow;
       }
     }
 
+    // Fallback tenant by tenant_user_id
     if (!tenantRow && message.tenant_user_id) {
       const { data: tRow2, error: tErr2 } = await supabaseAdmin
         .from('tenants')
@@ -186,7 +170,7 @@ export async function POST(req: Request) {
 
       if (tErr2) {
         console.error(
-          'Error loading tenant by user_id for message email:',
+          'message-email: tenant load error (by user_id):',
           tErr2
         );
       } else if (tRow2) {
@@ -196,11 +180,11 @@ export async function POST(req: Request) {
 
     if (!landlordRow || !tenantRow) {
       console.error(
-        'Missing landlord or tenant row for message email:',
+        'message-email: missing landlord or tenant row:',
         landlordRow,
         tenantRow
       );
-      return NextResponse.json({ ok: true }); // Don’t break UI; just skip email
+      return NextResponse.json({ ok: true }); // skip email, do not error
     }
 
     const landlordName = landlordRow.name || landlordRow.email;
@@ -211,7 +195,7 @@ export async function POST(req: Request) {
 
     if (!landlordEmail || !tenantEmail) {
       console.error(
-        'Missing landlordEmail or tenantEmail for message email:',
+        'message-email: missing landlordEmail or tenantEmail:',
         landlordEmail,
         tenantEmail
       );
@@ -233,7 +217,7 @@ export async function POST(req: Request) {
 
         if (teamError) {
           console.error(
-            'Error loading team members for message email:',
+            'message-email: team member load error:',
             teamError
           );
         } else if (teamRows && teamRows.length > 0) {
@@ -244,7 +228,10 @@ export async function POST(req: Request) {
           }
         }
       } catch (teamErr) {
-        console.error('Team member lookup threw for message email:', teamErr);
+        console.error(
+          'message-email: team member lookup threw:',
+          teamErr
+        );
       }
 
       // Deduplicate landlord + team emails
@@ -260,7 +247,7 @@ export async function POST(req: Request) {
     }
 
     if (recipients.length === 0) {
-      console.error('No recipients resolved for message email.');
+      console.error('message-email: no recipients resolved.');
       return NextResponse.json({ ok: true });
     }
 
@@ -299,20 +286,24 @@ export async function POST(req: Request) {
 
     const text = `${introLine}\n\nMessage preview:\n\n${messageBody}\n\nTo reply, log in to your RentZentro portal.`;
 
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to: recipients,
-      subject,
-      html,
-      text,
-    });
+    try {
+      await resend.emails.send({
+        from: FROM_EMAIL,
+        to: recipients,
+        subject,
+        html,
+        text,
+      });
+    } catch (sendErr) {
+      console.error('message-email: error sending email via Resend:', sendErr);
+      // still return ok so UI doesn't show "failed to send message"
+      return NextResponse.json({ ok: true });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('Error sending message email:', err);
-    return NextResponse.json(
-      { error: 'Failed to send email.' },
-      { status: 500 }
-    );
+    console.error('message-email: unexpected error:', err);
+    // never crash the UI – message has already been stored
+    return NextResponse.json({ ok: true });
   }
 }
