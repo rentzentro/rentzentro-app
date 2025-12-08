@@ -12,7 +12,7 @@ type TenantRow = {
   name: string | null;
   email: string;
   owner_id: string | null; // landlord user's UUID
-  user_id: string | null;  // auth.uid() for this tenant (may be null on older rows)
+  user_id: string | null; // auth.uid() for this tenant (may be null on older rows)
 };
 
 type LandlordRow = {
@@ -300,25 +300,17 @@ export default function TenantMessagesPage() {
       setMessages((prev) => [...prev, insertedRow]);
       setNewMessage('');
 
-      // ---------- Email notification: tenant -> landlord ----------
-      // Only fire if we actually know the landlord's email.
-      if (landlord && landlord.email) {
-        try {
-          await fetch('/api/message-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              direction: 'tenant_to_landlord',
-              landlordName: landlord.name || landlord.email || 'Your landlord',
-              landlordEmail: landlord.email,
-              tenantName: tenant.name || tenant.email,
-              tenantEmail: tenant.email,
-              messageBody: body,
-            }),
-          });
-        } catch (emailErr) {
-          console.warn('Tenant message email failed (non-blocking):', emailErr);
-        }
+      // ---------- Email notification: tenant -> landlord (best-effort) ----------
+      try {
+        await fetch('/api/message-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messageId: insertedRow.id,
+          }),
+        });
+      } catch (emailErr) {
+        console.warn('Tenant message email failed (non-blocking):', emailErr);
       }
     } catch (err: any) {
       console.error(err);
