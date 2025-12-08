@@ -70,77 +70,38 @@ const formatCurrency = (v: number | null | undefined) =>
         currency: 'USD',
       });
 
-// Normalize a date-only value from Supabase ("YYYY-MM-DD" or ISO) into a *local date*.
-// This avoids the 1-day shift from timezone offsets.
-const toLocalDateOnly = (iso: string | null | undefined): Date | null => {
-  if (!iso) return null;
-
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (match) {
-    const year = Number(match[1]);
-    const month = Number(match[2]); // 1–12
-    const day = Number(match[3]);
-    if (!year || !month || !day) return null;
-    return new Date(year, month - 1, day);
-  }
-
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-};
-
 const formatDate = (iso: string | null | undefined) => {
-  const d = toLocalDateOnly(iso);
-  if (!d) return '-';
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '-';
 
-  return d.toLocaleDateString('en-US', {
+  const local = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    d.getHours(),
+    d.getMinutes(),
+    d.getSeconds()
+  );
+
+  return local.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
 };
 
-// Safe date+time formatter for timestamps or date-only strings
 const formatDateTime = (iso: string | null | undefined) => {
   if (!iso) return '-';
-
-  try {
-    const match =
-      /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(iso);
-
-    if (match) {
-      const year = Number(match[1]);
-      const month = Number(match[2]);
-      const day = Number(match[3]);
-      const hour = match[4] ? Number(match[4]) : 0;
-      const minute = match[5] ? Number(match[5]) : 0;
-      const second = match[6] ? Number(match[6]) : 0;
-
-      if (!year || !month || !day) return '-';
-
-      // Build a *local* date/time (no timezone shift off by a day)
-      const d = new Date(year, month - 1, day, hour, minute, second);
-      return d.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-    }
-
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 };
 
 const formatStatusLabel = (status: string | null) => {
@@ -181,6 +142,11 @@ export default function TenantPortalPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+
+  // NEW: outstanding balance for the *current* unpaid month
+  const [outstandingAmount, setOutstandingAmount] = useState<number | null>(
+    null
+  );
 
   // ---------- Load tenant + related data ----------
 
@@ -297,7 +263,43 @@ export default function TenantPortalPage() {
 
         setProperty(prop);
 
-        // Payments
+        // -------- Outstanding balance for the current unpaid month --------
+        // We mirror the trigger logic:
+        // total_paid = SUM(payments.amount for this property)
+        // remainder = total_paid % monthly_rent
+        // outstanding = monthly_rent - remainder (while this month is unpaid)
+        let outstanding: number | null = null;
+
+        if (prop && prop.monthly_rent && prop.monthly_rent > 0) {
+          const { data: sumRow, error: sumError } = await supabase
+            .from('payments')
+            .select('total:sum(amount)')
+            .eq('property_id', prop.id)
+            .maybeSingle();
+
+          if (sumError) {
+            console.error(
+              'Tenant portal outstanding sum error:',
+              sumError
+            );
+          } else {
+            const totalPaid = Number(sumRow?.total ?? 0);
+            const rent = Number(prop.monthly_rent);
+            if (!Number.isNaN(rent) && rent > 0) {
+              const remainder = totalPaid % rent; // partial towards current month
+              const dueNow = rent - remainder;
+              if (dueNow > 0 && !Number.isNaN(dueNow)) {
+                outstanding = dueNow;
+              } else {
+                outstanding = 0;
+              }
+            }
+          }
+        }
+
+        setOutstandingAmount(outstanding);
+
+        // Payments (we still show the recent 10, but outstanding uses full sum above)
         const { data: payRows, error: payError } = await supabase
           .from('payments')
           .select('id, tenant_id, property_id, amount, paid_on, method, note')
@@ -480,15 +482,21 @@ export default function TenantPortalPage() {
 
   let isRentOverdue = false;
   if (property?.next_due_date) {
-    const dueDate = toLocalDateOnly(property.next_due_date);
-    if (dueDate) {
-      const now = new Date();
-      const todayDateOnly = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
+    const due = new Date(property.next_due_date);
+    if (!Number.isNaN(due.getTime())) {
+      const today = new Date();
+      // Compare by date only to avoid timezone hour differences
+      const dueDateOnly = new Date(
+        due.getFullYear(),
+        due.getMonth(),
+        due.getDate()
       );
-      isRentOverdue = dueDate.getTime() < todayDateOnly.getTime();
+      const todayDateOnly = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      );
+      isRentOverdue = dueDateOnly.getTime() < todayDateOnly.getTime();
     }
   }
 
@@ -505,6 +513,14 @@ export default function TenantPortalPage() {
   const accountStatusDotClasses = isRentOverdue
     ? 'inline-block h-1.5 w-1.5 rounded-full bg-red-400'
     : 'inline-block h-1.5 w-1.5 rounded-full bg-emerald-400';
+
+  // What number + label do we show in the big "rent" card?
+  const displayAmount =
+    isRentOverdue && outstandingAmount != null
+      ? outstandingAmount
+      : currentRent;
+
+  const currentRentLabel = isRentOverdue ? 'Amount due' : 'Current rent';
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -575,13 +591,21 @@ export default function TenantPortalPage() {
             {/* Current rent / actions */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Current rent
+                {currentRentLabel}
               </p>
               <div className="mt-1 flex items-baseline gap-2">
                 <p className="text-2xl font-semibold text-slate-50">
-                  {formatCurrency(currentRent)}
+                  {formatCurrency(displayAmount)}
                 </p>
               </div>
+              {isRentOverdue && currentRent && (
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Monthly rent:{' '}
+                  <span className="text-slate-200">
+                    {formatCurrency(currentRent)}
+                  </span>
+                </p>
+              )}
               <p className="mt-1 text-xs text-slate-400">
                 Next due date:{' '}
                 <span className="text-slate-200">
