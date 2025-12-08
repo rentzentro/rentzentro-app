@@ -288,6 +288,7 @@ export default function LandlordMessagesPage() {
         throw new Error('Please log in again to send a message.');
       }
 
+      const authUser = authData.user;
       const tenant = tenants.find((t) => t.id === selectedTenantId);
       if (!tenant) throw new Error('Tenant not found for this conversation.');
 
@@ -302,9 +303,16 @@ export default function LandlordMessagesPage() {
           ? 'Team member'
           : landlord.name || landlord.email || 'Landlord';
 
+      // IMPORTANT:
+      // For team members, set landlord_user_id = team member's auth uid
+      // so RLS that checks landlord_user_id = auth.uid() will pass.
+      const landlordUserForMessage = isTeamMember
+        ? authUser.id
+        : landlord.user_id;
+
       const insertPayload = {
         landlord_id: landlord.id,
-        landlord_user_id: landlord.user_id,
+        landlord_user_id: landlordUserForMessage,
         tenant_id: tenant.id,
         tenant_user_id: tenant.user_id,
         body,
@@ -340,7 +348,7 @@ export default function LandlordMessagesPage() {
         });
       } catch (emailErr) {
         console.warn(
-          'Failed to send landlord→tenant email notification:',
+          'Failed to send landlord/team→tenant email notification:',
           emailErr
         );
       }
