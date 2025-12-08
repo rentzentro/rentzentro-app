@@ -151,34 +151,52 @@ export default function LandlordMessagesPage() {
           teamFlag = true;
 
           // 2a) Load the REAL landlord row for this owner.
-          // owner_user_id might be either the landlord's user_id (auth UID)
-          // OR the landlord table id, so we try both.
-          const { data: landlordOwner, error: landlordOwnerError } =
-            await supabase
+          // owner_user_id might be either:
+          //   - landlord.user_id (auth UID, uuid)
+          //   - landlord.id (numeric)
+          // So we try user_id first, then id if owner_user_id is numeric-like.
+
+          let ownerLandlord: LandlordRow | null = null;
+
+          // Try match by landlord.user_id
+          const { data: lByUser, error: lByUserErr } = await supabase
+            .from('landlords')
+            .select('id, name, email, user_id')
+            .eq('user_id', typedTeam.owner_user_id)
+            .maybeSingle();
+
+          if (lByUserErr) {
+            console.error(
+              'Error loading owner landlord by user_id:',
+              lByUserErr
+            );
+          } else if (lByUser) {
+            ownerLandlord = lByUser as LandlordRow;
+          }
+
+          // If not found and owner_user_id is all digits, try landlord.id
+          if (!ownerLandlord && /^[0-9]+$/.test(typedTeam.owner_user_id)) {
+            const numericId = Number(typedTeam.owner_user_id);
+            const { data: lById, error: lByIdErr } = await supabase
               .from('landlords')
               .select('id, name, email, user_id')
-              .or(
-                `user_id.eq.${typedTeam.owner_user_id},id.eq.${typedTeam.owner_user_id}`
-              )
+              .eq('id', numericId)
               .maybeSingle();
 
-          if (landlordOwnerError) {
-            console.error(
-              'Error loading owner landlord row for messages:',
-              landlordOwnerError
-            );
+            if (lByIdErr) {
+              console.error('Error loading owner landlord by id:', lByIdErr);
+            } else if (lById) {
+              ownerLandlord = lById as LandlordRow;
+            }
+          }
+
+          if (!ownerLandlord) {
             throw new Error(
               'Unable to load the landlord account for this team membership.'
             );
           }
 
-          if (!landlordOwner) {
-            throw new Error(
-              'Landlord account for this team membership could not be found. Please ask the landlord to log in and confirm their account.'
-            );
-          }
-
-          resolvedLandlord = landlordOwner as LandlordRow;
+          resolvedLandlord = ownerLandlord;
         }
 
         if (!resolvedLandlord) {
@@ -296,7 +314,6 @@ export default function LandlordMessagesPage() {
       const tenant = tenants.find((t) => t.id === selectedTenantId);
       if (!tenant) throw new Error('Tenant not found for this conversation.');
 
-      // Make sure we never insert an invalid landlord_id
       if (!landlord.id) {
         throw new Error('Landlord account for this message could not be found.');
       }
@@ -307,7 +324,7 @@ export default function LandlordMessagesPage() {
           ? 'Team member'
           : landlord.name || landlord.email || 'Landlord';
 
-      // For team members, set landlord_user_id = team member's auth uid
+      // For team members, landlord_user_id = team member's auth uid
       const landlordUserForMessage = isTeamMember
         ? authUser.id
         : landlord.user_id;
