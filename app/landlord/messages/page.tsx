@@ -150,12 +150,16 @@ export default function LandlordMessagesPage() {
           const typedTeam = teamRow as TeamMemberRow;
           teamFlag = true;
 
-          // 2a) Load the REAL landlord row for this owner
+          // 2a) Load the REAL landlord row for this owner.
+          // owner_user_id might be either the landlord's user_id (auth UID)
+          // OR the landlord table id, so we try both.
           const { data: landlordOwner, error: landlordOwnerError } =
             await supabase
               .from('landlords')
               .select('id, name, email, user_id')
-              .eq('user_id', typedTeam.owner_user_id)
+              .or(
+                `user_id.eq.${typedTeam.owner_user_id},id.eq.${typedTeam.owner_user_id}`
+              )
               .maybeSingle();
 
           if (landlordOwnerError) {
@@ -303,9 +307,7 @@ export default function LandlordMessagesPage() {
           ? 'Team member'
           : landlord.name || landlord.email || 'Landlord';
 
-      // IMPORTANT:
       // For team members, set landlord_user_id = team member's auth uid
-      // so RLS that checks landlord_user_id = auth.uid() will pass.
       const landlordUserForMessage = isTeamMember
         ? authUser.id
         : landlord.user_id;
