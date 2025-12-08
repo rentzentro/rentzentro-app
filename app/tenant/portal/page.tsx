@@ -1,3 +1,4 @@
+// app/tenant/portal/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -143,10 +144,9 @@ export default function TenantPortalPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
 
-  // NEW: outstanding balance for the *current* unpaid month
-  const [outstandingAmount, setOutstandingAmount] = useState<number | null>(
-    null
-  );
+  // NEW: track how much of this period’s rent is paid vs still due
+  const [periodPaid, setPeriodPaid] = useState<number | null>(null);
+  const [periodRemaining, setPeriodRemaining] = useState<number | null>(null);
 
   // ---------- Load tenant + related data ----------
 
@@ -192,6 +192,8 @@ export default function TenantPortalPage() {
           setPayments([]);
           setDocuments([]);
           setMaintenance([]);
+          setPeriodPaid(null);
+          setPeriodRemaining(null);
           setError(
             'We couldn’t find a tenant profile for this email yet. ' +
               'This usually means your landlord hasn’t added you to their tenant list, or used a different email. ' +
@@ -263,54 +265,57 @@ export default function TenantPortalPage() {
 
         setProperty(prop);
 
-        // -------- Outstanding balance for the current unpaid month --------
-        // We mirror the trigger logic:
-        // total_paid = SUM(payments.amount for this property)
-        // remainder = total_paid % monthly_rent
-        // outstanding = monthly_rent - remainder (while this month is unpaid)
-        let outstanding: number | null = null;
+        // Effective rent (property preferred, fall back to tenant)
+        const effectiveRent =
+          prop?.monthly_rent ?? t.monthly_rent ?? null;
 
-        if (prop && prop.monthly_rent && prop.monthly_rent > 0) {
-          const { data: sumRow, error: sumError } = await supabase
-            .from('payments')
-            .select('total:sum(amount)')
-            .eq('property_id', prop.id)
-            .maybeSingle();
-
-          if (sumError) {
-            console.error(
-              'Tenant portal outstanding sum error:',
-              sumError
-            );
-          } else {
-            const totalPaid = Number(sumRow?.total ?? 0);
-            const rent = Number(prop.monthly_rent);
-            if (!Number.isNaN(rent) && rent > 0) {
-              const remainder = totalPaid % rent; // partial towards current month
-              const dueNow = rent - remainder;
-              if (dueNow > 0 && !Number.isNaN(dueNow)) {
-                outstanding = dueNow;
-              } else {
-                outstanding = 0;
-              }
-            }
-          }
-        }
-
-        setOutstandingAmount(outstanding);
-
-        // Payments (we still show the recent 10, but outstanding uses full sum above)
+        // Payments
         const { data: payRows, error: payError } = await supabase
           .from('payments')
           .select('id, tenant_id, property_id, amount, paid_on, method, note')
           .eq('tenant_id', t.id)
           .order('paid_on', { ascending: false })
-          .limit(10);
+          .limit(50);
 
         if (payError) {
           console.error('Tenant portal payments error:', payError);
         }
-        setPayments((payRows || []) as PaymentRow[]);
+
+        const payData = (payRows || []) as PaymentRow[];
+        setPayments(payData);
+
+        // ---------- Compute “this period” paid vs remaining ----------
+        if (effectiveRent != null && prop?.next_due_date) {
+          const start = new Date(prop.next_due_date);
+          if (!Number.isNaN(start.getTime())) {
+            let paidForThisPeriod = 0;
+
+            for (const p of payData) {
+              if (!p.amount || !p.paid_on) continue;
+              const d = new Date(p.paid_on);
+              if (Number.isNaN(d.getTime())) continue;
+
+              // All payments made on or after the current next_due_date
+              // count toward the earliest unpaid period.
+              if (d >= start) {
+                paidForThisPeriod += p.amount;
+              }
+            }
+
+            // Cap at one month’s rent for the “this period” display
+            const capped = Math.min(effectiveRent, paidForThisPeriod);
+            const remaining = Math.max(0, effectiveRent - capped);
+
+            setPeriodPaid(capped);
+            setPeriodRemaining(remaining);
+          } else {
+            setPeriodPaid(null);
+            setPeriodRemaining(null);
+          }
+        } else {
+          setPeriodPaid(null);
+          setPeriodRemaining(null);
+        }
 
         // Documents (by property OR tenant)
         let docQuery = supabase
@@ -485,18 +490,7 @@ export default function TenantPortalPage() {
     const due = new Date(property.next_due_date);
     if (!Number.isNaN(due.getTime())) {
       const today = new Date();
-      // Compare by date only to avoid timezone hour differences
-      const dueDateOnly = new Date(
-        due.getFullYear(),
-        due.getMonth(),
-        due.getDate()
-      );
-      const todayDateOnly = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate()
-      );
-      isRentOverdue = dueDateOnly.getTime() < todayDateOnly.getTime();
+      isRentOverdue = due.getTime() < today.getTime();
     }
   }
 
@@ -513,14 +507,6 @@ export default function TenantPortalPage() {
   const accountStatusDotClasses = isRentOverdue
     ? 'inline-block h-1.5 w-1.5 rounded-full bg-red-400'
     : 'inline-block h-1.5 w-1.5 rounded-full bg-emerald-400';
-
-  // What number + label do we show in the big "rent" card?
-  const displayAmount =
-    isRentOverdue && outstandingAmount != null
-      ? outstandingAmount
-      : currentRent;
-
-  const currentRentLabel = isRentOverdue ? 'Amount due' : 'Current rent';
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -591,21 +577,13 @@ export default function TenantPortalPage() {
             {/* Current rent / actions */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">
-                {currentRentLabel}
+                Current rent
               </p>
               <div className="mt-1 flex items-baseline gap-2">
                 <p className="text-2xl font-semibold text-slate-50">
-                  {formatCurrency(displayAmount)}
+                  {formatCurrency(currentRent)}
                 </p>
               </div>
-              {isRentOverdue && currentRent && (
-                <p className="mt-1 text-[11px] text-slate-400">
-                  Monthly rent:{' '}
-                  <span className="text-slate-200">
-                    {formatCurrency(currentRent)}
-                  </span>
-                </p>
-              )}
               <p className="mt-1 text-xs text-slate-400">
                 Next due date:{' '}
                 <span className="text-slate-200">
@@ -619,6 +597,28 @@ export default function TenantPortalPage() {
                   {property?.unit_label ? ` · ${property.unit_label}` : ''}
                 </span>
               </p>
+
+              {/* NEW: show this period’s paid / remaining when we can compute it */}
+              {currentRent != null && property?.next_due_date && (
+                <>
+                  <p className="mt-2 text-xs text-slate-400">
+                    Paid toward this period:{' '}
+                    <span className="text-slate-200">
+                      {periodPaid != null
+                        ? formatCurrency(periodPaid)
+                        : formatCurrency(0)}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Still due this period:{' '}
+                    <span className="text-slate-200">
+                      {periodRemaining != null
+                        ? formatCurrency(periodRemaining)
+                        : formatCurrency(currentRent)}
+                    </span>
+                  </p>
+                </>
+              )}
 
               <div className="mt-4 flex flex-col gap-2">
                 <button
