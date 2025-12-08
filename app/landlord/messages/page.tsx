@@ -192,7 +192,10 @@ export default function LandlordMessagesPage() {
           .order('name', { ascending: true });
 
         if (tenantsError) {
-          console.error('Error loading tenants for landlord messages:', tenantsError);
+          console.error(
+            'Error loading tenants for landlord messages:',
+            tenantsError
+          );
           throw new Error('Unable to load your tenants for messaging.');
         }
 
@@ -326,22 +329,20 @@ export default function LandlordMessagesPage() {
       setMessages((prev) => [...prev, newRow]);
       setNewMessage('');
 
-      // Fire-and-forget email notification to tenant
+      // Fire-and-forget email notification to tenant using messageId
       try {
         await fetch('/api/message-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            direction: 'landlord_or_team_to_tenant',
-            landlordName: landlord.name || landlord.email || 'Your landlord',
-            landlordEmail: landlord.email,
-            tenantName: tenant.name || tenant.email,
-            tenantEmail: tenant.email,
-            messageBody: body,
+            messageId: newRow.id,
           }),
         });
       } catch (emailErr) {
-        console.warn('Failed to send landlord→tenant email notification:', emailErr);
+        console.warn(
+          'Failed to send landlord→tenant email notification:',
+          emailErr
+        );
       }
     } catch (err: any) {
       console.error(err);
