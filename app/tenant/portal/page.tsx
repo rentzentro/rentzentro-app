@@ -164,31 +164,6 @@ export default function TenantPortalPage() {
           throw new Error('Unable to load tenant: missing account data.');
         }
 
-        // First, ensure the tenant row is linked to this auth user via service-role API
-        try {
-          const res = await fetch('/api/link-tenant-user', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email,
-              userId: authUserId,
-              tenantName:
-                (user?.user_metadata as any)?.full_name ||
-                (user?.user_metadata as any)?.name ||
-                undefined,
-            }),
-          });
-
-          const linkData = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            console.error('link-tenant-user error:', linkData);
-          } else {
-            console.log('link-tenant-user result:', linkData);
-          }
-        } catch (linkErr) {
-          console.error('link-tenant-user fetch failed:', linkErr);
-        }
-
         // Tenant: prefer user_id match, fall back to email
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
@@ -218,6 +193,24 @@ export default function TenantPortalPage() {
               'Please contact your landlord to confirm they added you with this exact email address.'
           );
           return;
+        }
+
+        // --- Auto-link tenant.user_id on first login ---
+        if (!t.user_id) {
+          const { data: updated, error: updateError } = await supabase
+            .from('tenants')
+            .update({ user_id: authUserId })
+            .eq('id', t.id)
+            .select(
+              'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id'
+            )
+            .maybeSingle();
+
+          if (updateError) {
+            console.error('Failed to link tenant.user_id:', updateError);
+          } else if (updated) {
+            t = updated as TenantRow;
+          }
         }
 
         setTenant(t);
@@ -313,13 +306,14 @@ export default function TenantPortalPage() {
         }
         setMaintenance((maintRows || []) as MaintenanceRow[]);
 
-        // Unread messages for this tenant (from landlord)
+        // ---------- Unread messages badge (landlord OR team) ----------
         if (t.user_id) {
           const { data: unreadRows, error: unreadError } = await supabase
             .from('messages')
             .select('id')
             .eq('tenant_user_id', t.user_id)
-            .eq('sender_type', 'landlord')
+            // 👇 CHANGE: count both landlord and team messages as unread
+            .in('sender_type', ['landlord', 'team'])
             .is('read_at', null);
 
           if (unreadError) {
@@ -451,7 +445,6 @@ export default function TenantPortalPage() {
     const due = new Date(property.next_due_date);
     if (!Number.isNaN(due.getTime())) {
       const today = new Date();
-      // Compare dates ignoring time zone edge issues a bit
       isRentOverdue = due.getTime() < today.getTime();
     }
   }
