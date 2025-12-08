@@ -55,8 +55,38 @@ const formatCurrency = (v: number | null | undefined) =>
 // Normalize a date from Supabase for <input type="date">
 const toDateInputValue = (iso: string | null | undefined): string => {
   if (!iso) return '';
-  // Handles both "YYYY-MM-DD" and ISO timestamps
+  // Handles both "YYYY-MM-DD" and ISO timestamps like "2025-01-01T00:00:00Z"
   return iso.slice(0, 10);
+};
+
+// Human-readable lease date label (safe for date-only or ISO)
+const formatLeaseDateLabel = (value: string | null | undefined): string => {
+  if (!value) return '—';
+
+  // Prefer treating "YYYY-MM-DD" as a pure date (no timezone shift)
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]); // 1–12
+    const day = Number(match[3]);
+    if (!year || !month || !day) return '—';
+
+    const d = new Date(year, month - 1, day);
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+
+  // Fallback for any other ISO-ish value
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 };
 
 // ---------- Component ----------
@@ -855,11 +885,8 @@ export default function LandlordTenantsPage() {
                       {(t.lease_start || t.lease_end) && (
                         <p className="text-[11px] text-slate-500">
                           Lease:{' '}
-                          {t.lease_start
-                            ? toDateInputValue(t.lease_start)
-                            : '—'}{' '}
-                          to{' '}
-                          {t.lease_end ? toDateInputValue(t.lease_end) : '—'}
+                          {formatLeaseDateLabel(t.lease_start)} to{' '}
+                          {formatLeaseDateLabel(t.lease_end)}
                         </p>
                       )}
                     </div>

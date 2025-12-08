@@ -70,38 +70,77 @@ const formatCurrency = (v: number | null | undefined) =>
         currency: 'USD',
       });
 
-const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '-';
+// Normalize a date-only value from Supabase ("YYYY-MM-DD" or ISO) into a *local date*.
+// This avoids the 1-day shift from timezone offsets.
+const toLocalDateOnly = (iso: string | null | undefined): Date | null => {
+  if (!iso) return null;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]); // 1–12
+    const day = Number(match[3]);
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day);
+  }
+
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '-';
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
 
-  const local = new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    d.getHours(),
-    d.getMinutes(),
-    d.getSeconds()
-  );
+const formatDate = (iso: string | null | undefined) => {
+  const d = toLocalDateOnly(iso);
+  if (!d) return '-';
 
-  return local.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
 };
 
+// Safe date+time formatter for timestamps or date-only strings
 const formatDateTime = (iso: string | null | undefined) => {
   if (!iso) return '-';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '-';
-  return d.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+
+  try {
+    const match =
+      /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(iso);
+
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      const hour = match[4] ? Number(match[4]) : 0;
+      const minute = match[5] ? Number(match[5]) : 0;
+      const second = match[6] ? Number(match[6]) : 0;
+
+      if (!year || !month || !day) return '-';
+
+      // Build a *local* date/time (no timezone shift off by a day)
+      const d = new Date(year, month - 1, day, hour, minute, second);
+      return d.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    }
+
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
 };
 
 const formatStatusLabel = (status: string | null) => {
@@ -312,7 +351,6 @@ export default function TenantPortalPage() {
             .from('messages')
             .select('id')
             .eq('tenant_user_id', t.user_id)
-            // 👇 CHANGE: count both landlord and team messages as unread
             .in('sender_type', ['landlord', 'team'])
             .is('read_at', null);
 
@@ -442,10 +480,15 @@ export default function TenantPortalPage() {
 
   let isRentOverdue = false;
   if (property?.next_due_date) {
-    const due = new Date(property.next_due_date);
-    if (!Number.isNaN(due.getTime())) {
-      const today = new Date();
-      isRentOverdue = due.getTime() < today.getTime();
+    const dueDate = toLocalDateOnly(property.next_due_date);
+    if (dueDate) {
+      const now = new Date();
+      const todayDateOnly = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
+      isRentOverdue = dueDate.getTime() < todayDateOnly.getTime();
     }
   }
 

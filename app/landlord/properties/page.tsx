@@ -26,9 +26,29 @@ const formatCurrency = (v: number | null | undefined) =>
         maximumFractionDigits: 2,
       });
 
-const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '-';
-  const d = new Date(iso);
+// SAFE date formatter: avoids timezone issues for plain YYYY-MM-DD
+const formatDate = (value: string | null | undefined) => {
+  if (!value) return '-';
+
+  // If it looks like "2025-01-01", treat it as a date-only value
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (dateOnlyMatch) {
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]); // 1–12
+    const day = Number(dateOnlyMatch[3]);
+
+    if (!year || !month || !day) return '-';
+
+    const d = new Date(year, month - 1, day);
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+
+  // Fallback for true datetime values
+  const d = new Date(value);
   if (isNaN(d.getTime())) return '-';
   return d.toLocaleDateString('en-US', {
     month: 'short',
@@ -113,6 +133,7 @@ export default function LandlordPropertiesPage() {
     setUnitLabel(p.unit_label || '');
     setMonthlyRent(p.monthly_rent != null ? String(p.monthly_rent) : '');
     setStatus(p.status || 'Current');
+    // next_due_date is stored as a date string (YYYY-MM-DD) → safe for the input
     setNextDueDate(p.next_due_date || '');
     setError(null);
     setSuccess(null);
@@ -156,6 +177,7 @@ export default function LandlordPropertiesPage() {
         unit_label: unitLabel.trim() || null,
         monthly_rent: monthlyRent ? Number(monthlyRent) : null,
         status: status.trim() || null,
+        // nextDueDate comes directly from the <input type="date" /> as YYYY-MM-DD
         next_due_date: nextDueDate || null,
       };
 

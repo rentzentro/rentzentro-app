@@ -44,10 +44,47 @@ export default function LandlordPaymentsPage() {
     loadPayments();
   }, []);
 
+  // ---------- Helpers ----------
+
   const formatDateTime = (iso: string | null | undefined) => {
     if (!iso) return '—';
+
     try {
-      return new Date(iso).toLocaleString();
+      // Handle both "YYYY-MM-DD" and full ISO timestamps
+      const match =
+        /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(iso);
+
+      if (match) {
+        const year = Number(match[1]);
+        const month = Number(match[2]); // 1–12
+        const day = Number(match[3]);
+        const hour = match[4] ? Number(match[4]) : 0;
+        const minute = match[5] ? Number(match[5]) : 0;
+        const second = match[6] ? Number(match[6]) : 0;
+
+        if (!year || !month || !day) return '—';
+
+        // Construct as a local date/time so we don't cross days due to timezone offsets
+        const d = new Date(year, month - 1, day, hour, minute, second);
+        return d.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+      }
+
+      // Fallback for anything else that still parses
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
     } catch {
       return iso;
     }
@@ -107,8 +144,8 @@ export default function LandlordPaymentsPage() {
                 No payments recorded yet
               </h2>
               <p className="mt-1 max-w-md text-sm text-slate-400">
-                Once tenants start paying online, their payments will show up here
-                automatically.
+                Once tenants start paying online, their payments will show up
+                here automatically.
               </p>
               <p className="mt-3 text-[11px] text-slate-500">
                 Tip: Make sure your tenants have been invited and can log in to
@@ -188,8 +225,8 @@ export default function LandlordPaymentsPage() {
 
         {/* Small hint */}
         <p className="mt-4 text-[11px] text-slate-500">
-          Payment information is for record-keeping only. Always confirm funds in
-          your bank account before handing over keys or issuing refunds.
+          Payment information is for record-keeping only. Always confirm funds
+          in your bank account before handing over keys or issuing refunds.
         </p>
       </div>
     </main>

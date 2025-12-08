@@ -70,30 +70,52 @@ const formatCurrency = (v: number | null | undefined) =>
         maximumFractionDigits: 2,
       });
 
-const formatDate = (iso: string | null | undefined) => {
-  if (!iso) return '-';
-  const d = new Date(iso);
+// Safe date formatter that avoids timezone shifts for plain YYYY-MM-DD values
+const formatDate = (value: string | null | undefined) => {
+  if (!value) return '-';
+
+  // If it's a plain date like "2025-01-01", avoid timezone parsing
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (dateOnlyMatch) {
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]); // 1–12
+    const day = Number(dateOnlyMatch[3]);
+
+    if (!year || !month || !day) return '-';
+
+    const d = new Date(year, month - 1, day);
+    return d.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+
+  // Fallback for real datetime strings
+  const d = new Date(value);
   if (isNaN(d.getTime())) return '-';
 
-  const local = new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    d.getHours(),
-    d.getMinutes(),
-    d.getSeconds()
-  );
-
-  return local.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
 };
 
-const parseDueDate = (iso: string | null | undefined) => {
-  if (!iso) return null;
-  const d = new Date(iso);
+// Parse due dates for comparisons, also guarding against timezone shifts
+const parseDueDate = (value: string | null | undefined) => {
+  if (!value) return null;
+
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (dateOnlyMatch) {
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]);
+    const day = Number(dateOnlyMatch[3]);
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day);
+  }
+
+  const d = new Date(value);
   if (isNaN(d.getTime())) return null;
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 };
