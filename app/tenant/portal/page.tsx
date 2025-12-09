@@ -144,7 +144,7 @@ export default function TenantPortalPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
 
-  // NEW: track how much of this period’s rent is paid vs still due
+  // Track how much of this period’s rent is paid vs still due
   const [periodPaid, setPeriodPaid] = useState<number | null>(null);
   const [periodRemaining, setPeriodRemaining] = useState<number | null>(null);
 
@@ -397,11 +397,21 @@ export default function TenantPortalPage() {
   const handlePayWithCard = async () => {
     if (!tenant) return;
 
-    const amount = property?.monthly_rent ?? tenant.monthly_rent ?? 0;
+    const baseRent = property?.monthly_rent ?? tenant.monthly_rent ?? 0;
+
+    // If there is a remaining amount for this period, only charge that.
+    let amount = baseRent;
+    if (
+      property?.next_due_date &&
+      periodRemaining != null &&
+      periodRemaining > 0
+    ) {
+      amount = periodRemaining;
+    }
 
     if (!amount || amount <= 0) {
       setError(
-        'Your monthly rent amount is not set. Please contact your landlord.'
+        'Your rent amount is not set or fully paid for this period. Please contact your landlord if this looks wrong.'
       );
       setSuccess(null);
       return;
@@ -482,6 +492,20 @@ export default function TenantPortalPage() {
 
   const currentRent =
     property?.monthly_rent ?? tenant.monthly_rent ?? null;
+
+  // Decide what the button will try to charge right now
+  let amountToPayNow: number | null = null;
+  if (currentRent != null && currentRent > 0) {
+    if (
+      property?.next_due_date &&
+      periodRemaining != null &&
+      periodRemaining > 0
+    ) {
+      amountToPayNow = periodRemaining;
+    } else {
+      amountToPayNow = currentRent;
+    }
+  }
 
   // ---------- Derived account / standing status ----------
 
@@ -598,7 +622,7 @@ export default function TenantPortalPage() {
                 </span>
               </p>
 
-              {/* NEW: show this period’s paid / remaining when we can compute it */}
+              {/* “This period” paid / remaining */}
               {currentRent != null && property?.next_due_date && (
                 <>
                   <p className="mt-2 text-xs text-slate-400">
@@ -624,11 +648,13 @@ export default function TenantPortalPage() {
                 <button
                   type="button"
                   onClick={handlePayWithCard}
-                  disabled={paying}
+                  disabled={paying || amountToPayNow == null}
                   className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {paying
                     ? 'Starting payment…'
+                    : amountToPayNow != null
+                    ? `Pay ${formatCurrency(amountToPayNow)} now`
                     : 'Pay rent securely with Card / ACH'}
                 </button>
               </div>
