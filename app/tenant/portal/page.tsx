@@ -76,9 +76,9 @@ const parseSupabaseDate = (value: string | null | undefined): Date | null => {
 };
 
 const formatCurrency = (v: number | null | undefined) =>
-  v == null || isNaN(v as any)
+  v == null || isNaN(v)
     ? '-'
-    : (v as number).toLocaleString('en-US', {
+    : v.toLocaleString('en-US', {
         style: 'currency',
         currency: 'USD',
       });
@@ -146,13 +146,14 @@ export default function TenantPortalPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
 
-  // Track *total* amount paid vs *total* outstanding since first unpaid month
-  const [periodPaid, setPeriodPaid] = useState<number | null>(null);
-  const [periodRemaining, setPeriodRemaining] = useState<number | null>(null);
-
-  // Auto-pay
-  const [autopayEnabled, setAutopayEnabled] = useState<boolean | null>(null);
-  const [autopayLoading, setAutopayLoading] = useState(false);
+  // Multi-month overdue tracking
+  const [monthsBehind, setMonthsBehind] = useState(0);
+  const [totalPaidTowardOverdue, setTotalPaidTowardOverdue] = useState<
+    number | null
+  >(null);
+  const [totalOutstandingOverdue, setTotalOutstandingOverdue] = useState<
+    number | null
+  >(null);
 
   // ---------- Load tenant + related data ----------
 
@@ -198,13 +199,11 @@ export default function TenantPortalPage() {
           setPayments([]);
           setDocuments([]);
           setMaintenance([]);
-          setPeriodPaid(null);
-          setPeriodRemaining(null);
-          setAutopayEnabled(null);
+          setMonthsBehind(0);
+          setTotalPaidTowardOverdue(null);
+          setTotalOutstandingOverdue(null);
           setError(
-            'We couldn’t find a tenant profile for this email yet. ' +
-              'This usually means your landlord hasn’t added you to their tenant list, or used a different email. ' +
-              'Please contact your landlord to confirm they added you with this exact email address.'
+            'We couldn’t find a tenant profile for this email yet. This usually means your landlord hasn’t added you to their tenant list, or used a different email. Please contact your landlord to confirm they added you with this exact email address.'
           );
           return;
         }
@@ -228,28 +227,6 @@ export default function TenantPortalPage() {
         }
 
         setTenant(t);
-
-        // -------- Load auto-pay status (via API) --------
-        try {
-          const res = await fetch('/api/tenant-autopay/status', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tenantId: t.id }),
-          });
-          if (res.ok) {
-            const data = await res.json().catch(() => ({}));
-            if (typeof data.enabled === 'boolean') {
-              setAutopayEnabled(data.enabled);
-            } else {
-              setAutopayEnabled(false);
-            }
-          } else {
-            setAutopayEnabled(false);
-          }
-        } catch (autoErr) {
-          console.error('Autopay status load error:', autoErr);
-          setAutopayEnabled(false);
-        }
 
         // -------- Property: try by property_id first --------
         let prop: PropertyRow | null = null;
@@ -294,9 +271,7 @@ export default function TenantPortalPage() {
 
         setProperty(prop);
 
-        // Effective rent (property preferred, fall back to tenant)
-        const effectiveRent =
-          prop?.monthly_rent ?? t.monthly_rent ?? null;
+        const effectiveRent = prop?.monthly_rent ?? t.monthly_rent ?? null;
 
         // Payments
         const { data: payRows, error: payError } = await supabase
@@ -313,69 +288,62 @@ export default function TenantPortalPage() {
         const payData = (payRows || []) as PaymentRow[];
         setPayments(payData);
 
-        // ---------- Compute TOTAL overdue vs payments (multi-month) ----------
-        if (effectiveRent != null && prop?.next_due_date) {
+        // ---------- Multi-month overdue math ----------
+        const today = new Date();
+        const todayMidnight = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          today.getDate()
+        );
+
+        let computedMonthsBehind = 0;
+        let paidTowardOverdue = 0;
+        let outstandingOverdue = 0;
+
+        if (effectiveRent != null && effectiveRent > 0 && prop?.next_due_date) {
           const firstDue = parseSupabaseDate(prop.next_due_date);
-          if (firstDue) {
-            const firstDueMidnight = new Date(
+          if (firstDue && firstDue <= todayMidnight) {
+            // Count months from firstDue up to the most recent due date <= today
+            let cursor = new Date(
               firstDue.getFullYear(),
               firstDue.getMonth(),
               firstDue.getDate()
             );
-            const today = new Date();
-            const todayMidnight = new Date(
-              today.getFullYear(),
-              today.getMonth(),
-              today.getDate()
-            );
-
-            // How many full monthly periods are owed from firstDue up through today?
-            let periodsDue = 1;
-
-            if (todayMidnight > firstDueMidnight) {
-              const yearDiff =
-                todayMidnight.getFullYear() - firstDueMidnight.getFullYear();
-              const monthDiff =
-                todayMidnight.getMonth() - firstDueMidnight.getMonth();
-
-              let monthsTotal = yearDiff * 12 + monthDiff;
-
-              // If we've passed the due-day in the current month, count that month too
-              if (todayMidnight.getDate() >= firstDueMidnight.getDate()) {
-                monthsTotal += 1;
-              }
-
-              periodsDue = Math.max(1, monthsTotal);
+            while (cursor <= todayMidnight) {
+              computedMonthsBehind += 1;
+              cursor = new Date(
+                cursor.getFullYear(),
+                cursor.getMonth() + 1,
+                cursor.getDate()
+              );
             }
 
-            const baseOwed = periodsDue * effectiveRent;
+            const totalOverdueRent = computedMonthsBehind * effectiveRent;
 
-            // Sum ALL payments made on or after the first unpaid due date
-            let totalPaidSinceFirstDue = 0;
+            // Sum all payments made on or after the first overdue due date
             for (const p of payData) {
               if (!p.amount || !p.paid_on) continue;
-              const d = new Date(p.paid_on);
-              if (Number.isNaN(d.getTime())) continue;
-              if (d >= firstDueMidnight) {
-                totalPaidSinceFirstDue += p.amount;
+              const pd = new Date(p.paid_on);
+              if (Number.isNaN(pd.getTime())) continue;
+              if (pd >= firstDue) {
+                paidTowardOverdue += p.amount;
               }
             }
 
-            const remainingTotal = Math.max(
+            outstandingOverdue = Math.max(
               0,
-              baseOwed - totalPaidSinceFirstDue
+              totalOverdueRent - paidTowardOverdue
             );
-
-            setPeriodPaid(totalPaidSinceFirstDue);
-            setPeriodRemaining(remainingTotal);
-          } else {
-            setPeriodPaid(null);
-            setPeriodRemaining(null);
           }
-        } else {
-          setPeriodPaid(null);
-          setPeriodRemaining(null);
         }
+
+        setMonthsBehind(computedMonthsBehind);
+        setTotalPaidTowardOverdue(
+          paidTowardOverdue > 0 ? paidTowardOverdue : null
+        );
+        setTotalOutstandingOverdue(
+          outstandingOverdue > 0 ? outstandingOverdue : 0
+        );
 
         // Documents (by property OR tenant)
         let docQuery = supabase
@@ -412,7 +380,7 @@ export default function TenantPortalPage() {
         }
         setMaintenance((maintRows || []) as MaintenanceRow[]);
 
-        // ---------- Unread messages badge (landlord OR team) ----------
+        // ---------- Unread messages badge ----------
         if (t.user_id) {
           const { data: unreadRows, error: unreadError } = await supabase
             .from('messages')
@@ -457,10 +425,10 @@ export default function TenantPortalPage() {
   const handlePayWithCard = async () => {
     if (!tenant) return;
 
-    const baseRent = property?.monthly_rent ?? tenant.monthly_rent ?? 0;
+    const currentRent =
+      property?.monthly_rent ?? tenant.monthly_rent ?? null;
+    const dueDateObj = parseSupabaseDate(property?.next_due_date || null);
 
-    // Parse due date to control early payments
-    const dueDate = parseSupabaseDate(property?.next_due_date || null);
     const today = new Date();
     const todayMidnight = new Date(
       today.getFullYear(),
@@ -469,7 +437,15 @@ export default function TenantPortalPage() {
     );
 
     const isBeforeDue =
-      !!dueDate && dueDate.getTime() > todayMidnight.getTime();
+      !!dueDateObj && dueDateObj.getTime() > todayMidnight.getTime();
+
+    if (!currentRent || currentRent <= 0) {
+      setError(
+        'Your rent amount is not set. Please contact your landlord if this looks wrong.'
+      );
+      setSuccess(null);
+      return;
+    }
 
     if (isBeforeDue) {
       setError(
@@ -479,15 +455,12 @@ export default function TenantPortalPage() {
       return;
     }
 
-    // If we have a computed total outstanding, always use that.
-    let amount =
-      periodRemaining != null && periodRemaining > 0
-        ? periodRemaining
-        : baseRent;
+    const outstanding =
+      totalOutstandingOverdue != null ? totalOutstandingOverdue : 0;
 
-    if (!amount || amount <= 0) {
+    if (!outstanding || outstanding <= 0) {
       setError(
-        'Your rent amount is not set or already paid up. Please contact your landlord if this looks wrong.'
+        'We don’t show any outstanding rent to pay right now. If this looks wrong, please contact your landlord.'
       );
       setSuccess(null);
       return;
@@ -502,7 +475,7 @@ export default function TenantPortalPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount,
+          amount: outstanding,
           description: `Rent payment for ${
             property?.name || 'your unit'
           }${property?.unit_label ? ` · ${property.unit_label}` : ''}`,
@@ -533,49 +506,6 @@ export default function TenantPortalPage() {
       );
     } finally {
       setPaying(false);
-    }
-  };
-
-  const handleToggleAutopay = async () => {
-    if (!tenant) return;
-    const nextValue = !autopayEnabled;
-
-    setAutopayLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const res = await fetch('/api/tenant-autopay', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: tenant.id,
-          enable: nextValue,
-        }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok || data?.error) {
-        throw new Error(
-          data?.error || 'Failed to update automatic payments setting.'
-        );
-      }
-
-      setAutopayEnabled(nextValue);
-      setSuccess(
-        nextValue
-          ? 'Automatic rent payments have been turned on.'
-          : 'Automatic rent payments have been turned off.'
-      );
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.message ||
-          'Something went wrong while updating automatic payments. Please try again.'
-      );
-    } finally {
-      setAutopayLoading(false);
     }
   };
 
@@ -612,9 +542,6 @@ export default function TenantPortalPage() {
   const currentRent =
     property?.monthly_rent ?? tenant.monthly_rent ?? null;
 
-  // ---------- Due date helpers for UI / logic ----------
-
-  const dueDateObj = parseSupabaseDate(property?.next_due_date || null);
   const today = new Date();
   const todayMidnight = new Date(
     today.getFullYear(),
@@ -622,26 +549,21 @@ export default function TenantPortalPage() {
     today.getDate()
   );
 
+  const dueDateObj = parseSupabaseDate(property?.next_due_date || null);
+
   const isRentOverdue =
     !!dueDateObj && dueDateObj.getTime() < todayMidnight.getTime();
-
   const isBeforeDue =
     !!dueDateObj && dueDateObj.getTime() > todayMidnight.getTime();
 
-  // Decide what the button will try to charge right now
-  let amountToPayNow: number | null = null;
-  if (currentRent != null && currentRent > 0 && !isBeforeDue) {
-    if (
-      property?.next_due_date &&
-      periodRemaining != null &&
-      periodRemaining > 0
-    ) {
-      // TOTAL outstanding (may be > 1 month if multiple months due)
-      amountToPayNow = periodRemaining;
-    } else {
-      amountToPayNow = currentRent;
-    }
-  }
+  const outstanding =
+    totalOutstandingOverdue != null ? totalOutstandingOverdue : 0;
+
+  const canPayNow =
+    currentRent != null &&
+    currentRent > 0 &&
+    !isBeforeDue &&
+    outstanding > 0;
 
   // ---------- Derived account / standing status ----------
 
@@ -749,76 +671,37 @@ export default function TenantPortalPage() {
                 </span>
               </p>
 
-              {/* TOTAL overdue paid / remaining across all past-due months */}
-              {currentRent != null && property?.next_due_date && (
+              {monthsBehind > 0 && currentRent != null && (
                 <>
                   <p className="mt-2 text-xs text-slate-400">
                     Total paid toward overdue rent:{' '}
                     <span className="text-slate-200">
-                      {periodPaid != null
-                        ? formatCurrency(periodPaid)
-                        : formatCurrency(0)}
+                      {formatCurrency(totalPaidTowardOverdue || 0)}
                     </span>
                   </p>
                   <p className="mt-1 text-xs text-slate-400">
                     Total outstanding rent:{' '}
                     <span className="text-slate-200">
-                      {periodRemaining != null
-                        ? formatCurrency(periodRemaining)
-                        : formatCurrency(0)}
+                      {formatCurrency(outstanding)}
                     </span>
                   </p>
                 </>
               )}
 
-              {/* Auto-pay toggle */}
-              <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-[11px] flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-medium text-slate-100">
-                    Automatic payments
-                  </p>
-                  <p className="text-slate-400">
-                    {autopayEnabled
-                      ? 'Your rent will be charged automatically each period.'
-                      : 'Turn this on to have rent charged automatically each period.'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleToggleAutopay}
-                  disabled={autopayEnabled === null || autopayLoading}
-                  className={
-                    'relative inline-flex h-6 w-11 items-center rounded-full border px-0.5 transition-colors ' +
-                    (autopayEnabled
-                      ? 'bg-emerald-500 border-emerald-400'
-                      : 'bg-slate-800 border-slate-600')
-                  }
-                >
-                  <span
-                    className={
-                      'inline-block h-4 w-4 rounded-full bg-slate-950 shadow transform transition-transform ' +
-                      (autopayEnabled ? 'translate-x-5' : 'translate-x-0')
-                    }
-                  />
-                </button>
-              </div>
-
               <div className="mt-4 flex flex-col gap-2">
                 <button
                   type="button"
                   onClick={handlePayWithCard}
-                  disabled={
-                    paying || amountToPayNow == null || isBeforeDue
-                  }
+                  disabled={!canPayNow || paying}
                   className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {paying
                     ? 'Starting payment…'
                     : isBeforeDue
                     ? 'Online payment not available until due date'
-                    : amountToPayNow != null
-                    ? `Pay ${formatCurrency(amountToPayNow)} now`
-                    : 'Pay rent securely with Card / ACH'}
+                    : outstanding > 0
+                    ? `Pay ${formatCurrency(outstanding)} now`
+                    : 'No outstanding rent to pay'}
                 </button>
               </div>
 
@@ -991,7 +874,6 @@ export default function TenantPortalPage() {
                 first, then contact your landlord or property manager directly.
               </p>
 
-              {/* Recent requests */}
               {maintenance.length === 0 ? (
                 <p className="mt-3 text-[11px] text-slate-500">
                   You haven&apos;t submitted any maintenance requests yet.
@@ -1040,7 +922,6 @@ export default function TenantPortalPage() {
                 </div>
               )}
 
-              {/* Buttons */}
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Link
                   href="/tenant/maintenance"
