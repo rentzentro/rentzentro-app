@@ -63,6 +63,18 @@ type MaintenanceRow = {
 
 // ---------- Helpers ----------
 
+const parseSupabaseDate = (value: string | null | undefined): Date | null => {
+  if (!value) return null;
+  // If it's a pure date (YYYY-MM-DD), parse without timezone shift
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+};
+
 const formatCurrency = (v: number | null | undefined) =>
   v == null || isNaN(v)
     ? '-'
@@ -73,19 +85,9 @@ const formatCurrency = (v: number | null | undefined) =>
 
 const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '-';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '-';
-
-  const local = new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    d.getHours(),
-    d.getMinutes(),
-    d.getSeconds()
-  );
-
-  return local.toLocaleDateString('en-US', {
+  const d = parseSupabaseDate(iso);
+  if (!d) return '-';
+  return d.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -286,8 +288,8 @@ export default function TenantPortalPage() {
 
         // ---------- Compute “this period” paid vs remaining ----------
         if (effectiveRent != null && prop?.next_due_date) {
-          const start = new Date(prop.next_due_date);
-          if (!Number.isNaN(start.getTime())) {
+          const start = parseSupabaseDate(prop.next_due_date);
+          if (start) {
             let paidForThisPeriod = 0;
 
             for (const p of payData) {
@@ -399,6 +401,26 @@ export default function TenantPortalPage() {
 
     const baseRent = property?.monthly_rent ?? tenant.monthly_rent ?? 0;
 
+    // Parse due date to control early payments
+    const dueDate = parseSupabaseDate(property?.next_due_date || null);
+    const today = new Date();
+    const todayMidnight = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+
+    const isBeforeDue =
+      !!dueDate && dueDate.getTime() > todayMidnight.getTime();
+
+    if (isBeforeDue) {
+      setError(
+        'Online rent payments are only available once the current rent is due. Please try again on or after the due date.'
+      );
+      setSuccess(null);
+      return;
+    }
+
     // If there is a remaining amount for this period, only charge that.
     let amount = baseRent;
     if (
@@ -411,7 +433,7 @@ export default function TenantPortalPage() {
 
     if (!amount || amount <= 0) {
       setError(
-        'Your rent amount is not set or fully paid for this period. Please contact your landlord if this looks wrong.'
+        'Your rent amount is not set or already fully paid for this period. Please contact your landlord if this looks wrong.'
       );
       setSuccess(null);
       return;
@@ -493,9 +515,25 @@ export default function TenantPortalPage() {
   const currentRent =
     property?.monthly_rent ?? tenant.monthly_rent ?? null;
 
+  // ---------- Due date helpers for UI / logic ----------
+
+  const dueDateObj = parseSupabaseDate(property?.next_due_date || null);
+  const today = new Date();
+  const todayMidnight = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+
+  const isRentOverdue =
+    !!dueDateObj && dueDateObj.getTime() < todayMidnight.getTime();
+
+  const isBeforeDue =
+    !!dueDateObj && dueDateObj.getTime() > todayMidnight.getTime();
+
   // Decide what the button will try to charge right now
   let amountToPayNow: number | null = null;
-  if (currentRent != null && currentRent > 0) {
+  if (currentRent != null && currentRent > 0 && !isBeforeDue) {
     if (
       property?.next_due_date &&
       periodRemaining != null &&
@@ -508,15 +546,6 @@ export default function TenantPortalPage() {
   }
 
   // ---------- Derived account / standing status ----------
-
-  let isRentOverdue = false;
-  if (property?.next_due_date) {
-    const due = new Date(property.next_due_date);
-    if (!Number.isNaN(due.getTime())) {
-      const today = new Date();
-      isRentOverdue = due.getTime() < today.getTime();
-    }
-  }
 
   const accountStatusLabel = isRentOverdue
     ? 'Rent overdue'
@@ -648,11 +677,15 @@ export default function TenantPortalPage() {
                 <button
                   type="button"
                   onClick={handlePayWithCard}
-                  disabled={paying || amountToPayNow == null}
+                  disabled={
+                    paying || amountToPayNow == null || isBeforeDue
+                  }
                   className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {paying
                     ? 'Starting payment…'
+                    : isBeforeDue
+                    ? 'Online payment not available until due date'
                     : amountToPayNow != null
                     ? `Pay ${formatCurrency(amountToPayNow)} now`
                     : 'Pay rent securely with Card / ACH'}
