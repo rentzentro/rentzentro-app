@@ -41,13 +41,23 @@ type TeamMemberRow = {
 
 // ---------- Helpers ----------
 
-// Display-friendly local date/time
-const formatDateTime = (iso: string | null | undefined) => {
+// Show a friendly DATE ONLY, ignoring timezone shifts.
+// Works even if we get a full ISO timestamp.
+const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '—';
   try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString();
+    const datePart = iso.slice(0, 10); // "YYYY-MM-DD"
+    const [y, m, d] = datePart.split('-').map((x) => Number(x));
+    if (!y || !m || !d) return datePart;
+
+    const dt = new Date(y, m - 1, d);
+    if (Number.isNaN(dt.getTime())) return datePart;
+
+    return dt.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
   } catch {
     return iso;
   }
@@ -58,7 +68,7 @@ const formatAmount = (amount: number | null) => {
   return `$${amount.toFixed(2)}`;
 };
 
-// Today in local time → YYYY-MM-DD (no UTC shift)
+// Local "today" for <input type="date"> (no UTC shift)
 const todayInputDate = () => {
   const now = new Date();
   const y = now.getFullYear();
@@ -67,19 +77,10 @@ const todayInputDate = () => {
   return `${y}-${m}-${d}`;
 };
 
-// Normalize to `YYYY-MM-DD` for <input type="date"> using LOCAL date
+// Normalize to `YYYY-MM-DD` for <input type="date">
 const toDateInputValue = (iso: string | null | undefined): string => {
   if (!iso) return '';
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '';
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  } catch {
-    return '';
-  }
+  return iso.slice(0, 10);
 };
 
 // ---------- Component ----------
@@ -302,22 +303,15 @@ export default function LandlordPaymentsPage() {
         );
       }
 
-      // Convert date input (YYYY-MM-DD) to ISO; default to "now" if missing
-      let paidOnIso: string;
-      if (formPaidOn) {
-        // Use noon LOCAL time to avoid UTC “day shift”
-        const [y, m, d] = formPaidOn.split('-').map((x) => Number(x));
-        const dateObj = new Date(y, m - 1, d, 12, 0, 0);
-        paidOnIso = dateObj.toISOString();
-      } else {
-        paidOnIso = new Date().toISOString();
-      }
+      // For a DATE-driven field we can safely pass the YYYY-MM-DD
+      // string and let Postgres store it without timezone surprises.
+      const paidOnValue = formPaidOn || todayInputDate();
 
       const payload = {
         tenant_id: formTenantId === '' ? null : formTenantId,
         property_id: formPropertyId === '' ? null : formPropertyId,
         amount: amountNum,
-        paid_on: paidOnIso,
+        paid_on: paidOnValue,
         method: formMethod.trim() || 'Manual',
         note: formNote.trim() || null,
       };
@@ -385,20 +379,13 @@ export default function LandlordPaymentsPage() {
         throw new Error('Please enter a valid payment amount greater than 0.');
       }
 
-      let paidOnIso: string;
-      if (editPaidOn) {
-        const [y, m, d] = editPaidOn.split('-').map((x) => Number(x));
-        const dateObj = new Date(y, m - 1, d, 12, 0, 0); // local noon
-        paidOnIso = dateObj.toISOString();
-      } else {
-        paidOnIso = new Date().toISOString();
-      }
+      const paidOnValue = editPaidOn || todayInputDate();
 
       const payload = {
         tenant_id: editTenantId === '' ? null : editTenantId,
         property_id: editPropertyId === '' ? null : editPropertyId,
         amount: amountNum,
-        paid_on: paidOnIso,
+        paid_on: paidOnValue,
         method: editMethod.trim() || null,
         note: editNote.trim() || null,
       };
@@ -467,13 +454,18 @@ export default function LandlordPaymentsPage() {
     router.push('/landlord');
   };
 
+  const handleLogOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/landlord/login');
+  };
+
   // ---------- Render ----------
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
       <div className="max-w-5xl mx-auto px-4 py-8 md:py-10">
         {/* Top bar */}
-        <div className="flex items-center justify-between mb-6 gap-3">
+        <div className="flex flex-col gap-3 items-start justify-between mb-6 md:flex-row md:items-center">
           <div>
             <p className="text-xs text-slate-500 uppercase tracking-[0.18em]">
               LANDLORD PORTAL
@@ -487,12 +479,18 @@ export default function LandlordPaymentsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-stretch justify-end">
             <button
               onClick={handleBackToDashboard}
-              className="text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+              className="flex-1 md:flex-none text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
             >
               ← Back to dashboard
+            </button>
+            <button
+              onClick={handleLogOut}
+              className="flex-1 md:flex-none text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+            >
+              Log out
             </button>
           </div>
         </div>
@@ -786,7 +784,7 @@ export default function LandlordPaymentsPage() {
                             className="border-b border-slate-900/60 last:border-b-0 hover:bg-slate-900/60"
                           >
                             <td className="py-2 pr-3 pl-4 align-top text-slate-300">
-                              {formatDateTime(p.paid_on || p.created_at)}
+                              {formatDate(p.paid_on || p.created_at)}
                             </td>
                             <td className="py-2 px-3 align-top text-emerald-300 font-medium">
                               {formatAmount(p.amount)}
