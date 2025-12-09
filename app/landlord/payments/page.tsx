@@ -41,10 +41,13 @@ type TeamMemberRow = {
 
 // ---------- Helpers ----------
 
+// Display-friendly local date/time
 const formatDateTime = (iso: string | null | undefined) => {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleString();
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString();
   } catch {
     return iso;
   }
@@ -55,14 +58,28 @@ const formatAmount = (amount: number | null) => {
   return `$${amount.toFixed(2)}`;
 };
 
+// Today in local time → YYYY-MM-DD (no UTC shift)
 const todayInputDate = () => {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
 
-// Normalize to `YYYY-MM-DD` for <input type="date">
+// Normalize to `YYYY-MM-DD` for <input type="date"> using LOCAL date
 const toDateInputValue = (iso: string | null | undefined): string => {
   if (!iso) return '';
-  return iso.slice(0, 10);
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  } catch {
+    return '';
+  }
 };
 
 // ---------- Component ----------
@@ -288,7 +305,7 @@ export default function LandlordPaymentsPage() {
       // Convert date input (YYYY-MM-DD) to ISO; default to "now" if missing
       let paidOnIso: string;
       if (formPaidOn) {
-        // Use noon local time to reduce timezone “day shift” issues
+        // Use noon LOCAL time to avoid UTC “day shift”
         const [y, m, d] = formPaidOn.split('-').map((x) => Number(x));
         const dateObj = new Date(y, m - 1, d, 12, 0, 0);
         paidOnIso = dateObj.toISOString();
@@ -371,7 +388,7 @@ export default function LandlordPaymentsPage() {
       let paidOnIso: string;
       if (editPaidOn) {
         const [y, m, d] = editPaidOn.split('-').map((x) => Number(x));
-        const dateObj = new Date(y, m - 1, d, 12, 0, 0);
+        const dateObj = new Date(y, m - 1, d, 12, 0, 0); // local noon
         paidOnIso = dateObj.toISOString();
       } else {
         paidOnIso = new Date().toISOString();
