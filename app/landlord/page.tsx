@@ -268,9 +268,7 @@ export default function LandlordDashboardPage() {
             if (ownerLandlord) {
               landlordRow = ownerLandlord;
             } else {
-              // 🔴 This is the case that was previously BLOCKING you.
-              // Now we just mark that lookup failed and synthesize a landlord
-              // shell so the dashboard can still load for the teammate.
+              // Fallback when owner landlord row not found
               console.warn(
                 'Team member login: team access found, but owner landlord row not found. Using fallback landlord shell.'
               );
@@ -389,9 +387,11 @@ export default function LandlordDashboardPage() {
     (t) => t.status?.toLowerCase() === 'current'
   ).length;
 
-  const monthlyRentRoll = properties
-    .filter((p) => p.status?.toLowerCase() === 'current')
-    .reduce((sum, p) => sum + (p.monthly_rent || 0), 0);
+  // ✅ FIXED: sum monthly_rent for all properties (no status filter)
+  const monthlyRentRoll = properties.reduce(
+    (sum, p) => sum + (p.monthly_rent || 0),
+    0
+  );
 
   const today = new Date();
   const todayDateOnly = new Date(
@@ -492,7 +492,8 @@ export default function LandlordDashboardPage() {
           </p>
           <button
             onClick={handleSignOut}
-            className="mt-1 rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+            className="mt-1 rounded-md bg-slate-800 px
+4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
           >
             Back to landlord login
           </button>
