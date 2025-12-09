@@ -33,6 +33,7 @@ type TenantRow = {
   monthly_rent: number | null;
   lease_start: string | null;
   lease_end: string | null;
+  allow_early_payment?: boolean | null; // NEW
 };
 
 type TeamMemberRow = {
@@ -109,6 +110,7 @@ export default function LandlordTenantsPage() {
   const [formPropertyId, setFormPropertyId] = useState<number | ''>('');
   const [formLeaseStart, setFormLeaseStart] = useState('');
   const [formLeaseEnd, setFormLeaseEnd] = useState('');
+  const [formAllowEarlyPayment, setFormAllowEarlyPayment] = useState(false); // NEW
   const [savingTenant, setSavingTenant] = useState(false);
 
   // Invite state
@@ -122,6 +124,7 @@ export default function LandlordTenantsPage() {
   const [editPropertyId, setEditPropertyId] = useState<number | ''>('');
   const [editLeaseStart, setEditLeaseStart] = useState('');
   const [editLeaseEnd, setEditLeaseEnd] = useState('');
+  const [editAllowEarlyPayment, setEditAllowEarlyPayment] = useState(false); // NEW
   const [savingEdit, setSavingEdit] = useState(false);
 
   // ---------- Load landlord / team owner + data ----------
@@ -262,7 +265,7 @@ export default function LandlordTenantsPage() {
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select(
-            'id, owner_id, name, email, phone, property_id, status, monthly_rent, lease_start, lease_end'
+            'id, owner_id, name, email, phone, property_id, status, monthly_rent, lease_start, lease_end, allow_early_payment'
           )
           .eq('owner_id', ownerUuid)
           .order('created_at', { ascending: false });
@@ -298,6 +301,7 @@ export default function LandlordTenantsPage() {
     setFormPropertyId('');
     setFormLeaseStart('');
     setFormLeaseEnd('');
+    setFormAllowEarlyPayment(false);
   };
 
   const handleCreateTenant = async (e: FormEvent) => {
@@ -328,6 +332,7 @@ export default function LandlordTenantsPage() {
           monthly_rent: null, // property is source of truth for rent
           lease_start: formLeaseStart || null,
           lease_end: formLeaseEnd || null,
+          allow_early_payment: formAllowEarlyPayment, // NEW
         })
         .select('*')
         .single();
@@ -360,6 +365,7 @@ export default function LandlordTenantsPage() {
     setEditPropertyId(t.property_id ?? '');
     setEditLeaseStart(toDateInputValue(t.lease_start));
     setEditLeaseEnd(toDateInputValue(t.lease_end));
+    setEditAllowEarlyPayment(!!t.allow_early_payment); // NEW
     setError(null);
     setSuccess(null);
   };
@@ -372,6 +378,7 @@ export default function LandlordTenantsPage() {
     setEditPropertyId('');
     setEditLeaseStart('');
     setEditLeaseEnd('');
+    setEditAllowEarlyPayment(false);
     setSavingEdit(false);
   };
 
@@ -397,6 +404,7 @@ export default function LandlordTenantsPage() {
           property_id: editPropertyId || null,
           lease_start: editLeaseStart || null,
           lease_end: editLeaseEnd || null,
+          allow_early_payment: editAllowEarlyPayment, // NEW
         })
         .eq('id', editingTenant.id)
         .select('*')
@@ -691,6 +699,27 @@ export default function LandlordTenantsPage() {
                   />
                 </div>
 
+                {/* Allow early payments */}
+                <div className="md:col-span-2 mt-1">
+                  <label className="flex items-center gap-2 text-[11px] text-slate-200">
+                    <input
+                      type="checkbox"
+                      className="h-3 w-3 rounded border-slate-600 bg-slate-900"
+                      checked={formAllowEarlyPayment}
+                      onChange={(e) =>
+                        setFormAllowEarlyPayment(e.target.checked)
+                      }
+                    />
+                    <span>
+                      Allow this tenant to pay rent before the due date
+                    </span>
+                  </label>
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    If unchecked, the tenant portal will only allow payments
+                    once rent is due.
+                  </p>
+                </div>
+
                 <div className="md:col-span-2 flex items-center justify-end gap-2 pt-1">
                   <button
                     type="button"
@@ -814,6 +843,27 @@ export default function LandlordTenantsPage() {
                 />
               </div>
 
+              {/* Allow early payments (edit) */}
+              <div className="md:col-span-2 mt-1">
+                <label className="flex items-center gap-2 text-[11px] text-slate-200">
+                  <input
+                    type="checkbox"
+                    className="h-3 w-3 rounded border-slate-600 bg-slate-900"
+                    checked={editAllowEarlyPayment}
+                    onChange={(e) =>
+                      setEditAllowEarlyPayment(e.target.checked)
+                    }
+                  />
+                  <span>
+                    Allow this tenant to pay rent before the due date
+                  </span>
+                </label>
+                <p className="mt-1 text-[10px] text-slate-500">
+                  This controls whether the tenant portal will allow early rent
+                  payments for this tenant.
+                </p>
+              </div>
+
               <div className="md:col-span-2 flex items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
@@ -856,6 +906,7 @@ export default function LandlordTenantsPage() {
               {tenants.map((t) => {
                 const prop =
                   t.property_id != null ? propertyById.get(t.property_id) : null;
+                const earlyAllowed = !!t.allow_early_payment;
 
                 return (
                   <div
@@ -889,6 +940,18 @@ export default function LandlordTenantsPage() {
                           {formatLeaseDateLabel(t.lease_end)}
                         </p>
                       )}
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Early payments:{' '}
+                        <span
+                          className={
+                            earlyAllowed
+                              ? 'text-emerald-300'
+                              : 'text-slate-300'
+                          }
+                        >
+                          {earlyAllowed ? 'Allowed' : 'Not allowed'}
+                        </span>
+                      </p>
                     </div>
                     <div className="flex flex-col items-end gap-1 text-[11px]">
                       <p className="text-slate-400">

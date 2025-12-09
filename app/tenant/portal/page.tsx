@@ -1,3 +1,4 @@
+// app/tenant/portal/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -19,9 +20,9 @@ type TenantRow = {
   lease_start: string | null;
   lease_end: string | null;
   user_id?: string | null;
-  allow_early_ayment?: boolean | null; // legacy typo-safe
-  allow_early_payment?: boolean | null; // NEW
-  autopay_enabled?: boolean | null; // NEW
+
+  // NEW: auto-pay preference stored on tenants table
+  auto_pay_enabled?: boolean | null;
 };
 
 type PropertyRow = {
@@ -65,6 +66,18 @@ type MaintenanceRow = {
 
 // ---------- Helpers ----------
 
+const parseSupabaseDate = (value: string | null | undefined): Date | null => {
+  if (!value) return null;
+  // If it's a pure date (YYYY-MM-DD), parse without timezone shift
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+};
+
 const formatCurrency = (v: number | null | undefined) =>
   v == null || isNaN(v)
     ? '-'
@@ -75,35 +88,9 @@ const formatCurrency = (v: number | null | undefined) =>
 
 const formatDate = (iso: string | null | undefined) => {
   if (!iso) return '-';
-
-  // If it's just YYYY-MM-DD, avoid timezone shift
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (m) {
-    const year = Number(m[1]);
-    const month = Number(m[2]);
-    const day = Number(m[3]);
-    if (!year || !month || !day) return '-';
-    const d = new Date(year, month - 1, day);
-    return d.toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  }
-
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '-';
-
-  const local = new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    d.getHours(),
-    d.getMinutes(),
-    d.getSeconds()
-  );
-
-  return local.toLocaleDateString('en-US', {
+  const d = parseSupabaseDate(iso);
+  if (!d) return '-';
+  return d.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -146,22 +133,6 @@ const statusBadgeClasses = (status: string | null) => {
   return 'bg-slate-700 text-slate-200 border border-slate-500/60';
 };
 
-// Parse YYYY-MM-DD (or full ISO) into a "date only" Date
-const parseDateOnly = (value: string | null | undefined): Date | null => {
-  if (!value) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (m) {
-    const y = Number(m[1]);
-    const mo = Number(m[2]);
-    const d = Number(m[3]);
-    if (!y || !mo || !d) return null;
-    return new Date(y, mo - 1, d);
-  }
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-};
-
 // ---------- Component ----------
 
 export default function TenantPortalPage() {
@@ -178,8 +149,12 @@ export default function TenantPortalPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
 
-  // Autopay local state (mirrors tenant.autopay_enabled)
-  const [savingAutopay, setSavingAutopay] = useState(false);
+  // Track how much of this period’s rent is paid vs still due
+  const [periodPaid, setPeriodPaid] = useState<number | null>(null);
+  const [periodRemaining, setPeriodRemaining] = useState<number | null>(null);
+
+  // NEW: auto-pay toggle state
+  const [updatingAutoPay, setUpdatingAutoPay] = useState(false);
 
   // ---------- Load tenant + related data ----------
 
@@ -205,23 +180,8 @@ export default function TenantPortalPage() {
         // Tenant: prefer user_id match, fall back to email
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
-          .select(
-            `
-            id,
-            owner_id,
-            name,
-            email,
-            phone,
-            status,
-            property_id,
-            monthly_rent,
-            lease_start,
-            lease_end,
-            user_id,
-            allow_early_payment,
-            autopay_enabled
-          `
-          )
+          // NOTE: select('*') so we automatically pick up auto_pay_enabled
+          .select('*')
           .or(`user_id.eq.${authUserId},email.eq.${email}`)
           .order('created_at', { ascending: true });
 
@@ -239,6 +199,8 @@ export default function TenantPortalPage() {
           setPayments([]);
           setDocuments([]);
           setMaintenance([]);
+          setPeriodPaid(null);
+          setPeriodRemaining(null);
           setError(
             'We couldn’t find a tenant profile for this email yet. ' +
               'This usually means your landlord hasn’t added you to their tenant list, or used a different email. ' +
@@ -253,23 +215,7 @@ export default function TenantPortalPage() {
             .from('tenants')
             .update({ user_id: authUserId })
             .eq('id', t.id)
-            .select(
-              `
-              id,
-              owner_id,
-              name,
-              email,
-              phone,
-              status,
-              property_id,
-              monthly_rent,
-              lease_start,
-              lease_end,
-              user_id,
-              allow_early_payment,
-              autopay_enabled
-            `
-            )
+            .select('*') // also pick up auto_pay_enabled if present
             .maybeSingle();
 
           if (updateError) {
@@ -324,18 +270,56 @@ export default function TenantPortalPage() {
 
         setProperty(prop);
 
+        // Effective rent (property preferred, fall back to tenant)
+        const effectiveRent = prop?.monthly_rent ?? t.monthly_rent ?? null;
+
         // Payments
         const { data: payRows, error: payError } = await supabase
           .from('payments')
           .select('id, tenant_id, property_id, amount, paid_on, method, note')
           .eq('tenant_id', t.id)
           .order('paid_on', { ascending: false })
-          .limit(10);
+          .limit(50);
 
         if (payError) {
           console.error('Tenant portal payments error:', payError);
         }
-        setPayments((payRows || []) as PaymentRow[]);
+
+        const payData = (payRows || []) as PaymentRow[];
+        setPayments(payData);
+
+        // ---------- Compute “this period” paid vs remaining ----------
+        if (effectiveRent != null && prop?.next_due_date) {
+          const start = parseSupabaseDate(prop.next_due_date);
+          if (start) {
+            let paidForThisPeriod = 0;
+
+            for (const p of payData) {
+              if (!p.amount || !p.paid_on) continue;
+              const d = new Date(p.paid_on);
+              if (Number.isNaN(d.getTime())) continue;
+
+              // All payments made on or after the current next_due_date
+              // count toward the earliest unpaid period.
+              if (d >= start) {
+                paidForThisPeriod += p.amount;
+              }
+            }
+
+            // Cap at one month’s rent for the “this period” display
+            const capped = Math.min(effectiveRent, paidForThisPeriod);
+            const remaining = Math.max(0, effectiveRent - capped);
+
+            setPeriodPaid(capped);
+            setPeriodRemaining(remaining);
+          } else {
+            setPeriodPaid(null);
+            setPeriodRemaining(null);
+          }
+        } else {
+          setPeriodPaid(null);
+          setPeriodRemaining(null);
+        }
 
         // Documents (by property OR tenant)
         let docQuery = supabase
@@ -417,32 +401,41 @@ export default function TenantPortalPage() {
   const handlePayWithCard = async () => {
     if (!tenant) return;
 
-    const amount = property?.monthly_rent ?? tenant.monthly_rent ?? 0;
+    const baseRent = property?.monthly_rent ?? tenant.monthly_rent ?? 0;
 
-    if (!amount || amount <= 0) {
-      setError(
-        'Your monthly rent amount is not set. Please contact your landlord.'
-      );
-      setSuccess(null);
-      return;
-    }
-
-    // ----- Early payment gate (per-tenant) -----
-    // If rent is not due yet AND landlord has NOT allowed early pay -> block.
+    // Parse due date to control early payments
+    const dueDate = parseSupabaseDate(property?.next_due_date || null);
     const today = new Date();
-    const todayDateOnly = new Date(
+    const todayMidnight = new Date(
       today.getFullYear(),
       today.getMonth(),
       today.getDate()
     );
 
-    const dueDate = parseDateOnly(property?.next_due_date || null);
-    const allowEarly =
-      tenant.allow_early_payment ?? (tenant as any).allow_early_ayment ?? false;
+    const isBeforeDue =
+      !!dueDate && dueDate.getTime() > todayMidnight.getTime();
 
-    if (dueDate && dueDate > todayDateOnly && !allowEarly) {
+    if (isBeforeDue) {
       setError(
-        'Your next rent payment is not due yet. Please contact your landlord if you need to pay early.'
+        'Online rent payments are only available once the current rent is due. Please try again on or after the due date.'
+      );
+      setSuccess(null);
+      return;
+    }
+
+    // If there is a remaining amount for this period, only charge that.
+    let amount = baseRent;
+    if (
+      property?.next_due_date &&
+      periodRemaining != null &&
+      periodRemaining > 0
+    ) {
+      amount = periodRemaining;
+    }
+
+    if (!amount || amount <= 0) {
+      setError(
+        'Your rent amount is not set or already fully paid for this period. Please contact your landlord if this looks wrong.'
       );
       setSuccess(null);
       return;
@@ -491,64 +484,55 @@ export default function TenantPortalPage() {
     }
   };
 
-  const handleToggleAutopay = async () => {
+  // NEW: auto-pay toggle handler (just updates preference on tenants table)
+  const handleToggleAutoPay = async () => {
     if (!tenant) return;
-    const next = !(tenant.autopay_enabled ?? false);
 
-    setSavingAutopay(true);
+    const currentRent =
+      property?.monthly_rent ?? tenant.monthly_rent ?? null;
+
+    if (!property?.next_due_date || !currentRent || currentRent <= 0) {
+      setError(
+        'Auto-pay is only available when your rent amount and due date are set. Please contact your landlord.'
+      );
+      setSuccess(null);
+      return;
+    }
+
+    const currentlyEnabled = !!tenant.auto_pay_enabled;
+    const newValue = !currentlyEnabled;
+
+    setUpdatingAutoPay(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const { error: updateError, data } = await supabase
+      const { data, error: updateError } = await supabase
         .from('tenants')
-        .update({ autopay_enabled: next })
+        .update({ auto_pay_enabled: newValue })
         .eq('id', tenant.id)
-        .select(
-          `
-          id,
-          owner_id,
-          name,
-          email,
-          phone,
-          status,
-          property_id,
-          monthly_rent,
-          lease_start,
-          lease_end,
-          user_id,
-          allow_early_payment,
-          autopay_enabled
-        `
-        )
-        .maybeSingle();
+        .select('*')
+        .single();
 
       if (updateError) {
-        console.error('Error updating autopay setting:', updateError);
-        throw new Error(
-          updateError.message || 'Failed to update automatic payment setting.'
-        );
+        throw updateError;
       }
 
-      if (data) {
-        setTenant(data as TenantRow);
-      } else {
-        setTenant({ ...tenant, autopay_enabled: next });
-      }
-
+      setTenant(data as TenantRow);
       setSuccess(
-        next
-          ? 'Automatic rent payments have been turned on.'
-          : 'Automatic rent payments have been turned off.'
+        newValue
+          ? 'Auto-pay turned on. Your rent will be charged automatically each period once your landlord has auto-pay fully enabled.'
+          : 'Auto-pay turned off. You can still pay manually once rent is due.'
       );
     } catch (err: any) {
-      console.error(err);
+      console.error('Auto-pay toggle error:', err);
       setError(
         err?.message ||
-          'Something went wrong while updating automatic payment settings.'
+          'Unable to update your auto-pay preference right now. Please try again.'
       );
+      setSuccess(null);
     } finally {
-      setSavingAutopay(false);
+      setUpdatingAutoPay(false);
     }
   };
 
@@ -585,21 +569,40 @@ export default function TenantPortalPage() {
   const currentRent =
     property?.monthly_rent ?? tenant.monthly_rent ?? null;
 
-  // ---------- Derived account / standing status ----------
+  // ---------- Due date helpers for UI / logic ----------
 
-  let isRentOverdue = false;
-  if (property?.next_due_date) {
-    const due = parseDateOnly(property.next_due_date);
-    if (due) {
-      const today = new Date();
-      const todayDateOnly = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate()
-      );
-      isRentOverdue = due.getTime() < todayDateOnly.getTime();
+  const dueDateObj = parseSupabaseDate(property?.next_due_date || null);
+  const today = new Date();
+  const todayMidnight = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+
+  const isRentOverdue =
+    !!dueDateObj && dueDateObj.getTime() < todayMidnight.getTime();
+
+  const isBeforeDue =
+    !!dueDateObj && dueDateObj.getTime() > todayMidnight.getTime();
+
+  // Decide what the button will try to charge right now
+  let amountToPayNow: number | null = null;
+  if (currentRent != null && currentRent > 0 && !isBeforeDue) {
+    if (
+      property?.next_due_date &&
+      periodRemaining != null &&
+      periodRemaining > 0
+    ) {
+      amountToPayNow = periodRemaining;
+    } else {
+      amountToPayNow = currentRent;
     }
   }
+
+  // NEW: auto-pay current flag
+  const autoPayEnabled = !!tenant.auto_pay_enabled;
+
+  // ---------- Derived account / standing status ----------
 
   const accountStatusLabel = isRentOverdue
     ? 'Rent overdue'
@@ -614,8 +617,6 @@ export default function TenantPortalPage() {
   const accountStatusDotClasses = isRentOverdue
     ? 'inline-block h-1.5 w-1.5 rounded-full bg-red-400'
     : 'inline-block h-1.5 w-1.5 rounded-full bg-emerald-400';
-
-  const autopayEnabled = tenant.autopay_enabled ?? false;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -707,29 +708,98 @@ export default function TenantPortalPage() {
                 </span>
               </p>
 
+              {/* “This period” paid / remaining */}
+              {currentRent != null && property?.next_due_date && (
+                <>
+                  <p className="mt-2 text-xs text-slate-400">
+                    Paid toward this period:{' '}
+                    <span className="text-slate-200">
+                      {periodPaid != null
+                        ? formatCurrency(periodPaid)
+                        : formatCurrency(0)}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Still due this period:{' '}
+                    <span className="text-slate-200">
+                      {periodRemaining != null
+                        ? formatCurrency(periodRemaining)
+                        : formatCurrency(currentRent)}
+                    </span>
+                  </p>
+                </>
+              )}
+
               <div className="mt-4 flex flex-col gap-2">
                 <button
                   type="button"
                   onClick={handlePayWithCard}
-                  disabled={paying}
+                  disabled={
+                    paying || amountToPayNow == null || isBeforeDue
+                  }
                   className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {paying
                     ? 'Starting payment…'
+                    : isBeforeDue
+                    ? 'Online payment not available until due date'
+                    : amountToPayNow != null
+                    ? `Pay ${formatCurrency(amountToPayNow)} now`
                     : 'Pay rent securely with Card / ACH'}
                 </button>
+              </div>
+
+              {/* NEW: Auto-pay toggle section */}
+              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-3 text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-100">
+                      Automatic payments
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">
+                      {autoPayEnabled
+                        ? 'Auto-pay is ON. Your rent will be charged automatically each period based on your landlord’s settings.'
+                        : 'Auto-pay is OFF. You can still pay manually once rent is due.'}
+                    </p>
+                    {!property?.next_due_date || !currentRent || currentRent <= 0 ? (
+                      <p className="mt-1 text-[10px] text-amber-300">
+                        Auto-pay will be available once your landlord sets both
+                        your rent amount and next due date.
+                      </p>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleToggleAutoPay}
+                    disabled={
+                      updatingAutoPay ||
+                      !property?.next_due_date ||
+                      !currentRent ||
+                      currentRent <= 0
+                    }
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold border ${
+                      autoPayEnabled
+                        ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                        : 'bg-slate-900 text-slate-100 border-slate-600'
+                    } disabled:opacity-60 disabled:cursor-not-allowed`}
+                  >
+                    {updatingAutoPay
+                      ? 'Saving…'
+                      : autoPayEnabled
+                      ? 'Turn off'
+                      : 'Turn on'}
+                  </button>
+                </div>
+                <p className="mt-2 text-[10px] text-slate-500">
+                  You can update this setting at any time. Turning off auto-pay
+                  does not cancel any payments that are already processing.
+                </p>
               </div>
 
               <p className="mt-3 text-[11px] text-slate-500">
                 Card / ACH payments are processed securely by Stripe. You&apos;ll
                 get a confirmation once your payment is completed.
               </p>
-              {!autopayEnabled && (
-                <p className="mt-1 text-[11px] text-slate-500">
-                  You can also turn on automatic monthly payments in the
-                  &quot;Automatic payments&quot; section below.
-                </p>
-              )}
             </section>
 
             {/* Payment history */}
@@ -959,54 +1029,6 @@ export default function TenantPortalPage() {
                   View all requests
                 </Link>
               </div>
-            </section>
-
-            {/* Automatic payments */}
-            <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Automatic payments
-              </p>
-              <p className="mt-1 text-sm font-medium text-slate-50">
-                Monthly rent autopay
-              </p>
-              <p className="mt-1 text-[11px] text-slate-400">
-                Turn this on if you&apos;d like RentZentro to automatically start
-                your monthly rent payment using your saved card or bank method.
-              </p>
-
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <div className="text-[11px] text-slate-300">
-                  <p className="font-medium text-slate-100">
-                    {autopayEnabled ? 'Automatic payments are ON' : 'Automatic payments are OFF'}
-                  </p>
-                  <p className="mt-1 text-slate-400">
-                    Make sure funds are available before each due date. If a
-                    payment fails, your rent may still show as overdue.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleToggleAutopay}
-                  disabled={savingAutopay}
-                  className={`shrink-0 inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-semibold border ${
-                    autopayEnabled
-                      ? 'border-emerald-500/70 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
-                      : 'border-slate-600 bg-slate-900 text-slate-100 hover:bg-slate-800'
-                  } disabled:opacity-60 disabled:cursor-not-allowed`}
-                >
-                  {savingAutopay
-                    ? 'Saving…'
-                    : autopayEnabled
-                    ? 'Turn off'
-                    : 'Turn on'}
-                </button>
-              </div>
-
-              <p className="mt-2 text-[10px] text-slate-500">
-                Note: The exact timing and processing of automatic charges
-                depends on how your landlord has configured their Stripe
-                account. If you have questions, contact your landlord directly.
-              </p>
             </section>
           </div>
         </div>
