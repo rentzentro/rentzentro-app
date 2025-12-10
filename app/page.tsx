@@ -80,7 +80,8 @@ export default function HomePage() {
                     Powered by Stripe
                   </span>
                   <span className="text-[10px] text-emerald-100/80">
-                    Secure card & ACH rent payments for your tenants.
+                    Secure card & ACH rent payments, including automatic rent
+                    payments (auto-pay) for your tenants.
                   </span>
                 </div>
               </div>
@@ -105,8 +106,9 @@ export default function HomePage() {
               <p className="mt-3 max-w-xl text-sm text-slate-400">
                 RentZentro is software for landlords—not a management company.
                 Get a clean dashboard, tenant portal, online card & ACH rent
-                payments, automatic rent reminders, document sharing, and
-                maintenance tracking without the corporate bloat.
+                payments, automatic rent payments (auto-pay), automatic rent
+                reminders, document sharing, and maintenance tracking without
+                the corporate bloat.
               </p>
             </div>
 
@@ -157,6 +159,17 @@ export default function HomePage() {
                     Tenants pay rent online with card or ACH through Stripe.
                     Payments log automatically to your dashboard—RentZentro
                     never holds your funds.
+                  </p>
+                </div>
+
+                {/* NEW: Automatic rent payments for landlords */}
+                <div className="flex items-start gap-2 text-xs text-slate-200">
+                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                    ✓
+                  </span>
+                  <p>
+                    Offer tenants automatic rent payments (auto-pay) so on-time
+                    rent becomes the default instead of a monthly chase.
                   </p>
                 </div>
 
