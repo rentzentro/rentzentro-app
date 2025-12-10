@@ -83,6 +83,24 @@ const toDateInputValue = (iso: string | null | undefined): string => {
   return iso.slice(0, 10);
 };
 
+// Identify payments that were logged automatically via the tenant portal / Stripe
+// These should be VIEW-ONLY: not editable and not deletable.
+const isPortalLoggedPayment = (payment: Payment): boolean => {
+  const method = (payment.method || '').toLowerCase().trim();
+
+  if (!method) return false;
+
+  // Anything that's clearly "card" or "ach" based (Stripe Checkout or autopay)
+  if (method.startsWith('card')) return true; // "card", "card_autopay", etc.
+  if (method.startsWith('ach')) return true; // "ach", "ach_autopay", etc.
+
+  // Future-proof: any method string that references Stripe directly
+  if (method.includes('stripe')) return true;
+
+  // You can add more conditions here later if you add other online methods
+  return false;
+};
+
 // ---------- Component ----------
 
 export default function LandlordPaymentsPage() {
@@ -343,6 +361,16 @@ export default function LandlordPaymentsPage() {
   // ---------- Edit payment helpers ----------
 
   const startEditPayment = (p: Payment) => {
+    // Block editing for portal/online payments
+    if (isPortalLoggedPayment(p)) {
+      setError(
+        'Payments made through the tenant portal (card/ACH/autopay) are view-only and cannot be edited. ' +
+          'If something needs to be adjusted, add a separate manual payment instead.'
+      );
+      setFormMessage(null);
+      return;
+    }
+
     setEditingPayment(p);
     setEditTenantId(p.tenant_id ?? '');
     setEditPropertyId(p.property_id ?? '');
@@ -368,6 +396,15 @@ export default function LandlordPaymentsPage() {
   const handleUpdatePayment = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingPayment) return;
+
+    // Hard block in handler as well, just in case
+    if (isPortalLoggedPayment(editingPayment)) {
+      setError(
+        'Online portal payments cannot be edited. Adjust records with a separate manual payment if needed.'
+      );
+      setSavingEdit(false);
+      return;
+    }
 
     setSavingEdit(true);
     setError(null);
@@ -418,6 +455,16 @@ export default function LandlordPaymentsPage() {
   // ---------- Delete payment helpers ----------
 
   const handleDeletePayment = async (payment: Payment) => {
+    // Block deleting for portal/online payments
+    if (isPortalLoggedPayment(payment)) {
+      setError(
+        'Payments made through the tenant portal (card/ACH/autopay) are view-only and cannot be deleted. ' +
+          'If there was an error, reconcile it in your bank and add a manual adjustment payment instead.'
+      );
+      setFormMessage(null);
+      return;
+    }
+
     const confirmed = window.confirm(
       'Delete this payment? If this payment was marking the most recent period as paid, the tenant may show as past due again.'
     );
@@ -770,13 +817,14 @@ export default function LandlordPaymentsPage() {
                         const tenantLabel = t
                           ? t.name || t.email
                           : p.tenant_id ?? '—';
-                        const propertyLabel = prop
+                        const propertyLabelText = prop
                           ? `${prop.name || 'Property'}${
                               prop.unit_label ? ` · ${prop.unit_label}` : ''
                             }`
                           : p.property_id ?? '—';
 
                         const isDeleting = deletingId === p.id;
+                        const portalPayment = isPortalLoggedPayment(p);
 
                         return (
                           <tr
@@ -793,7 +841,7 @@ export default function LandlordPaymentsPage() {
                               {tenantLabel}
                             </td>
                             <td className="py-2 px-3 align-top text-slate-300">
-                              {propertyLabel}
+                              {propertyLabelText}
                             </td>
                             <td className="py-2 px-3 align-top text-slate-300 hidden sm:table-cell">
                               {p.method || '—'}
@@ -802,23 +850,29 @@ export default function LandlordPaymentsPage() {
                               {p.note || '—'}
                             </td>
                             <td className="py-2 px-3 align-top">
-                              <div className="flex flex-wrap gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => startEditPayment(p)}
-                                  className="rounded-full border border-sky-500/70 bg-sky-500/10 px-3 py-1 text-[11px] text-sky-200 hover:bg-sky-500/20"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeletePayment(p)}
-                                  disabled={isDeleting}
-                                  className="rounded-full border border-rose-500/70 bg-rose-500/10 px-3 py-1 text-[11px] text-rose-200 hover:bg-rose-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
-                                >
-                                  {isDeleting ? 'Deleting…' : 'Delete'}
-                                </button>
-                              </div>
+                              {portalPayment ? (
+                                <span className="inline-flex items-center rounded-full border border-emerald-500/50 bg-emerald-500/10 px-3 py-1 text-[10px] font-medium text-emerald-200">
+                                  Portal payment · view only
+                                </span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditPayment(p)}
+                                    className="rounded-full border border-sky-500/70 bg-sky-500/10 px-3 py-1 text-[11px] text-sky-200 hover:bg-sky-500/20"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeletePayment(p)}
+                                    disabled={isDeleting}
+                                    className="rounded-full border border-rose-500/70 bg-rose-500/10 px-3 py-1 text-[11px] text-rose-200 hover:bg-rose-500/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                                  >
+                                    {isDeleting ? 'Deleting…' : 'Delete'}
+                                  </button>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         );
