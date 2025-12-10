@@ -20,6 +20,7 @@ type TenantRow = {
   lease_start: string | null;
   lease_end: string | null;
   user_id?: string | null;
+  allow_early_payment?: boolean | null; // NEW
 };
 
 type PropertyRow = {
@@ -312,7 +313,7 @@ export default function TenantPortalPage() {
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select(
-            'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id'
+            'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment'
           )
           .or(`user_id.eq.${authUserId},email.eq.${email}`)
           .order('created_at', { ascending: true });
@@ -347,7 +348,7 @@ export default function TenantPortalPage() {
             .update({ user_id: authUserId })
             .eq('id', t.id)
             .select(
-              'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id'
+              'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment'
             )
             .maybeSingle();
 
@@ -530,6 +531,7 @@ export default function TenantPortalPage() {
     if (!tenant) return;
 
     const baseRent = property?.monthly_rent ?? tenant.monthly_rent ?? 0;
+    const allowEarly = !!tenant.allow_early_payment;
 
     const today = new Date();
     const todayMidnight = new Date(
@@ -562,15 +564,17 @@ export default function TenantPortalPage() {
       return;
     }
 
-    // Charge outstanding if any, otherwise base rent
-    const amount =
-      rentStatus && rentStatus.outstanding > 0
-        ? rentStatus.outstanding
-        : baseRent;
+    // Charge outstanding if any, otherwise allow-paying-one-month if landlord enabled early payment
+    let amount = 0;
+    if (rentStatus && rentStatus.outstanding > 0) {
+      amount = rentStatus.outstanding;
+    } else if (allowEarly && baseRent > 0) {
+      amount = baseRent;
+    }
 
     if (!amount || amount <= 0) {
       setError(
-        'Your rent appears to be fully paid or not set for this period. Please contact your landlord if this looks wrong.'
+        'Your rent appears to be fully paid for this period, and your landlord is not currently allowing early online payments for this unit.'
       );
       setSuccess(null);
       return;
@@ -650,6 +654,8 @@ export default function TenantPortalPage() {
 
   const currentRent =
     property?.monthly_rent ?? tenant.monthly_rent ?? null;
+  const allowEarly = !!tenant.allow_early_payment;
+  const baseRentForButton = currentRent ?? 0;
 
   // For status + early-pay text: use calculated nextDueDate if available,
   // otherwise fall back to property.next_due_date
@@ -677,6 +683,8 @@ export default function TenantPortalPage() {
   const amountToPayNow =
     !isBeforeDue && rentStatus && rentStatus.outstanding > 0
       ? rentStatus.outstanding
+      : !isBeforeDue && allowEarly && baseRentForButton > 0
+      ? baseRentForButton
       : null;
 
   const accountStatusLabel = isRentOverdue
@@ -1081,7 +1089,8 @@ export default function TenantPortalPage() {
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Link
                   href="/tenant/maintenance"
-                  className="flex-1 inline-flex items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
+                  className="flex-1 inline-flex items
+                  center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
                 >
                   Submit a maintenance request
                 </Link>
