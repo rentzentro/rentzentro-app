@@ -61,6 +61,15 @@ type MaintenanceRow = {
   resolution_note: string | null;
 };
 
+type RentStatus = {
+  totalDue: number;
+  totalPaid: number;
+  outstanding: number;
+  monthsDue: number;
+  nextDueDate: string | null; // ISO date of the earliest unpaid/next month
+  isCaughtUp: boolean;
+};
+
 // ---------- Helpers ----------
 
 const parseSupabaseDate = (value: string | null | undefined): Date | null => {
@@ -138,6 +147,118 @@ const monthsBetween = (from: Date, to: Date) => {
   );
 };
 
+// Calculate rent status with partial payments support
+const calculateRentStatus = (
+  monthlyRent: number | null,
+  firstDueDateISO: string | null,
+  payments: PaymentRow[]
+): RentStatus => {
+  if (!monthlyRent || !firstDueDateISO) {
+    return {
+      totalDue: 0,
+      totalPaid: 0,
+      outstanding: 0,
+      monthsDue: 0,
+      nextDueDate: firstDueDateISO,
+      isCaughtUp: true,
+    };
+  }
+
+  const firstDue = parseSupabaseDate(firstDueDateISO);
+  if (!firstDue) {
+    return {
+      totalDue: 0,
+      totalPaid: 0,
+      outstanding: 0,
+      monthsDue: 0,
+      nextDueDate: firstDueDateISO,
+      isCaughtUp: true,
+    };
+  }
+
+  const today = new Date();
+  const todayMidnight = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+  const firstDueMidnight = new Date(
+    firstDue.getFullYear(),
+    firstDue.getMonth(),
+    firstDue.getDate()
+  );
+
+  // No rent due yet (first due date in the future)
+  if (firstDueMidnight > todayMidnight) {
+    return {
+      totalDue: 0,
+      totalPaid: 0,
+      outstanding: 0,
+      monthsDue: 0,
+      nextDueDate: firstDueMidnight.toISOString(),
+      isCaughtUp: true,
+    };
+  }
+
+  // How many monthly periods are due from firstDue through this month (inclusive)
+  const mDiff = monthsBetween(firstDueMidnight, todayMidnight);
+  const monthsDue = Math.max(1, mDiff + 1);
+
+  const totalDue = monthsDue * monthlyRent;
+
+  // Sum all payments (assumed successful payments only)
+  const totalPaid = payments.reduce(
+    (sum, p) => sum + (p.amount || 0),
+    0
+  );
+
+  const outstanding = Math.max(0, totalDue - totalPaid);
+  const isCaughtUp = outstanding <= 0;
+
+  // Walk month-by-month to find the earliest unpaid (or partially unpaid) month
+  let remainingPaid = totalPaid;
+  let monthCursor = new Date(firstDueMidnight);
+  let unpaidMonth: Date | null = null;
+
+  for (let i = 0; i < monthsDue; i++) {
+    if (remainingPaid >= monthlyRent) {
+      remainingPaid -= monthlyRent;
+      monthCursor = new Date(
+        monthCursor.getFullYear(),
+        monthCursor.getMonth() + 1,
+        monthCursor.getDate()
+      );
+    } else {
+      unpaidMonth = new Date(monthCursor);
+      break;
+    }
+  }
+
+  let nextDueDate: string | null;
+
+  if (unpaidMonth) {
+    // There is at least one month with some unpaid amount
+    nextDueDate = unpaidMonth.toISOString();
+  } else {
+    // All periods up to today fully covered; next due is the next month after the last one counted
+    const next = new Date(
+      firstDueMidnight.getFullYear(),
+      firstDueMidnight.getMonth() + monthsDue,
+      firstDueMidnight.getDate()
+    );
+    nextDueDate = next.toISOString();
+  }
+
+  return {
+    totalDue,
+    totalPaid,
+    outstanding,
+    monthsDue,
+    nextDueDate,
+    isCaughtUp,
+  };
+};
+
 // ---------- Component ----------
 
 export default function TenantPortalPage() {
@@ -154,10 +275,7 @@ export default function TenantPortalPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
 
-  // Overdue math (based on lease_start + total payments)
-  const [totalDue, setTotalDue] = useState<number | null>(null);
-  const [totalPaidToward, setTotalPaidToward] = useState<number | null>(null);
-  const [totalOutstanding, setTotalOutstanding] = useState<number | null>(null);
+  const [rentStatus, setRentStatus] = useState<RentStatus | null>(null);
 
   // Auto-pay UI toggle (front-end only right now)
   const [autoPayEnabled, setAutoPayEnabled] = useState(false);
@@ -206,9 +324,7 @@ export default function TenantPortalPage() {
           setPayments([]);
           setDocuments([]);
           setMaintenance([]);
-          setTotalDue(null);
-          setTotalPaidToward(null);
-          setTotalOutstanding(null);
+          setRentStatus(null);
           setError(
             'We couldn’t find a tenant profile for this email yet. ' +
               'This usually means your landlord hasn’t added you to their tenant list, or used a different email. ' +
@@ -281,8 +397,7 @@ export default function TenantPortalPage() {
         setProperty(prop);
 
         // Effective rent (property preferred, fall back to tenant)
-        const effectiveRent =
-          prop?.monthly_rent ?? t.monthly_rent ?? null;
+        const effectiveRent = prop?.monthly_rent ?? t.monthly_rent ?? null;
 
         // Payments
         const { data: payRows, error: payError } = await supabase
@@ -299,53 +414,12 @@ export default function TenantPortalPage() {
         const payData = (payRows || []) as PaymentRow[];
         setPayments(payData);
 
-        // ---------- Compute totals based on lease_start ----------
-        let newTotalDue: number | null = null;
-        let newTotalPaidToward = 0;
-        let newOutstanding: number | null = null;
+        // ---------- Compute rent status based on next_due_date (preferred) or lease_start ----------
+        const firstDueDateISO =
+          prop?.next_due_date || t.lease_start || null;
 
-        const today = new Date();
-        const todayMidnight = new Date(
-          today.getFullYear(),
-          today.getMonth(),
-          today.getDate()
-        );
-
-        const leaseStartDate = parseSupabaseDate(t.lease_start);
-
-        if (effectiveRent != null && leaseStartDate && leaseStartDate <= todayMidnight) {
-          // Number of months from lease_start through this month (inclusive)
-          const mDiff = monthsBetween(leaseStartDate, todayMidnight);
-          const periodsOwed = Math.max(1, mDiff + 1); // at least 1 period if we've passed lease_start
-
-          newTotalDue = periodsOwed * effectiveRent;
-
-          // Sum ALL payments since lease_start toward those periods
-          for (const p of payData) {
-            if (!p.amount || !p.paid_on) continue;
-            const pd = parseSupabaseDate(p.paid_on);
-            if (!pd) continue;
-            if (pd >= leaseStartDate) {
-              newTotalPaidToward += p.amount;
-            }
-          }
-
-          newOutstanding = Math.max(0, newTotalDue - newTotalPaidToward);
-        } else if (effectiveRent != null && leaseStartDate && leaseStartDate > todayMidnight) {
-          // Lease hasn't started yet → nothing due yet
-          newTotalDue = 0;
-          newTotalPaidToward = 0;
-          newOutstanding = 0;
-        } else {
-          // No lease_start set → fall back to a single-period view
-          newTotalDue = effectiveRent;
-          newTotalPaidToward = 0;
-          newOutstanding = Math.max(0, effectiveRent ?? 0);
-        }
-
-        setTotalDue(newTotalDue);
-        setTotalPaidToward(newTotalPaidToward);
-        setTotalOutstanding(newOutstanding);
+        const rs = calculateRentStatus(effectiveRent, firstDueDateISO, payData);
+        setRentStatus(rs);
 
         // Documents (by property OR tenant)
         let docQuery = supabase
@@ -445,8 +519,8 @@ export default function TenantPortalPage() {
 
     // Earliest due date we know about (for "no early payments")
     const earliestDueDate =
-      parseSupabaseDate(tenant.lease_start) ||
-      parseSupabaseDate(property?.next_due_date || null);
+      parseSupabaseDate(property?.next_due_date || null) ||
+      parseSupabaseDate(tenant.lease_start);
 
     const isBeforeFirstDue =
       !!earliestDueDate && todayMidnight < earliestDueDate;
@@ -461,8 +535,8 @@ export default function TenantPortalPage() {
 
     // Charge outstanding if any, otherwise base rent
     const amount =
-      totalOutstanding != null && totalOutstanding > 0
-        ? totalOutstanding
+      rentStatus && rentStatus.outstanding > 0
+        ? rentStatus.outstanding
         : baseRent;
 
     if (!amount || amount <= 0) {
@@ -548,8 +622,13 @@ export default function TenantPortalPage() {
   const currentRent =
     property?.monthly_rent ?? tenant.monthly_rent ?? null;
 
-  // For status + early-pay text (we still show next_due_date if you’ve set it)
-  const dueDateObj = parseSupabaseDate(property?.next_due_date || null);
+  // For status + early-pay text: use calculated nextDueDate if available,
+  // otherwise fall back to property.next_due_date
+  const dueDateObj = parseSupabaseDate(
+    (rentStatus?.nextDueDate as string | null) ||
+      property?.next_due_date ||
+      null
+  );
   const today = new Date();
   const todayMidnight = new Date(
     today.getFullYear(),
@@ -567,8 +646,8 @@ export default function TenantPortalPage() {
     !!earliestDueDate && todayMidnight < earliestDueDate;
 
   const amountToPayNow =
-    !isBeforeDue && totalOutstanding != null && totalOutstanding > 0
-      ? totalOutstanding
+    !isBeforeDue && rentStatus && rentStatus.outstanding > 0
+      ? rentStatus.outstanding
       : null;
 
   const accountStatusLabel = isRentOverdue
@@ -664,7 +743,10 @@ export default function TenantPortalPage() {
               <p className="mt-1 text-xs text-slate-400">
                 Next due date:{' '}
                 <span className="text-slate-200">
-                  {formatDate(property?.next_due_date)}
+                  {formatDate(
+                    (rentStatus?.nextDueDate as string | null) ||
+                      property?.next_due_date
+                  )}
                 </span>
               </p>
               <p className="mt-1 text-xs text-slate-400">
@@ -675,19 +757,19 @@ export default function TenantPortalPage() {
                 </span>
               </p>
 
-              {/* Totals based on lease_start */}
-              {currentRent != null && (
+              {/* Totals based on rentStatus */}
+              {currentRent != null && rentStatus && (
                 <>
                   <p className="mt-2 text-xs text-slate-400">
-                    Total paid toward overdue rent:{' '}
+                    Total paid toward rent:{' '}
                     <span className="text-slate-200">
-                      {formatCurrency(totalPaidToward ?? 0)}
+                      {formatCurrency(rentStatus.totalPaid)}
                     </span>
                   </p>
                   <p className="mt-1 text-xs text-slate-400">
                     Total outstanding rent:{' '}
                     <span className="text-slate-200">
-                      {formatCurrency(totalOutstanding ?? 0)}
+                      {formatCurrency(rentStatus.outstanding)}
                     </span>
                   </p>
                 </>
