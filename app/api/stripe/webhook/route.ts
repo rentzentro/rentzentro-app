@@ -16,6 +16,11 @@ const ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET as string;
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+// Helper for logging
+function log(...args: any[]) {
+  console.log('[rent webhook]', ...args);
+}
+
 export async function POST(req: Request) {
   if (!ENDPOINT_SECRET) {
     console.error('Missing STRIPE_WEBHOOK_SECRET env var');
@@ -55,8 +60,8 @@ export async function POST(req: Request) {
 
         // Only handle one-time rent payments, ignore subscriptions
         if (session.mode !== 'payment') {
-          console.log(
-            '[rent webhook] checkout.session.completed with mode != payment, ignoring'
+          log(
+            'checkout.session.completed with mode != payment, ignoring'
           );
           break;
         }
@@ -116,7 +121,7 @@ export async function POST(req: Request) {
         // Use "today" as paid_on (date only)
         const paid_on = new Date().toISOString().slice(0, 10);
 
-        console.log('[rent webhook] inserting payment row', {
+        log('inserting ONE-TIME payment row', {
           tenant_id,
           property_id,
           amount,
@@ -147,8 +152,101 @@ export async function POST(req: Request) {
         break;
       }
 
+      // NEW: handle autopay / subscription-based rent via invoices
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object as Stripe.Invoice;
+
+        const metadata = (invoice.metadata || {}) as Record<string, string>;
+        const tenantIdStr = metadata['tenant_id'];
+        const propertyIdStr = metadata['property_id'];
+
+        // Optional type flag if you want to scope further later:
+        // const rzType = metadata['rz_type']; // e.g. "rent_autopay"
+
+        // If this invoice doesn't look like a tenant rent invoice, ignore it
+        if (!tenantIdStr) {
+          log(
+            'invoice.payment_succeeded with no tenant_id in metadata, ignoring'
+          );
+          break;
+        }
+
+        const tenant_id = Number(tenantIdStr);
+        const property_id =
+          propertyIdStr != null && propertyIdStr !== ''
+            ? Number(propertyIdStr)
+            : null;
+
+        if (Number.isNaN(tenant_id)) {
+          console.warn(
+            '[rent webhook] invoice.payment_succeeded invalid tenant_id:',
+            tenantIdStr
+          );
+          break;
+        }
+
+        if (property_id != null && Number.isNaN(property_id)) {
+          console.warn(
+            '[rent webhook] invoice.payment_succeeded invalid property_id:',
+            propertyIdStr
+          );
+          break;
+        }
+
+        const amountPaid = invoice.amount_paid; // in cents
+        if (!amountPaid) {
+          console.error(
+            '[rent webhook] invoice.payment_succeeded has no amount_paid'
+          );
+          break;
+        }
+
+        // Store amount as whole dollars
+        const amount = Math.round(amountPaid / 100);
+
+        // Use "today" as paid_on (date only) to match your existing rows
+        const paid_on = new Date().toISOString().slice(0, 10);
+
+        // Prefer metadata.description; fall back to invoice description
+        const description =
+          metadata['description'] ||
+          invoice.description ||
+          'Rent payment (autopay)';
+
+        log('inserting AUTOPAY payment row from invoice', {
+          tenant_id,
+          property_id,
+          amount,
+          paid_on,
+          note: description,
+          invoice_id: invoice.id,
+        });
+
+        const { error: insertError } = await supabaseAdmin
+          .from('payments')
+          .insert([
+            {
+              tenant_id,
+              property_id,
+              amount,
+              paid_on,
+              method: 'card_autopay',
+              note: description,
+            },
+          ]);
+
+        if (insertError) {
+          console.error(
+            '[rent webhook] Error inserting autopay payment into payments table:',
+            insertError
+          );
+        }
+
+        break;
+      }
+
       default:
-        console.log('[rent webhook] Unhandled event type:', event.type);
+        log('Unhandled event type:', event.type);
     }
 
     return NextResponse.json({ received: true }, { status: 200 });
