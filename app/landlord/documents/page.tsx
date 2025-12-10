@@ -1,3 +1,4 @@
+// app/landlord/documents/page.tsx
 'use client';
 
 import { useEffect, useState, FormEvent } from 'react';
@@ -49,12 +50,29 @@ export default function LandlordDocumentsPage() {
   const [title, setTitle] = useState('');
   const [propertyId, setPropertyId] = useState<number | ''>('');
 
+  // E-signatures (per-signature landlord pay)
+  const [esignTotalPurchased, setEsignTotalPurchased] = useState<number | null>(
+    null
+  );
+  const [buyQuantity, setBuyQuantity] = useState<number>(10);
+  const [buying, setBuying] = useState(false);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
 
       try {
+        // Make sure we have a logged-in landlord
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        if (authError || !authData?.user) {
+          router.push('/landlord/login');
+          return;
+        }
+
+        const user = authData.user;
+
+        // Properties
         const { data: propRows, error: propError } = await supabase
           .from('properties')
           .select('id, name, unit_label')
@@ -63,6 +81,7 @@ export default function LandlordDocumentsPage() {
         if (propError) throw propError;
         setProperties((propRows || []) as PropertyRow[]);
 
+        // Documents
         const { data: docRows, error: docError } = await supabase
           .from('documents')
           .select('*')
@@ -70,6 +89,29 @@ export default function LandlordDocumentsPage() {
 
         if (docError) throw docError;
         setDocuments((docRows || []) as DocumentRow[]);
+
+        // E-sign purchases (total signatures purchased by this landlord)
+        try {
+          const { data: esignRows, error: esignError } = await supabase
+            .from('esign_purchases')
+            .select('signatures')
+            .eq('landlord_user_id', user.id);
+
+          if (esignError) {
+            console.warn(
+              '[documents] E-sign purchases table not available yet or query failed:',
+              esignError
+            );
+          } else if (esignRows) {
+            const total = (esignRows as any[]).reduce(
+              (sum, row) => sum + (row.signatures ?? 0),
+              0
+            );
+            setEsignTotalPurchased(total);
+          }
+        } catch (innerErr) {
+          console.warn('[documents] E-sign purchases lookup failed:', innerErr);
+        }
       } catch (err: any) {
         console.error(err);
         setError(
@@ -81,7 +123,7 @@ export default function LandlordDocumentsPage() {
     };
 
     load();
-  }, []);
+  }, [router]);
 
   const handleUpload = async (e: FormEvent) => {
     e.preventDefault();
@@ -103,7 +145,9 @@ export default function LandlordDocumentsPage() {
 
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+      const { data: urlData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(path);
       const fileUrl = urlData?.publicUrl;
 
       if (!fileUrl) throw new Error('Failed to retrieve file URL.');
@@ -162,7 +206,48 @@ export default function LandlordDocumentsPage() {
     if (!id) return 'Not linked';
     const p = properties.find((x) => x.id === id);
     if (!p) return 'Unknown property';
-    return `${p.name || 'Property'}${p.unit_label ? ` · ${p.unit_label}` : ''}`;
+    return `${p.name || 'Property'}${
+      p.unit_label ? ` · ${p.unit_label}` : ''
+    }`;
+  };
+
+  const handleBuySignatures = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!buyQuantity || buyQuantity <= 0) {
+      setError('Please enter a valid number of signatures to purchase.');
+      return;
+    }
+
+    setBuying(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/esign/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: buyQuantity }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data?.url) {
+        throw new Error(
+          data?.error ||
+            'Failed to start e-sign checkout. Please double-check your Stripe configuration.'
+        );
+      }
+
+      // Redirect to Stripe Checkout
+      window.location.href = data.url as string;
+    } catch (err: any) {
+      console.error(err);
+      setError(
+        err?.message ||
+          'Something went wrong starting the e-sign checkout session.'
+      );
+    } finally {
+      setBuying(false);
+    }
   };
 
   return (
@@ -183,7 +268,7 @@ export default function LandlordDocumentsPage() {
               Leases & documents
             </h1>
             <p className="text-[13px] text-slate-400">
-              Upload leases, addenda, and important files.
+              Upload leases, addenda, and important files for your properties.
             </p>
           </div>
 
@@ -203,6 +288,70 @@ export default function LandlordDocumentsPage() {
             {error}
           </div>
         )}
+
+        {/* E-SIGNATURES PANEL */}
+        <section className="mb-6 rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">
+                E-signatures (per signature)
+              </p>
+              <p className="mt-1 text-sm text-slate-50">
+                Purchase e-signature credits so you can send leases and forms
+                for electronic signature directly from RentZentro.
+              </p>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Credits are paid by you as the landlord. Tenants never pay to
+                sign.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/50 px-3 py-2 text-right text-[11px] min-w-[190px]">
+              <p className="text-slate-300">Signatures purchased</p>
+              <p className="mt-1 text-lg font-semibold text-emerald-300">
+                {esignTotalPurchased == null
+                  ? '—'
+                  : esignTotalPurchased.toLocaleString('en-US')}
+              </p>
+              <p className="mt-0.5 text-[10px] text-slate-500">
+                Based on completed purchases
+              </p>
+            </div>
+          </div>
+
+          <form
+            onSubmit={handleBuySignatures}
+            className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="flex items-center gap-2 text-[11px]">
+              <label
+                htmlFor="esign-qty"
+                className="text-slate-300 whitespace-nowrap"
+              >
+                Signatures to purchase
+              </label>
+              <input
+                id="esign-qty"
+                type="number"
+                min={1}
+                value={buyQuantity}
+                onChange={(e) => setBuyQuantity(Number(e.target.value) || 0)}
+                className="w-20 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+              <span className="text-slate-500">
+                Each signature is billed via Stripe at your configured rate.
+              </span>
+            </div>
+
+            <button
+              type="submit"
+              disabled={buying}
+              className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-[11px] font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+            >
+              {buying ? 'Starting checkout…' : 'Buy e-signatures'}
+            </button>
+          </form>
+        </section>
 
         {/* Upload Form */}
         <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
@@ -260,7 +409,6 @@ export default function LandlordDocumentsPage() {
                   File
                 </label>
 
-                {/* FIXED FILE INPUT — CLEAN, READABLE */}
                 <input
                   id="doc-file-input"
                   type="file"
@@ -339,8 +487,7 @@ export default function LandlordDocumentsPage() {
           )}
 
           <p className="mt-3 text-[11px] text-slate-500">
-            Tenants will be able to view documents assigned
-            to their unit.
+            Tenants will be able to view documents assigned to their unit.
           </p>
         </section>
       </div>

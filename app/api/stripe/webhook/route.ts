@@ -58,26 +58,107 @@ export async function POST(req: Request) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
 
-        // Only handle one-time rent payments, ignore subscriptions
+        // Only handle one-time payments here; subscriptions are handled elsewhere
         if (session.mode !== 'payment') {
-          log(
-            'checkout.session.completed with mode != payment, ignoring'
-          );
+          log('checkout.session.completed with mode != payment, ignoring');
           break;
         }
 
         const metadata = (session.metadata || {}) as Record<string, string>;
+        const paymentKind = metadata['payment_kind'] || 'rent';
 
+        // -------------------------------------------------------------------
+        // 1) E-SIGN PER-SIGNATURE PURCHASE (LANDLORD PAYING)
+        // -------------------------------------------------------------------
+        if (paymentKind === 'esign') {
+          const landlordUserId = metadata['landlord_user_id'];
+          const signaturesStr = metadata['signatures'] ?? '1';
+
+          if (!landlordUserId) {
+            log(
+              'checkout.session.completed (esign) missing landlord_user_id in metadata, ignoring'
+            );
+            break;
+          }
+
+          const signatures = Number(signaturesStr);
+          if (Number.isNaN(signatures) || signatures <= 0) {
+            log(
+              'checkout.session.completed (esign) invalid signatures value:',
+              signaturesStr
+            );
+            break;
+          }
+
+          const amountTotal = session.amount_total; // number | null, in cents
+          if (amountTotal == null) {
+            console.error(
+              '[rent webhook] checkout.session.completed (esign) has no amount_total'
+            );
+            return NextResponse.json(
+              { error: 'Missing amount_total on session.' },
+              { status: 400 }
+            );
+          }
+
+          const amount = Math.round(amountTotal / 100); // store as whole dollars
+          const paid_at = new Date().toISOString();
+
+          const sessionDescription =
+            ((session as any).description as string | undefined) || undefined;
+
+          const description =
+            metadata['description'] ||
+            sessionDescription ||
+            'E-signature package purchase';
+
+          log('inserting E-SIGN purchase row', {
+            landlord_user_id: landlordUserId,
+            signatures,
+            amount,
+            paid_at,
+            payment_intent: session.payment_intent,
+            session_id: session.id,
+          });
+
+          const { error: esignInsertError } = await supabaseAdmin
+            .from('esign_purchases')
+            .insert([
+              {
+                landlord_user_id: landlordUserId,
+                signatures,
+                amount,
+                paid_at,
+                stripe_payment_intent_id: session.payment_intent as
+                  | string
+                  | null,
+                stripe_checkout_session_id: session.id,
+                description,
+              },
+            ]);
+
+          if (esignInsertError) {
+            console.error(
+              '[rent webhook] Error inserting e-sign purchase into esign_purchases table:',
+              esignInsertError
+            );
+          }
+
+          break;
+        }
+
+        // -------------------------------------------------------------------
+        // 2) DEFAULT: ONE-TIME RENT PAYMENT (TENANT PAYING)
+        // -------------------------------------------------------------------
         // IMPORTANT: keys must match what we send from /api/checkout
         const tenantIdStr = metadata['tenant_id'];
         const propertyIdStr = metadata['property_id'];
 
-        const description =
-          metadata['description'] || 'Rent payment';
+        const description = metadata['description'] || 'Rent payment';
 
         if (!tenantIdStr) {
           console.warn(
-            '[rent webhook] checkout.session.completed missing tenant_id metadata'
+            '[rent webhook] checkout.session.completed missing tenant_id metadata (rent mode)'
           );
           break;
         }
@@ -90,7 +171,7 @@ export async function POST(req: Request) {
 
         if (Number.isNaN(tenant_id)) {
           console.warn(
-            '[rent webhook] Invalid tenant_id in metadata:',
+            '[rent webhook] Invalid tenant_id in metadata (rent):',
             tenantIdStr
           );
           break;
@@ -98,16 +179,16 @@ export async function POST(req: Request) {
 
         if (property_id != null && Number.isNaN(property_id)) {
           console.warn(
-            '[rent webhook] Invalid property_id in metadata:',
+            '[rent webhook] Invalid property_id in metadata (rent):',
             propertyIdStr
           );
           break;
         }
 
-        const amountTotal = session.amount_total; // in cents
-        if (!amountTotal) {
+        const amountTotal = session.amount_total; // number | null, in cents
+        if (amountTotal == null) {
           console.error(
-            '[rent webhook] checkout.session.completed has no amount_total'
+            '[rent webhook] checkout.session.completed (rent) has no amount_total'
           );
           return NextResponse.json(
             { error: 'Missing amount_total on session.' },
@@ -152,16 +233,15 @@ export async function POST(req: Request) {
         break;
       }
 
-      // NEW: handle autopay / subscription-based rent via invoices
+      // ---------------------------------------------------------------------
+      // AUTOPAY / SUBSCRIPTION-BASED RENT VIA INVOICES
+      // ---------------------------------------------------------------------
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
 
         const metadata = (invoice.metadata || {}) as Record<string, string>;
         const tenantIdStr = metadata['tenant_id'];
         const propertyIdStr = metadata['property_id'];
-
-        // Optional type flag if you want to scope further later:
-        // const rzType = metadata['rz_type']; // e.g. "rent_autopay"
 
         // If this invoice doesn't look like a tenant rent invoice, ignore it
         if (!tenantIdStr) {
@@ -193,8 +273,8 @@ export async function POST(req: Request) {
           break;
         }
 
-        const amountPaid = invoice.amount_paid; // in cents
-        if (!amountPaid) {
+        const amountPaid = invoice.amount_paid; // number | null, in cents
+        if (amountPaid == null) {
           console.error(
             '[rent webhook] invoice.payment_succeeded has no amount_paid'
           );
