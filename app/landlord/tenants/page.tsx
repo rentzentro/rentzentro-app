@@ -33,7 +33,7 @@ type TenantRow = {
   monthly_rent: number | null;
   lease_start: string | null;
   lease_end: string | null;
-  allow_early_payment?: boolean | null; // NEW
+  allow_early_payment?: boolean | null;
 };
 
 type TeamMemberRow = {
@@ -110,7 +110,7 @@ export default function LandlordTenantsPage() {
   const [formPropertyId, setFormPropertyId] = useState<number | ''>('');
   const [formLeaseStart, setFormLeaseStart] = useState('');
   const [formLeaseEnd, setFormLeaseEnd] = useState('');
-  const [formAllowEarlyPayment, setFormAllowEarlyPayment] = useState(false); // NEW
+  const [formAllowEarlyPayment, setFormAllowEarlyPayment] = useState(false);
   const [savingTenant, setSavingTenant] = useState(false);
 
   // Invite state
@@ -124,7 +124,7 @@ export default function LandlordTenantsPage() {
   const [editPropertyId, setEditPropertyId] = useState<number | ''>('');
   const [editLeaseStart, setEditLeaseStart] = useState('');
   const [editLeaseEnd, setEditLeaseEnd] = useState('');
-  const [editAllowEarlyPayment, setEditAllowEarlyPayment] = useState(false); // NEW
+  const [editAllowEarlyPayment, setEditAllowEarlyPayment] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
   // ---------- Load landlord / team owner + data ----------
@@ -319,6 +319,11 @@ export default function LandlordTenantsPage() {
       if (!formPropertyId) {
         throw new Error('Please select a property for this tenant.');
       }
+      if (!formLeaseStart) {
+        throw new Error(
+          'Lease start / first rent due date is required. For month-to-month, use the first month rent is due.'
+        );
+      }
 
       const { data, error: insertError } = await supabase
         .from('tenants')
@@ -330,9 +335,9 @@ export default function LandlordTenantsPage() {
           property_id: formPropertyId,
           status: 'Current',
           monthly_rent: null, // property is source of truth for rent
-          lease_start: formLeaseStart || null,
+          lease_start: formLeaseStart,
           lease_end: formLeaseEnd || null,
-          allow_early_payment: formAllowEarlyPayment, // NEW
+          allow_early_payment: formAllowEarlyPayment,
         })
         .select('*')
         .single();
@@ -365,7 +370,7 @@ export default function LandlordTenantsPage() {
     setEditPropertyId(t.property_id ?? '');
     setEditLeaseStart(toDateInputValue(t.lease_start));
     setEditLeaseEnd(toDateInputValue(t.lease_end));
-    setEditAllowEarlyPayment(!!t.allow_early_payment); // NEW
+    setEditAllowEarlyPayment(!!t.allow_early_payment);
     setError(null);
     setSuccess(null);
   };
@@ -394,6 +399,11 @@ export default function LandlordTenantsPage() {
       if (!editEmail.trim()) {
         throw new Error('Tenant email is required.');
       }
+      if (!editLeaseStart) {
+        throw new Error(
+          'Lease start / first rent due date is required. For month-to-month, use the first month rent is due.'
+        );
+      }
 
       const { data, error: updateError } = await supabase
         .from('tenants')
@@ -402,9 +412,9 @@ export default function LandlordTenantsPage() {
           email: editEmail.trim(),
           phone: editPhone.trim() || null,
           property_id: editPropertyId || null,
-          lease_start: editLeaseStart || null,
+          lease_start: editLeaseStart,
           lease_end: editLeaseEnd || null,
-          allow_early_payment: editAllowEarlyPayment, // NEW
+          allow_early_payment: editAllowEarlyPayment,
         })
         .eq('id', editingTenant.id)
         .select('*')
@@ -554,8 +564,8 @@ export default function LandlordTenantsPage() {
               Manage tenants
             </h1>
             <p className="text-[13px] text-slate-400">
-              Add or remove tenants, link them to properties, set lease dates,
-              and send portal invites.
+              Add or remove tenants, link them to properties, and set lease /
+              rent start dates for accurate rent tracking.
             </p>
           </div>
 
@@ -605,7 +615,7 @@ export default function LandlordTenantsPage() {
               </p>
               <p className="mt-1 text-sm text-slate-200">
                 Create a tenant linked to one of your properties and set their
-                lease dates.
+                lease / rent start dates.
               </p>
             </div>
 
@@ -681,13 +691,22 @@ export default function LandlordTenantsPage() {
 
                 {/* Lease dates */}
                 <div className="space-y-1 md:col-span-1">
-                  <label className="block text-slate-300">Lease start</label>
+                  <label className="block text-slate-300">
+                    Lease start / first rent due date{' '}
+                    <span className="text-red-400">*</span>
+                  </label>
                   <input
                     type="date"
+                    required
                     value={formLeaseStart}
                     onChange={(e) => setFormLeaseStart(e.target.value)}
                     className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    For month-to-month tenants, use the first month rent is due.
+                    This date is used to calculate overdue rent and future due
+                    dates in the tenant portal.
+                  </p>
                 </div>
                 <div className="space-y-1 md:col-span-1">
                   <label className="block text-slate-300">Lease end</label>
@@ -697,6 +716,10 @@ export default function LandlordTenantsPage() {
                     onChange={(e) => setFormLeaseEnd(e.target.value)}
                     className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    Optional. You can leave this blank for open-ended or
+                    month-to-month tenants.
+                  </p>
                 </div>
 
                 {/* Allow early payments */}
@@ -825,13 +848,22 @@ export default function LandlordTenantsPage() {
 
               {/* Lease dates */}
               <div className="space-y-1 md:col-span-1">
-                <label className="block text-slate-300">Lease start</label>
+                <label className="block text-slate-300">
+                  Lease start / first rent due date{' '}
+                  <span className="text-red-400">*</span>
+                </label>
                 <input
                   type="date"
+                  required
                   value={editLeaseStart}
                   onChange={(e) => setEditLeaseStart(e.target.value)}
                   className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
+                <p className="mt-1 text-[10px] text-slate-500">
+                  For month-to-month tenants, use the first month rent is due.
+                  This date is used to calculate overdue rent and future due
+                  dates in the tenant portal.
+                </p>
               </div>
               <div className="space-y-1 md:col-span-1">
                 <label className="block text-slate-300">Lease end</label>
@@ -841,6 +873,10 @@ export default function LandlordTenantsPage() {
                   onChange={(e) => setEditLeaseEnd(e.target.value)}
                   className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Optional. You can leave this blank for open-ended or
+                  month-to-month tenants.
+                </p>
               </div>
 
               {/* Allow early payments (edit) */}
