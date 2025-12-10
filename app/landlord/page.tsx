@@ -25,9 +25,6 @@ type PropertyRow = {
   monthly_rent: number | null;
   status: string | null;
   next_due_date: string | null;
-  // If your rent math view/table exposes a per-period amount (e.g. after partial payments),
-  // we’ll use it; otherwise we fall back to monthly_rent.
-  effective_rent?: number | null;
 };
 
 type TenantRow = {
@@ -312,12 +309,12 @@ export default function LandlordDashboardPage() {
             .from('tenants')
             .select('*')
             .order('created_at', { ascending: false }),
-          // Payments: RLS should already restrict to this landlord owner_id
+          // Payments: need more history so overdue math matches tenant portal
           supabase
             .from('payments')
             .select('*')
             .order('paid_on', { ascending: false })
-            .limit(10),
+            .limit(500),
           supabase
             .from('maintenance_requests')
             .select('id, status')
@@ -391,20 +388,11 @@ export default function LandlordDashboardPage() {
     (t) => t.status?.toLowerCase() === 'current'
   ).length;
 
-  // Only count non-inactive units toward rent status + rent roll
-  const activeRentProperties = properties.filter(
-    (p) => (p.status || '').toLowerCase() !== 'inactive'
+  // Sum monthly_rent for all properties
+  const monthlyRentRoll = properties.reduce(
+    (sum, p) => sum + (p.monthly_rent || 0),
+    0
   );
-
-  // If effective_rent is present (e.g. adjusted for partial payments),
-  // we use that; otherwise we fall back to monthly_rent.
-  const monthlyRentRoll = activeRentProperties.reduce((sum, p) => {
-    const amt =
-      p.effective_rent != null && !isNaN(p.effective_rent)
-        ? p.effective_rent
-        : p.monthly_rent || 0;
-    return sum + amt;
-  }, 0);
 
   const today = new Date();
   const todayDateOnly = new Date(
@@ -418,19 +406,19 @@ export default function LandlordDashboardPage() {
     todayDateOnly.getDate() + 7
   );
 
-  const overdue = activeRentProperties.filter((p) => {
+  const overdue = properties.filter((p) => {
     const due = parseDueDate(p.next_due_date);
     if (!due) return false;
     return due < todayDateOnly;
   });
 
-  const upcoming7 = activeRentProperties.filter((p) => {
+  const upcoming7 = properties.filter((p) => {
     const due = parseDueDate(p.next_due_date);
     if (!due) return false;
     return due >= todayDateOnly && due <= sevenDaysFromNow;
   });
 
-  const notDueYet = activeRentProperties.filter((p) => {
+  const notDueYet = properties.filter((p) => {
     const due = parseDueDate(p.next_due_date);
     if (!due) return true;
     return due > sevenDaysFromNow;
@@ -445,6 +433,53 @@ export default function LandlordDashboardPage() {
   const newMaintenanceCount = maintenanceRequests.filter(
     (m) => m.status?.toLowerCase() === 'new'
   ).length;
+
+  // ---------- Overdue amount helper (match tenant portal math) ----------
+
+  const computeOverdueAmountForProperty = (p: PropertyRow): number | null => {
+    const rent = p.monthly_rent;
+    if (!rent || rent <= 0) return null;
+
+    const firstUnpaidDue = parseDueDate(p.next_due_date);
+    if (!firstUnpaidDue) return null;
+
+    // If not actually overdue, just show a single period of rent
+    if (firstUnpaidDue >= todayDateOnly) {
+      return rent;
+    }
+
+    // How many due periods exist between firstUnpaidDue and today?
+    let monthsBehind =
+      (todayDateOnly.getFullYear() - firstUnpaidDue.getFullYear()) * 12 +
+      (todayDateOnly.getMonth() - firstUnpaidDue.getMonth());
+
+    // If we've passed the due day this month, count the current month too.
+    if (todayDateOnly.getDate() >= firstUnpaidDue.getDate()) {
+      monthsBehind += 1;
+    }
+
+    if (monthsBehind < 1) {
+      monthsBehind = 1;
+    }
+
+    const baseDue = monthsBehind * rent;
+
+    // Payments applied toward these overdue periods:
+    // any payments for this property from firstUnpaidDue through today.
+    const paidToward = payments.reduce((sum, pay) => {
+      if (pay.property_id !== p.id) return sum;
+      if (!pay.amount || !pay.paid_on) return sum;
+
+      const paidDate = parseDueDate(pay.paid_on);
+      if (!paidDate) return sum;
+
+      if (paidDate < firstUnpaidDue || paidDate > todayDateOnly) return sum;
+      return sum + pay.amount;
+    }, 0);
+
+    const remaining = baseDue - paidToward;
+    return remaining <= 0 ? 0 : remaining;
+  };
 
   // Subscription / trial status
   let hasActiveTrial = false;
@@ -763,15 +798,19 @@ export default function LandlordDashboardPage() {
               </p>
             </Link>
 
+            {/* UPDATED: Documents & e-sign button with icons side-by-side */}
             <Link
               href="/landlord/documents"
               className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
             >
               <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  📄✍️
+                  📄
                 </span>
-                Documents & e-sign
+                <span className="flex items-center gap-1">
+                  <span>Documents &amp; e-sign</span>
+                  <span className="text-[13px]">✍️</span>
+                </span>
               </p>
               <p className="text-[11px] text-slate-400">
                 Upload leases, share files, and send e-signature envelopes to tenants.
@@ -822,7 +861,7 @@ export default function LandlordDashboardPage() {
               </p>
             </div>
 
-          <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
               <Link
                 href="/landlord/properties"
                 className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
@@ -854,10 +893,7 @@ export default function LandlordDashboardPage() {
               ) : (
                 <div className="space-y-2">
                   {overdue.map((p) => {
-                    const amount =
-                      p.effective_rent != null && !isNaN(p.effective_rent)
-                        ? p.effective_rent
-                        : p.monthly_rent;
+                    const amountDue = computeOverdueAmountForProperty(p);
                     return (
                       <div
                         key={p.id}
@@ -869,7 +905,9 @@ export default function LandlordDashboardPage() {
                         </p>
                         <p className="text-[11px] text-rose-100/80">
                           Due {formatDate(p.next_due_date)} •{' '}
-                          {formatCurrency(amount ?? null)}
+                          {formatCurrency(
+                            amountDue != null ? amountDue : p.monthly_rent
+                          )}
                         </p>
                       </div>
                     );
@@ -894,27 +932,21 @@ export default function LandlordDashboardPage() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {upcoming7.map((p) => {
-                    const amount =
-                      p.effective_rent != null && !isNaN(p.effective_rent)
-                        ? p.effective_rent
-                        : p.monthly_rent;
-                    return (
-                      <div
-                        key={p.id}
-                        className="rounded-xl bg-amber-950/40 border border-amber-500/40 px-2 py-1.5"
-                      >
-                        <p className="text-[11px] text-amber-50 font-medium">
-                          {p.name || 'Property'}{' '}
-                          {p.unit_label ? `· ${p.unit_label}` : ''}
-                        </p>
-                        <p className="text-[11px] text-amber-100/90">
-                          Due {formatDate(p.next_due_date)} •{' '}
-                          {formatCurrency(amount ?? null)}
-                        </p>
-                      </div>
-                    );
-                  })}
+                  {upcoming7.map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-xl bg-amber-950/40 border border-amber-500/40 px-2 py-1.5"
+                    >
+                      <p className="text-[11px] text-amber-50 font-medium">
+                        {p.name || 'Property'}{' '}
+                        {p.unit_label ? `· ${p.unit_label}` : ''}
+                      </p>
+                      <p className="text-[11px] text-amber-100/90">
+                        Due {formatDate(p.next_due_date)} •{' '}
+                        {formatCurrency(p.monthly_rent)}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -935,30 +967,24 @@ export default function LandlordDashboardPage() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {notDueYet.map((p) => {
-                    const amount =
-                      p.effective_rent != null && !isNaN(p.effective_rent)
-                        ? p.effective_rent
-                        : p.monthly_rent;
-                    return (
-                      <div
-                        key={p.id}
-                        className="rounded-xl bg-emerald-950/40 border border-emerald-500/40 px-2 py-1.5"
-                      >
-                        <p className="text-[11px] text-emerald-50 font-medium">
-                          {p.name || 'Property'}{' '}
-                          {p.unit_label ? `· ${p.unit_label}` : ''}
-                        </p>
-                        <p className="text-[11px] text-emerald-100/90">
-                          {p.next_due_date
-                            ? `Due ${formatDate(p.next_due_date)}`
-                            : 'No due date set'}
-                          {' • '}
-                          {formatCurrency(amount ?? null)}
-                        </p>
-                      </div>
-                    );
-                  })}
+                  {notDueYet.map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-xl bg-emerald-950/40 border border-emerald-500/40 px-2 py-1.5"
+                    >
+                      <p className="text-[11px] text-emerald-50 font-medium">
+                        {p.name || 'Property'}{' '}
+                        {p.unit_label ? `· ${p.unit_label}` : ''}
+                      </p>
+                      <p className="text-[11px] text-emerald-100/90">
+                        {p.next_due_date
+                          ? `Due ${formatDate(p.next_due_date)}`
+                          : 'No due date set'}
+                        {' • '}
+                        {formatCurrency(p.monthly_rent)}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
