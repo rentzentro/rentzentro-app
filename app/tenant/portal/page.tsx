@@ -130,6 +130,14 @@ const statusBadgeClasses = (status: string | null) => {
   return 'bg-slate-700 text-slate-200 border border-slate-500/60';
 };
 
+// Months difference helper: whole months between two dates (ignore days)
+const monthsBetween = (from: Date, to: Date) => {
+  return (
+    (to.getFullYear() - from.getFullYear()) * 12 +
+    (to.getMonth() - from.getMonth())
+  );
+};
+
 // ---------- Component ----------
 
 export default function TenantPortalPage() {
@@ -146,7 +154,7 @@ export default function TenantPortalPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
 
-  // Overdue math
+  // Overdue math (based on lease_start + total payments)
   const [totalDue, setTotalDue] = useState<number | null>(null);
   const [totalPaidToward, setTotalPaidToward] = useState<number | null>(null);
   const [totalOutstanding, setTotalOutstanding] = useState<number | null>(null);
@@ -291,12 +299,11 @@ export default function TenantPortalPage() {
         const payData = (payRows || []) as PaymentRow[];
         setPayments(payData);
 
-        // ---------- Compute overdue totals (all periods up to this month) ----------
+        // ---------- Compute totals based on lease_start ----------
         let newTotalDue: number | null = null;
         let newTotalPaidToward = 0;
         let newOutstanding: number | null = null;
 
-        const dueDate = parseSupabaseDate(prop?.next_due_date || null);
         const today = new Date();
         const todayMidnight = new Date(
           today.getFullYear(),
@@ -304,32 +311,36 @@ export default function TenantPortalPage() {
           today.getDate()
         );
 
-        if (effectiveRent != null && dueDate && dueDate <= todayMidnight) {
-          // How many monthly periods from first due date up to this month (inclusive)
-          const monthsDiff =
-            (todayMidnight.getFullYear() - dueDate.getFullYear()) * 12 +
-            (todayMidnight.getMonth() - dueDate.getMonth()) +
-            1;
+        const leaseStartDate = parseSupabaseDate(t.lease_start);
 
-          const periodsOwed = Math.max(1, monthsDiff);
+        if (effectiveRent != null && leaseStartDate && leaseStartDate <= todayMidnight) {
+          // Number of months from lease_start through this month (inclusive)
+          const mDiff = monthsBetween(leaseStartDate, todayMidnight);
+          const periodsOwed = Math.max(1, mDiff + 1); // at least 1 period if we've passed lease_start
+
           newTotalDue = periodsOwed * effectiveRent;
 
-          // All payments made on/after the first due date reduce that total
+          // Sum ALL payments since lease_start toward those periods
           for (const p of payData) {
             if (!p.amount || !p.paid_on) continue;
             const pd = parseSupabaseDate(p.paid_on);
             if (!pd) continue;
-            if (pd >= dueDate) {
+            if (pd >= leaseStartDate) {
               newTotalPaidToward += p.amount;
             }
           }
 
           newOutstanding = Math.max(0, newTotalDue - newTotalPaidToward);
-        } else {
-          // Not yet due, or missing data
-          newTotalDue = effectiveRent != null ? effectiveRent : null;
+        } else if (effectiveRent != null && leaseStartDate && leaseStartDate > todayMidnight) {
+          // Lease hasn't started yet → nothing due yet
+          newTotalDue = 0;
           newTotalPaidToward = 0;
           newOutstanding = 0;
+        } else {
+          // No lease_start set → fall back to a single-period view
+          newTotalDue = effectiveRent;
+          newTotalPaidToward = 0;
+          newOutstanding = Math.max(0, effectiveRent ?? 0);
         }
 
         setTotalDue(newTotalDue);
@@ -425,7 +436,6 @@ export default function TenantPortalPage() {
 
     const baseRent = property?.monthly_rent ?? tenant.monthly_rent ?? 0;
 
-    const dueDate = parseSupabaseDate(property?.next_due_date || null);
     const today = new Date();
     const todayMidnight = new Date(
       today.getFullYear(),
@@ -433,18 +443,23 @@ export default function TenantPortalPage() {
       today.getDate()
     );
 
-    const isBeforeDue =
-      !!dueDate && dueDate.getTime() > todayMidnight.getTime();
+    // Earliest due date we know about (for "no early payments")
+    const earliestDueDate =
+      parseSupabaseDate(tenant.lease_start) ||
+      parseSupabaseDate(property?.next_due_date || null);
 
-    if (isBeforeDue) {
+    const isBeforeFirstDue =
+      !!earliestDueDate && todayMidnight < earliestDueDate;
+
+    if (isBeforeFirstDue) {
       setError(
-        'Online rent payments are only available once the current rent is due. Please try again on or after the due date.'
+        'Online rent payments are only available once your first rent due date arrives. Please try again on or after the due date.'
       );
       setSuccess(null);
       return;
     }
 
-    // Charge up to the total outstanding amount
+    // Charge outstanding if any, otherwise base rent
     const amount =
       totalOutstanding != null && totalOutstanding > 0
         ? totalOutstanding
@@ -533,6 +548,7 @@ export default function TenantPortalPage() {
   const currentRent =
     property?.monthly_rent ?? tenant.monthly_rent ?? null;
 
+  // For status + early-pay text (we still show next_due_date if you’ve set it)
   const dueDateObj = parseSupabaseDate(property?.next_due_date || null);
   const today = new Date();
   const todayMidnight = new Date(
@@ -544,8 +560,11 @@ export default function TenantPortalPage() {
   const isRentOverdue =
     !!dueDateObj && dueDateObj.getTime() < todayMidnight.getTime();
 
+  const earliestDueDate =
+    parseSupabaseDate(tenant.lease_start) || dueDateObj;
+
   const isBeforeDue =
-    !!dueDateObj && dueDateObj.getTime() > todayMidnight.getTime();
+    !!earliestDueDate && todayMidnight < earliestDueDate;
 
   const amountToPayNow =
     !isBeforeDue && totalOutstanding != null && totalOutstanding > 0
@@ -656,7 +675,7 @@ export default function TenantPortalPage() {
                 </span>
               </p>
 
-              {/* Overdue totals */}
+              {/* Totals based on lease_start */}
               {currentRent != null && (
                 <>
                   <p className="mt-2 text-xs text-slate-400">
