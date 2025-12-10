@@ -66,7 +66,7 @@ type RentStatus = {
   totalPaid: number;
   outstanding: number;
   monthsDue: number;
-  nextDueDate: string | null; // ISO date of the earliest unpaid/next month
+  nextDueDate: string | null; // ISO or YYYY-MM-DD
   isCaughtUp: boolean;
 };
 
@@ -82,6 +82,13 @@ const parseSupabaseDate = (value: string | null | undefined): Date | null => {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
   return d;
+};
+
+const dateToYMD = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 };
 
 const formatCurrency = (v: number | null | undefined) =>
@@ -195,7 +202,7 @@ const calculateRentStatus = (
       totalPaid: 0,
       outstanding: 0,
       monthsDue: 0,
-      nextDueDate: firstDueMidnight.toISOString(),
+      nextDueDate: dateToYMD(firstDueMidnight),
       isCaughtUp: true,
     };
   }
@@ -238,7 +245,7 @@ const calculateRentStatus = (
 
   if (unpaidMonth) {
     // There is at least one month with some unpaid amount
-    nextDueDate = unpaidMonth.toISOString();
+    nextDueDate = dateToYMD(unpaidMonth);
   } else {
     // All periods up to today fully covered; next due is the next month after the last one counted
     const next = new Date(
@@ -246,7 +253,7 @@ const calculateRentStatus = (
       firstDueMidnight.getMonth() + monthsDue,
       firstDueMidnight.getDate()
     );
-    nextDueDate = next.toISOString();
+    nextDueDate = dateToYMD(next);
   }
 
   return {
@@ -414,9 +421,23 @@ export default function TenantPortalPage() {
         const payData = (payRows || []) as PaymentRow[];
         setPayments(payData);
 
-        // ---------- Compute rent status based on next_due_date (preferred) or lease_start ----------
-        const firstDueDateISO =
-          prop?.next_due_date || t.lease_start || null;
+        // ---------- Compute first due date (earliest of lease_start or next_due_date) ----------
+        const leaseStartDate = parseSupabaseDate(t.lease_start);
+        const nextDueDate = parseSupabaseDate(prop?.next_due_date || null);
+
+        let firstDueDateISO: string | null = null;
+
+        if (leaseStartDate && nextDueDate) {
+          firstDueDateISO = dateToYMD(
+            leaseStartDate <= nextDueDate ? leaseStartDate : nextDueDate
+          );
+        } else if (leaseStartDate) {
+          firstDueDateISO = dateToYMD(leaseStartDate);
+        } else if (nextDueDate) {
+          firstDueDateISO = dateToYMD(nextDueDate);
+        } else {
+          firstDueDateISO = null;
+        }
 
         const rs = calculateRentStatus(effectiveRent, firstDueDateISO, payData);
         setRentStatus(rs);
@@ -517,13 +538,21 @@ export default function TenantPortalPage() {
       today.getDate()
     );
 
-    // Earliest due date we know about (for "no early payments")
-    const earliestDueDate =
-      parseSupabaseDate(property?.next_due_date || null) ||
-      parseSupabaseDate(tenant.lease_start);
+    // Use the same "first due" logic to block early payments
+    const leaseStartDate = parseSupabaseDate(tenant.lease_start);
+    const nextDueDate = parseSupabaseDate(property?.next_due_date || null);
+
+    let earliestDue: Date | null = null;
+    if (leaseStartDate && nextDueDate) {
+      earliestDue = leaseStartDate <= nextDueDate ? leaseStartDate : nextDueDate;
+    } else if (leaseStartDate) {
+      earliestDue = leaseStartDate;
+    } else if (nextDueDate) {
+      earliestDue = nextDueDate;
+    }
 
     const isBeforeFirstDue =
-      !!earliestDueDate && todayMidnight < earliestDueDate;
+      !!earliestDue && todayMidnight < earliestDue;
 
     if (isBeforeFirstDue) {
       setError(
