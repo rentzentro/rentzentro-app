@@ -40,43 +40,36 @@ const formatDate = (iso: string | null | undefined) => {
 
 export default function LandlordDocumentsPage() {
   const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
+  // Generic page error (loading / upload / delete / checkout)
+  const [error, setError] = useState<string | null>(null);
+
+  // Upload state
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [propertyId, setPropertyId] = useState<number | ''>('');
 
-  // E-signatures (per-signature landlord pay)
-  const [landlordUserId, setLandlordUserId] = useState<string | null>(null);
-  const [esignTotalPurchased, setEsignTotalPurchased] = useState<number>(0);
-  const [esignUsedCount, setEsignUsedCount] = useState<number>(0);
+  // E-signatures (purchase credits)
+  const [esignTotalPurchased, setEsignTotalPurchased] = useState<
+    number | null
+  >(null);
   const [buyQuantity, setBuyQuantity] = useState<number>(10);
   const [buying, setBuying] = useState(false);
 
-  // Use credits: send for e-sign
-  const [activeEsignDocId, setActiveEsignDocId] = useState<number | null>(null);
-  const [signerName, setSignerName] = useState('');
-  const [signerEmail, setSignerEmail] = useState('');
-  const [startingEsign, setStartingEsign] = useState(false);
-
-  const remainingCredits = Math.max(
-    0,
-    (esignTotalPurchased || 0) - (esignUsedCount || 0)
-  );
+  // ---------- Load data ----------
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
-      setInfoMessage(null);
 
       try {
-        // Make sure we have a logged-in landlord
+        // Ensure logged-in landlord
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
         if (authError || !authData?.user) {
@@ -85,7 +78,6 @@ export default function LandlordDocumentsPage() {
         }
 
         const user = authData.user;
-        setLandlordUserId(user.id);
 
         // Properties
         const { data: propRows, error: propError } = await supabase
@@ -105,7 +97,7 @@ export default function LandlordDocumentsPage() {
         if (docError) throw docError;
         setDocuments((docRows || []) as DocumentRow[]);
 
-        // E-sign purchases (total signatures purchased by this landlord)
+        // E-sign purchases (signatures purchased by this landlord user)
         try {
           const { data: esignRows, error: esignError } = await supabase
             .from('esign_purchases')
@@ -114,7 +106,7 @@ export default function LandlordDocumentsPage() {
 
           if (esignError) {
             console.warn(
-              '[documents] E-sign purchases table not available yet or query failed:',
+              '[documents] esign_purchases query failed or table missing:',
               esignError
             );
           } else if (esignRows) {
@@ -125,26 +117,10 @@ export default function LandlordDocumentsPage() {
             setEsignTotalPurchased(total);
           }
         } catch (innerErr) {
-          console.warn('[documents] E-sign purchases lookup failed:', innerErr);
-        }
-
-        // E-sign envelopes used (one envelope = one signature credit)
-        try {
-          const { data: envRows, error: envError } = await supabase
-            .from('esign_envelopes')
-            .select('id')
-            .eq('landlord_user_id', user.id);
-
-          if (envError) {
-            console.warn(
-              '[documents] E-sign envelopes lookup failed:',
-              envError
-            );
-          } else if (envRows) {
-            setEsignUsedCount(envRows.length);
-          }
-        } catch (envErr) {
-          console.warn('[documents] E-sign envelopes query threw:', envErr);
+          console.warn(
+            '[documents] esign_purchases lookup threw error:',
+            innerErr
+          );
         }
       } catch (err: any) {
         console.error(err);
@@ -159,6 +135,8 @@ export default function LandlordDocumentsPage() {
     load();
   }, [router]);
 
+  // ---------- Handlers ----------
+
   const handleUpload = async (e: FormEvent) => {
     e.preventDefault();
 
@@ -167,7 +145,6 @@ export default function LandlordDocumentsPage() {
 
     setUploading(true);
     setError(null);
-    setInfoMessage(null);
 
     try {
       const bucket = 'documents';
@@ -209,8 +186,6 @@ export default function LandlordDocumentsPage() {
         'doc-file-input'
       ) as HTMLInputElement | null;
       if (inputEl) inputEl.value = '';
-
-      setInfoMessage('Document uploaded.');
     } catch (err: any) {
       console.error(err);
       setError(err?.message || 'Unexpected upload error.');
@@ -223,7 +198,6 @@ export default function LandlordDocumentsPage() {
     if (!window.confirm('Delete this document?')) return;
 
     setError(null);
-    setInfoMessage(null);
 
     try {
       await supabase.storage.from('documents').remove([doc.storage_path]);
@@ -236,7 +210,6 @@ export default function LandlordDocumentsPage() {
       if (error) throw error;
 
       setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
-      setInfoMessage('Document deleted.');
     } catch (err: any) {
       console.error(err);
       setError(err?.message || 'Failed to delete document.');
@@ -261,7 +234,6 @@ export default function LandlordDocumentsPage() {
 
     setBuying(true);
     setError(null);
-    setInfoMessage(null);
 
     try {
       const res = await fetch('/api/esign/checkout', {
@@ -279,7 +251,6 @@ export default function LandlordDocumentsPage() {
         );
       }
 
-      // Redirect to Stripe Checkout
       window.location.href = data.url as string;
     } catch (err: any) {
       console.error(err);
@@ -292,79 +263,7 @@ export default function LandlordDocumentsPage() {
     }
   };
 
-  const openEsignForm = (docId: number) => {
-    setActiveEsignDocId((current) => (current === docId ? null : docId));
-    setSignerName('');
-    setSignerEmail('');
-    setError(null);
-    setInfoMessage(null);
-  };
-
-  const handleStartEsign = async (e: FormEvent, doc: DocumentRow) => {
-    e.preventDefault();
-
-    if (!landlordUserId) {
-      setError('Unable to determine your account. Please log in again.');
-      return;
-    }
-
-    if (!signerName.trim() || !signerEmail.trim()) {
-      setError('Signer name and email are required to start an e-sign request.');
-      return;
-    }
-
-    if (remainingCredits <= 0) {
-      setError(
-        'You have no remaining e-sign credits. Purchase more signatures to send a new request.'
-      );
-      return;
-    }
-
-    setStartingEsign(true);
-    setError(null);
-    setInfoMessage(null);
-
-    try {
-      const res = await fetch('/api/esign/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          landlordUserId,
-          documentId: doc.id,
-          documentTitle: doc.title,
-          signerName: signerName.trim(),
-          signerEmail: signerEmail.trim(),
-        }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(
-          data?.error ||
-            'Failed to start e-sign request. Please try again in a moment.'
-        );
-      }
-
-      // One more envelope used
-      setEsignUsedCount((prev) => prev + 1);
-
-      setActiveEsignDocId(null);
-      setSignerName('');
-      setSignerEmail('');
-      setInfoMessage(
-        'E-sign request created. Your signer will receive an email shortly.'
-      );
-    } catch (err: any) {
-      console.error(err);
-      setError(
-        err?.message ||
-          'Unexpected error while starting the e-sign request.'
-      );
-    } finally {
-      setStartingEsign(false);
-    }
-  };
+  // ---------- Render ----------
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
@@ -381,14 +280,13 @@ export default function LandlordDocumentsPage() {
             </div>
 
             <h1 className="text-xl font-semibold mt-1 text-slate-50">
-              Leases & documents
+              Leases &amp; documents
             </h1>
             <p className="text-[13px] text-slate-400">
               Upload leases, addenda, and important files for your properties.
             </p>
           </div>
 
-          {/* BACK BUTTON */}
           <button
             type="button"
             onClick={() => router.back()}
@@ -398,16 +296,10 @@ export default function LandlordDocumentsPage() {
           </button>
         </div>
 
-        {/* Global error / info */}
-        {(error || infoMessage) && (
-          <div
-            className={`mb-4 rounded-2xl px-4 py-3 text-sm ${
-              error
-                ? 'bg-rose-950/40 border border-rose-500/40 text-rose-100'
-                : 'bg-emerald-950/40 border border-emerald-500/40 text-emerald-100'
-            }`}
-          >
-            {error || infoMessage}
+        {/* Error banner */}
+        {error && (
+          <div className="mb-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 px-4 py-3 text-sm text-rose-100">
+            {error}
           </div>
         )}
 
@@ -428,17 +320,15 @@ export default function LandlordDocumentsPage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/50 px-3 py-2 text-right text-[11px] min-w-[210px]">
+            <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/50 px-3 py-2 text-right text-[11px] min-w-[190px]">
               <p className="text-slate-300">Signatures purchased</p>
               <p className="mt-1 text-lg font-semibold text-emerald-300">
-                {esignTotalPurchased.toLocaleString('en-US')}
-              </p>
-              <p className="mt-1 text-slate-300">Remaining credits</p>
-              <p className="mt-1 text-lg font-semibold text-emerald-200">
-                {remainingCredits.toLocaleString('en-US')}
+                {esignTotalPurchased == null
+                  ? '—'
+                  : esignTotalPurchased.toLocaleString('en-US')}
               </p>
               <p className="mt-0.5 text-[10px] text-slate-500">
-                1 credit is used each time you send a document for e-sign.
+                Based on completed purchases
               </p>
             </div>
           </div>
@@ -572,112 +462,46 @@ export default function LandlordDocumentsPage() {
             </p>
           ) : (
             <div className="mt-3 space-y-2 text-xs">
-              {documents.map((doc) => {
-                const isActive = activeEsignDocId === doc.id;
-
-                return (
-                  <div
-                    key={doc.id}
-                    className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-slate-100 truncate">
-                          {doc.title}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {propertyLabel(doc.property_id)} •{' '}
-                          {formatDate(doc.created_at)}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openEsignForm(doc.id)}
-                          className="inline-flex items-center gap-1 rounded-full border border-emerald-500/70 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-100 hover:bg-emerald-500/20"
-                        >
-                          <span>📄✍️</span>
-                          <span>Send for e-sign</span>
-                        </button>
-
-                        <a
-                          href={doc.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
-                        >
-                          Open
-                        </a>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(doc)}
-                          className="text-[11px] px-3 py-1 rounded-full border border-rose-500/60 bg-rose-900/60 hover:bg-rose-800/80"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-
-                    {isActive && (
-                      <form
-                        onSubmit={(e) => handleStartEsign(e, doc)}
-                        className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_auto]"
-                      >
-                        <div className="space-y-1">
-                          <label className="block text-[11px] text-slate-400">
-                            Signer name
-                          </label>
-                          <input
-                            type="text"
-                            value={signerName}
-                            onChange={(e) => setSignerName(e.target.value)}
-                            className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                            placeholder="Ex: Wanda Smith"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="block text-[11px] text-slate-400">
-                            Signer email
-                          </label>
-                          <input
-                            type="email"
-                            value={signerEmail}
-                            onChange={(e) => setSignerEmail(e.target.value)}
-                            className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                            placeholder="tenant@example.com"
-                          />
-                        </div>
-
-                        <div className="flex items-end justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setActiveEsignDocId(null)}
-                            className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] text-slate-200 hover:bg-slate-800"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={startingEsign}
-                            className="rounded-full bg-emerald-500 px-4 py-1.5 text-[11px] font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
-                          >
-                            {startingEsign ? 'Sending…' : 'Send to sign'}
-                          </button>
-                        </div>
-                      </form>
-                    )}
+              {documents.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-100 truncate">
+                      {doc.title}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      {propertyLabel(doc.property_id)} •{' '}
+                      {formatDate(doc.created_at)}
+                    </p>
                   </div>
-                );
-              })}
+
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={doc.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                    >
+                      Open
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(doc)}
+                      className="text-[11px] px-3 py-1 rounded-full border border-rose-500/60 bg-rose-900/60 hover:bg-rose-800/80"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
           <p className="mt-3 text-[11px] text-slate-500">
-            Tenants will be able to view documents assigned to their unit. Use
-            e-signatures to send leases and forms for electronic signature.
+            Tenants will be able to view documents assigned to their unit.
           </p>
         </section>
       </div>
