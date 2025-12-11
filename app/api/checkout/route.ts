@@ -10,10 +10,87 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || 'https://www.rentzentro.com';
 
+// Optional: per-signature e-sign price in Stripe
+// Create a Price in Stripe and set this env var.
+const ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID as string | undefined;
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as any;
 
+    // Decide which flow this is: rent (default) or e-sign purchase
+    const paymentKind: 'rent' | 'esign' =
+      body.paymentKind || body.payment_kind || 'rent';
+
+    // -------------------------------------------------------------------
+    // 1) LANDLORD E-SIGN CREDIT PURCHASE (PER SIGNATURE)
+    // -------------------------------------------------------------------
+    if (paymentKind === 'esign') {
+      const signatures = Number(body.signatures ?? 0);
+      const landlordUserId = body.landlordUserId as string | undefined;
+      const description =
+        (body.description as string | undefined) ||
+        `E-signature credits (${signatures})`;
+
+      if (!landlordUserId) {
+        return NextResponse.json(
+          { error: 'Missing landlordUserId for e-sign purchase.' },
+          { status: 400 }
+        );
+      }
+
+      if (!signatures || Number.isNaN(signatures) || signatures <= 0) {
+        return NextResponse.json(
+          { error: 'Please choose at least 1 signature to purchase.' },
+          { status: 400 }
+        );
+      }
+
+      if (!ESIGN_PRICE_ID) {
+        console.error(
+          'Missing STRIPE_ESIGN_PRICE_ID env var for e-sign purchases.'
+        );
+        return NextResponse.json(
+          {
+            error:
+              'E-sign pricing is not configured yet. Please contact RentZentro support.',
+          },
+          { status: 500 }
+        );
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: ESIGN_PRICE_ID,
+            quantity: signatures,
+          },
+        ],
+        success_url: `${APP_URL}/landlord/documents?esign=success`,
+        cancel_url: `${APP_URL}/landlord/documents?esign=cancelled`,
+        metadata: {
+          payment_kind: 'esign',
+          landlord_user_id: landlordUserId,
+          signatures: String(signatures),
+          description,
+        },
+      });
+
+      if (!session.url) {
+        return NextResponse.json(
+          { error: 'Stripe session created without a redirect URL.' },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ url: session.url }, { status: 200 });
+    }
+
+    // -------------------------------------------------------------------
+    // 2) DEFAULT: TENANT RENT PAYMENT (EXISTING FLOW)
+    // -------------------------------------------------------------------
     const { amount, description, tenantId, propertyId } = body as {
       amount: number; // dollars, e.g. 1500
       description?: string;
@@ -201,17 +278,15 @@ export async function POST(req: Request) {
         property_id: property.id,
         landlord_id: landlord.id,
         type: 'rent_payment',
+        payment_kind: 'rent',
       },
       payment_intent_data: {
         transfer_data: {
           destination: landlordStripeAccountId,
         },
-        // If you ever want a per-payment platform fee, set application_fee_amount here.
       },
-      // Optional but nice: lets Stripe show extra bank options if available
       payment_method_options: {
         us_bank_account: {
-          // Let Stripe handle verification automatically (default behavior)
           verification_method: 'automatic',
         },
       },
@@ -231,7 +306,7 @@ export async function POST(req: Request) {
       {
         error:
           err?.message ||
-          'Unexpected error while starting the rent payment checkout session.',
+          'Unexpected error while starting the checkout session.',
       },
       { status: 500 }
     );
