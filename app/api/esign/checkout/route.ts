@@ -1,152 +1,109 @@
 // app/api/esign/checkout/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { supabaseAdmin } from '../../../supabaseAdminClient';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: '2024-06-20' as any,
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-const ESIGN_PRICE_CENTS = Number(process.env.ESIGN_PRICE_CENTS || 295); // $2.95 default
+// Price ID for “$2.95 per signature” (or whatever you configured)
+const STRIPE_ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID;
 
-function createSupabaseServerClient() {
-  return createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-}
+// Base URL for redirecting back into the app
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL || 'https://www.rentzentro.com';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const {
-      signerName,
-      signerEmail,
-      documentTitle,
-    }: {
-      signerName?: string;
-      signerEmail?: string;
-      documentTitle?: string;
-    } = body || {};
 
-    if (!signerEmail || !documentTitle) {
+    const { landlordUserId, quantity } = body as {
+      landlordUserId?: string;
+      quantity?: number;
+    };
+
+    // --- validation just for credit purchase ---
+    if (!landlordUserId) {
       return NextResponse.json(
-        {
-          error:
-            'signerEmail and documentTitle are required to start an e-sign request.',
-        },
+        { error: 'Missing landlordUserId for e-sign purchase.' },
         { status: 400 }
       );
     }
 
-    const cookieStore = cookies();
-    const supabase = createSupabaseServerClient();
-
-    // Auth: landlord (or team member acting as landlord)
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(
-      cookieStore.get('sb-access-token')?.value
-    );
-
-    if (authError || !user?.id || !user.email) {
-      console.error('eSign checkout auth error:', authError);
+    const qty = Number(quantity);
+    if (!qty || isNaN(qty) || qty <= 0) {
       return NextResponse.json(
-        { error: 'You must be logged in as a landlord to use e-sign.' },
-        { status: 401 }
+        { error: 'Please enter a valid number of signatures to purchase.' },
+        { status: 400 }
       );
     }
 
-    const landlordUserId = user.id;
-    const landlordEmail = user.email;
-
-    if (!ESIGN_PRICE_CENTS || ESIGN_PRICE_CENTS <= 0) {
+    if (!STRIPE_ESIGN_PRICE_ID) {
       return NextResponse.json(
         {
           error:
-            'ESIGN_PRICE_CENTS is not configured correctly on the server.',
+            'E-sign pricing is not configured yet. Please contact RentZentro support.',
         },
         { status: 500 }
       );
     }
 
-    const origin =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      'http://localhost:3000';
+    // Optional sanity check that this landlord exists
+    try {
+      const { data: landlordRow, error: landlordError } = await supabaseAdmin
+        .from('landlords')
+        .select('id')
+        .eq('user_id', landlordUserId)
+        .maybeSingle();
 
-    // 1) Create a row in esign_envelopes with status = checkout_created
-    const { data: envelopeRow, error: insertError } = await supabase
-      .from('esign_envelopes')
-      .insert({
-        landlord_user_id: landlordUserId,
-        landlord_email: landlordEmail,
-        document_title: documentTitle,
-        signer_name: signerName || 'Signer',
-        signer_email: signerEmail,
-        amount_cents: ESIGN_PRICE_CENTS,
-        status: 'checkout_created',
-      })
-      .select('*')
-      .single();
-
-    if (insertError || !envelopeRow) {
-      console.error('Error inserting esign_envelopes row:', insertError);
-      return NextResponse.json(
-        { error: 'Failed to start e-sign request. Please try again.' },
-        { status: 500 }
-      );
+      if (landlordError) {
+        console.warn(
+          '[esign/checkout] landlord lookup error (continuing anyway):',
+          landlordError
+        );
+      } else if (!landlordRow) {
+        console.warn(
+          '[esign/checkout] landlord not found for landlordUserId =',
+          landlordUserId
+        );
+      }
+    } catch (lookupErr) {
+      console.warn('[esign/checkout] landlord lookup threw:', lookupErr);
     }
 
-    // 2) Create Stripe Checkout for this envelope
+    // --- Stripe Checkout session for a one-time e-sign credit purchase ---
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      payment_method_types: ['card', 'us_bank_account'],
-      customer_email: landlordEmail,
       line_items: [
         {
-          quantity: 1,
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `E-signature for "${documentTitle}"`,
-              description: 'Per-signature e-sign request via RentZentro.',
-            },
-            unit_amount: ESIGN_PRICE_CENTS,
-          },
+          price: STRIPE_ESIGN_PRICE_ID,
+          quantity: qty,
         },
       ],
-      success_url: `${origin}/landlord/documents?esign=success`,
-      cancel_url: `${origin}/landlord/documents?esign=cancelled`,
+      success_url: `${APP_URL}/landlord/documents?esign=success`,
+      cancel_url: `${APP_URL}/landlord/documents?esign=cancelled`,
       metadata: {
-        payment_kind: 'esign',
-        esign_envelope_id: String(envelopeRow.id),
+        type: 'esign_purchase',
         landlord_user_id: landlordUserId,
-        landlord_email: landlordEmail,
-        signer_email: signerEmail,
-        signer_name: signerName || '',
-        document_title: documentTitle,
+        signatures: String(qty),
       },
     });
 
-    // 3) Update row with session id
-    const { error: updateError } = await supabase
-      .from('esign_envelopes')
-      .update({
-        stripe_session_id: session.id,
-      })
-      .eq('id', envelopeRow.id);
-
-    if (updateError) {
-      console.error('Error updating esign_envelopes with session id:', updateError);
+    if (!session.url) {
+      return NextResponse.json(
+        { error: 'Unexpected error starting e-sign checkout.' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (err: any) {
-    console.error('Error in /api/esign/checkout:', err);
+    console.error('[esign/checkout] unexpected error:', err);
     return NextResponse.json(
-      { error: err?.message || 'Unexpected error starting e-sign checkout.' },
+      {
+        error:
+          err?.message ||
+          'Unexpected error while starting e-sign checkout.',
+      },
       { status: 500 }
     );
   }
