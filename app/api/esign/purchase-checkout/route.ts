@@ -1,101 +1,101 @@
 // app/api/esign/purchase-checkout/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { supabaseAdmin } from '../../../supabaseAdminClient';
 
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY as string;
-const ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID as string; // per-signature price
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-  apiVersion: '2024-06-20' as any,
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+// Price in Stripe for *one* e-signature (per signature)
+const ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID;
+
+// Where to send landlord back after Stripe Checkout
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL || 'https://www.rentzentro.com';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const {
-      landlordUserId,
-      landlordEmail,
-      signatures = 1,
-      successUrl,
-      cancelUrl,
-    } = body as {
-      landlordUserId?: string;
-      landlordEmail?: string;
-      signatures?: number;
-      successUrl?: string;
-      cancelUrl?: string;
+
+    const { quantity, landlordUserId } = body as {
+      quantity?: number;
+      landlordUserId?: string | null;
     };
 
-    if (!STRIPE_SECRET_KEY || !ESIGN_PRICE_ID) {
-      console.error(
-        '[esign checkout] Missing STRIPE_SECRET_KEY or STRIPE_ESIGN_PRICE_ID env var.'
-      );
+    const qty = Number(quantity || 0);
+
+    if (!ESIGN_PRICE_ID) {
       return NextResponse.json(
-        { error: 'Stripe not configured for e-sign.' },
+        {
+          error:
+            'STRIPE_ESIGN_PRICE_ID is not configured yet. Please contact RentZentro support.',
+        },
         { status: 500 }
       );
     }
 
-    if (!landlordUserId) {
+    if (!qty || qty <= 0) {
       return NextResponse.json(
-        { error: 'landlordUserId is required.' },
+        { error: 'Please provide a valid number of signatures to purchase.' },
         { status: 400 }
       );
     }
 
-    const qty = Number(signatures);
-    if (!qty || qty <= 0 || !Number.isFinite(qty)) {
-      return NextResponse.json(
-        { error: 'Invalid signatures quantity.' },
-        { status: 400 }
-      );
+    // Optional sanity check: make sure this landlord exists
+    if (landlordUserId) {
+      const { data: landlordRow, error: landlordError } = await supabaseAdmin
+        .from('landlords')
+        .select('id')
+        .eq('user_id', landlordUserId)
+        .maybeSingle();
+
+      if (landlordError) {
+        console.warn(
+          '[esign/purchase-checkout] landlord lookup error (continuing anyway):',
+          landlordError
+        );
+      } else if (!landlordRow) {
+        console.warn(
+          '[esign/purchase-checkout] no landlord row found for landlordUserId =',
+          landlordUserId
+        );
+      }
     }
 
-    const baseSuccessUrl =
-      successUrl ||
-      `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.rentzentro.com'}/landlord/documents?esign=success`;
-
-    const baseCancelUrl =
-      cancelUrl ||
-      `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.rentzentro.com'}/landlord/documents?esign=cancelled`;
-
-    // Create Stripe Checkout session for one-time e-sign purchase
+    // Create Stripe Checkout session. Stripe will charge:
+    //   qty × price (which you set to $2.95 per signature in the Dashboard)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [
         {
           price: ESIGN_PRICE_ID,
-          quantity: qty,
+          quantity: qty, // ✅ THIS is what makes 10 × $2.95 = $29.50
         },
       ],
-      customer_email: landlordEmail,
-      success_url: baseSuccessUrl,
-      cancel_url: baseCancelUrl,
+      success_url: `${APP_URL}/landlord/documents?esign=success`,
+      cancel_url: `${APP_URL}/landlord/documents?esign=cancelled`,
       metadata: {
-        payment_kind: 'esign',
-        landlord_user_id: landlordUserId,
+        type: 'esign_purchase',
+        landlord_user_id: landlordUserId || '',
         signatures: String(qty),
-        description: `E-signature package: ${qty} signature${
-          qty === 1 ? '' : 's'
-        }`,
       },
     });
 
     if (!session.url) {
-      console.error('[esign checkout] No URL on created session');
       return NextResponse.json(
-        { error: 'Failed to create checkout session.' },
+        { error: 'Stripe session created without a redirect URL.' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (err: any) {
-    console.error('[esign checkout] Unexpected error:', err);
+    console.error('[esign/purchase-checkout] unexpected error:', err);
     return NextResponse.json(
-      { error: err?.message || 'Unexpected error starting e-sign checkout.' },
+      {
+        error:
+          err?.message ||
+          'Unexpected error while starting e-sign purchase checkout.',
+      },
       { status: 500 }
     );
   }
