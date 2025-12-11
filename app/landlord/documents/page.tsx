@@ -40,28 +40,25 @@ const formatDate = (iso: string | null | undefined) => {
 
 export default function LandlordDocumentsPage() {
   const router = useRouter();
-
   const [loading, setLoading] = useState(true);
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
-
-  // Generic page error (loading / upload / delete / checkout)
   const [error, setError] = useState<string | null>(null);
 
-  // Upload state
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [propertyId, setPropertyId] = useState<number | ''>('');
 
-  // E-signatures (purchase credits)
-  const [esignTotalPurchased, setEsignTotalPurchased] = useState<
-    number | null
-  >(null);
+  // Track logged-in landlord user_id for e-sign purchases (optional, useful for metadata)
+  const [landlordUserId, setLandlordUserId] = useState<string | null>(null);
+
+  // E-signatures (per-signature landlord pay)
+  const [esignTotalPurchased, setEsignTotalPurchased] = useState<number | null>(
+    null
+  );
   const [buyQuantity, setBuyQuantity] = useState<number>(10);
   const [buying, setBuying] = useState(false);
-
-  // ---------- Load data ----------
 
   useEffect(() => {
     const load = async () => {
@@ -69,15 +66,15 @@ export default function LandlordDocumentsPage() {
       setError(null);
 
       try {
-        // Ensure logged-in landlord
-        const { data: authData, error: authError } =
-          await supabase.auth.getUser();
+        // Make sure we have a logged-in landlord
+        const { data: authData, error: authError } = await supabase.auth.getUser();
         if (authError || !authData?.user) {
           router.push('/landlord/login');
           return;
         }
 
         const user = authData.user;
+        setLandlordUserId(user.id);
 
         // Properties
         const { data: propRows, error: propError } = await supabase
@@ -97,7 +94,7 @@ export default function LandlordDocumentsPage() {
         if (docError) throw docError;
         setDocuments((docRows || []) as DocumentRow[]);
 
-        // E-sign purchases (signatures purchased by this landlord user)
+        // E-sign purchases (total signatures purchased by this landlord)
         try {
           const { data: esignRows, error: esignError } = await supabase
             .from('esign_purchases')
@@ -106,7 +103,7 @@ export default function LandlordDocumentsPage() {
 
           if (esignError) {
             console.warn(
-              '[documents] esign_purchases query failed or table missing:',
+              '[documents] E-sign purchases table not available yet or query failed:',
               esignError
             );
           } else if (esignRows) {
@@ -117,10 +114,7 @@ export default function LandlordDocumentsPage() {
             setEsignTotalPurchased(total);
           }
         } catch (innerErr) {
-          console.warn(
-            '[documents] esign_purchases lookup threw error:',
-            innerErr
-          );
+          console.warn('[documents] E-sign purchases lookup failed:', innerErr);
         }
       } catch (err: any) {
         console.error(err);
@@ -134,8 +128,6 @@ export default function LandlordDocumentsPage() {
 
     load();
   }, [router]);
-
-  // ---------- Handlers ----------
 
   const handleUpload = async (e: FormEvent) => {
     e.preventDefault();
@@ -197,8 +189,6 @@ export default function LandlordDocumentsPage() {
   const handleDelete = async (doc: DocumentRow) => {
     if (!window.confirm('Delete this document?')) return;
 
-    setError(null);
-
     try {
       await supabase.storage.from('documents').remove([doc.storage_path]);
 
@@ -236,10 +226,13 @@ export default function LandlordDocumentsPage() {
     setError(null);
 
     try {
-      const res = await fetch('/api/esign/checkout', {
+      const res = await fetch('/api/esign/purchase-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity: buyQuantity }),
+        body: JSON.stringify({
+          quantity: buyQuantity,
+          landlordUserId, // optional, for metadata if the API wants it
+        }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -251,6 +244,7 @@ export default function LandlordDocumentsPage() {
         );
       }
 
+      // Redirect to Stripe Checkout
       window.location.href = data.url as string;
     } catch (err: any) {
       console.error(err);
@@ -262,8 +256,6 @@ export default function LandlordDocumentsPage() {
       setBuying(false);
     }
   };
-
-  // ---------- Render ----------
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
@@ -280,13 +272,14 @@ export default function LandlordDocumentsPage() {
             </div>
 
             <h1 className="text-xl font-semibold mt-1 text-slate-50">
-              Leases &amp; documents
+              Leases & documents
             </h1>
             <p className="text-[13px] text-slate-400">
               Upload leases, addenda, and important files for your properties.
             </p>
           </div>
 
+          {/* BACK BUTTON */}
           <button
             type="button"
             onClick={() => router.back()}
@@ -296,7 +289,7 @@ export default function LandlordDocumentsPage() {
           </button>
         </div>
 
-        {/* Error banner */}
+        {/* Error */}
         {error && (
           <div className="mb-4 rounded-2xl bg-rose-950/40 border border-rose-500/40 px-4 py-3 text-sm text-rose-100">
             {error}
