@@ -1,16 +1,18 @@
 // app/api/esign/purchase-checkout/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { supabaseAdmin } from '../../../supabaseAdminClient';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
-
-// Price in Stripe for *one* e-signature (per signature)
-const ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID;
-
-// Where to send landlord back after Stripe Checkout
 const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL || 'https://www.rentzentro.com';
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  'https://www.rentzentro.com';
+
+// Optional: Stripe Price ID for e-sign credits
+const ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID || null;
+
+// PRICE PER SIGNATURE, in cents (used if you don't configure a Price in Stripe)
+const FALLBACK_PRICE_CENTS = 295; // $2.95
 
 export async function POST(req: Request) {
   try {
@@ -18,65 +20,51 @@ export async function POST(req: Request) {
 
     const { quantity, landlordUserId } = body as {
       quantity?: number;
-      landlordUserId?: string | null;
+      landlordUserId?: string;
     };
 
-    const qty = Number(quantity || 0);
-
-    if (!ESIGN_PRICE_ID) {
+    if (!landlordUserId) {
       return NextResponse.json(
-        {
-          error:
-            'STRIPE_ESIGN_PRICE_ID is not configured yet. Please contact RentZentro support.',
-        },
-        { status: 500 }
-      );
-    }
-
-    if (!qty || qty <= 0) {
-      return NextResponse.json(
-        { error: 'Please provide a valid number of signatures to purchase.' },
+        { error: 'Missing landlordUserId for e-sign purchase.' },
         { status: 400 }
       );
     }
 
-    // Optional sanity check: make sure this landlord exists
-    if (landlordUserId) {
-      const { data: landlordRow, error: landlordError } = await supabaseAdmin
-        .from('landlords')
-        .select('id')
-        .eq('user_id', landlordUserId)
-        .maybeSingle();
-
-      if (landlordError) {
-        console.warn(
-          '[esign/purchase-checkout] landlord lookup error (continuing anyway):',
-          landlordError
-        );
-      } else if (!landlordRow) {
-        console.warn(
-          '[esign/purchase-checkout] no landlord row found for landlordUserId =',
-          landlordUserId
-        );
-      }
+    const qty = Number(quantity);
+    if (!qty || qty <= 0) {
+      return NextResponse.json(
+        { error: 'Please choose a valid number of signatures to purchase.' },
+        { status: 400 }
+      );
     }
 
-    // Create Stripe Checkout session. Stripe will charge:
-    //   qty × price (which you set to $2.95 per signature in the Dashboard)
+    const lineItem: Stripe.Checkout.SessionCreateParams.LineItem =
+      ESIGN_PRICE_ID
+        ? {
+            price: ESIGN_PRICE_ID,
+            quantity: qty,
+          }
+        : {
+            quantity: qty,
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: 'E-signature credits (per signature)',
+              },
+              unit_amount: FALLBACK_PRICE_CENTS,
+            },
+          };
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      line_items: [
-        {
-          price: ESIGN_PRICE_ID,
-          quantity: qty, // ✅ THIS is what makes 10 × $2.95 = $29.50
-        },
-      ],
+      line_items: [lineItem],
       success_url: `${APP_URL}/landlord/documents?esign=success`,
       cancel_url: `${APP_URL}/landlord/documents?esign=cancelled`,
       metadata: {
         type: 'esign_purchase',
-        landlord_user_id: landlordUserId || '',
+        landlord_user_id: landlordUserId,
         signatures: String(qty),
+        description: `E-signature credits x${qty}`,
       },
     });
 
@@ -89,12 +77,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (err: any) {
-    console.error('[esign/purchase-checkout] unexpected error:', err);
+    console.error('[esign/purchase-checkout] error:', err);
     return NextResponse.json(
       {
         error:
           err?.message ||
-          'Unexpected error while starting e-sign purchase checkout.',
+          'Unexpected error while starting the e-sign purchase checkout session.',
       },
       { status: 500 }
     );
