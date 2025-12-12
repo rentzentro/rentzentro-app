@@ -9,7 +9,6 @@ export const dynamic = 'force-dynamic';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
-// Prefer a dedicated secret, fall back to general one if needed
 const WEBHOOK_SECRET =
   process.env.STRIPE_ESIGN_WEBHOOK_SECRET ||
   process.env.STRIPE_WEBHOOK_SECRET ||
@@ -18,7 +17,7 @@ const WEBHOOK_SECRET =
 export async function POST(req: Request) {
   if (!WEBHOOK_SECRET) {
     console.error(
-      '[esign/purchase-webhook] Missing STRIPE_ESIGN_WEBHOOK_SECRET / STRIPE_WEBHOOK_SECRET env var.'
+      '[esign/purchase-webhook] Missing STRIPE_ESIGN_WEBHOOK_SECRET / STRIPE_WEBHOOK_SECRET.'
     );
     return NextResponse.json(
       { error: 'Webhook secret not configured.' },
@@ -28,6 +27,7 @@ export async function POST(req: Request) {
 
   const sig = headers().get('stripe-signature');
   if (!sig) {
+    console.error('[esign/purchase-webhook] Missing stripe-signature header.');
     return NextResponse.json(
       { error: 'Missing stripe-signature header.' },
       { status: 400 }
@@ -48,11 +48,17 @@ export async function POST(req: Request) {
   }
 
   try {
+    console.log('[esign/purchase-webhook] Received event:', event.type);
+
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
 
       // Only handle our e-sign purchases
       if (session.metadata?.type !== 'esign_purchase') {
+        console.log(
+          '[esign/purchase-webhook] Ignoring checkout.session.completed with type:',
+          session.metadata?.type
+        );
         return NextResponse.json({ received: true }, { status: 200 });
       }
 
@@ -62,19 +68,22 @@ export async function POST(req: Request) {
 
       if (!landlordUserId || !signatures || signatures <= 0) {
         console.error(
-          '[esign/purchase-webhook] Missing landlordUserId or signatures in metadata.'
+          '[esign/purchase-webhook] Missing landlordUserId or signatures in metadata:',
+          {
+            landlordUserId,
+            signaturesMeta,
+          }
         );
         return NextResponse.json({ received: true }, { status: 200 });
       }
 
-      // Only count paid sessions
       const isPaid =
         session.payment_status === 'paid' ||
         (session.status === 'complete' && session.amount_total);
 
       if (!isPaid) {
         console.log(
-          '[esign/purchase-webhook] Checkout session not paid, skipping insert.'
+          '[esign/purchase-webhook] Session not paid yet, skipping insert.'
         );
         return NextResponse.json({ received: true }, { status: 200 });
       }
@@ -85,7 +94,15 @@ export async function POST(req: Request) {
           ? session.payment_intent
           : (session.payment_intent as any)?.id ?? null;
 
-      // Insert one row into esign_purchases
+      console.log(
+        '[esign/purchase-webhook] Inserting purchase row:',
+        landlordUserId,
+        signatures,
+        amountCents,
+        paymentIntentId,
+        session.id
+      );
+
       const { error: insertError } = await supabaseAdmin
         .from('esign_purchases')
         .insert({
@@ -111,7 +128,7 @@ export async function POST(req: Request) {
       }
 
       console.log(
-        `[esign/purchase-webhook] Logged e-sign purchase: landlord=${landlordUserId}, signatures=${signatures}`
+        '[esign/purchase-webhook] Successfully logged e-sign purchase.'
       );
     }
 
