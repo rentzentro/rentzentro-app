@@ -83,6 +83,33 @@ const toDateInputValue = (iso: string | null | undefined): string => {
   return iso.slice(0, 10);
 };
 
+// Determine if this looks like an ACH-style payment (so we can show the delay note)
+const isAchLikeMethod = (method: string | null | undefined) => {
+  const m = (method || '').toLowerCase().trim();
+  if (!m) return false;
+
+  // Common patterns you may store over time
+  if (m.startsWith('ach')) return true;
+  if (m.includes('us_bank')) return true;
+  if (m.includes('bank')) return true;
+  if (m.includes('ach_transfer')) return true;
+
+  return false;
+};
+
+// Friendly method label for display
+const formatMethodLabel = (method: string | null | undefined) => {
+  const m = (method || '').toLowerCase().trim();
+  if (!m) return '—';
+
+  if (isAchLikeMethod(m)) return 'Bank transfer (ACH)';
+  if (m.startsWith('card')) return m.includes('autopay') ? 'Card (autopay)' : 'Card';
+  if (m.includes('stripe')) return 'Online (Stripe)';
+
+  // Fallback: show whatever you stored
+  return method || '—';
+};
+
 // Identify payments that were logged automatically via the tenant portal / Stripe
 // These should be VIEW-ONLY: not editable and not deletable.
 const isPortalLoggedPayment = (payment: Payment): boolean => {
@@ -94,10 +121,10 @@ const isPortalLoggedPayment = (payment: Payment): boolean => {
   if (method.startsWith('card')) return true; // "card", "card_autopay", etc.
   if (method.startsWith('ach')) return true; // "ach", "ach_autopay", etc.
 
-  // Future-proof: any method string that references Stripe directly
+  // Catch other Stripe-ish online labels you might store
   if (method.includes('stripe')) return true;
+  if (method.includes('us_bank')) return true; // ACH-like
 
-  // You can add more conditions here later if you add other online methods
   return false;
 };
 
@@ -542,6 +569,18 @@ export default function LandlordPaymentsPage() {
           </div>
         </div>
 
+        {/* Payment timing note (ACH delay) */}
+        <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-[12px] text-slate-300">
+          <p className="font-semibold text-slate-100">Payment timing note</p>
+          <p className="mt-1 text-slate-400">
+            <span className="text-slate-200 font-medium">Card</span> payments usually confirm quickly.
+            <span className="mx-1">•</span>
+            <span className="text-slate-200 font-medium">Bank transfer (ACH)</span> payments can take{' '}
+            <span className="text-slate-200 font-medium">1–5 business days</span> to fully clear.
+            During that time, the tenant may show as “paid” on their side while the payout is still processing.
+          </p>
+        </div>
+
         {/* Global errors / messages */}
         {(error || formMessage) && (
           <div
@@ -619,9 +658,7 @@ export default function LandlordPaymentsPage() {
                       Tenant (optional)
                     </label>
                     <select
-                      value={
-                        formTenantId === '' ? '' : String(formTenantId)
-                      }
+                      value={formTenantId === '' ? '' : String(formTenantId)}
                       onChange={(e) =>
                         setFormTenantId(
                           e.target.value ? Number(e.target.value) : ''
@@ -825,6 +862,7 @@ export default function LandlordPaymentsPage() {
 
                         const isDeleting = deletingId === p.id;
                         const portalPayment = isPortalLoggedPayment(p);
+                        const isAch = isAchLikeMethod(p.method);
 
                         return (
                           <tr
@@ -844,7 +882,12 @@ export default function LandlordPaymentsPage() {
                               {propertyLabelText}
                             </td>
                             <td className="py-2 px-3 align-top text-slate-300 hidden sm:table-cell">
-                              {p.method || '—'}
+                              {formatMethodLabel(p.method)}
+                              {portalPayment && isAch && (
+                                <span className="block mt-0.5 text-[10px] text-slate-500">
+                                  Clearing: 1–5 business days
+                                </span>
+                              )}
                             </td>
                             <td className="py-2 px-3 align-top text-slate-400 max-w-xs hidden md:table-cell">
                               {p.note || '—'}
@@ -852,7 +895,9 @@ export default function LandlordPaymentsPage() {
                             <td className="py-2 px-3 align-top">
                               {portalPayment ? (
                                 <span className="inline-flex items-center rounded-full border border-emerald-500/50 bg-emerald-500/10 px-3 py-1 text-[10px] font-medium text-emerald-200">
-                                  Portal payment · view only
+                                  {isAch
+                                    ? 'Portal payment (ACH) · view only'
+                                    : 'Portal payment · view only'}
                                 </span>
                               ) : (
                                 <div className="flex flex-wrap gap-1">
@@ -935,9 +980,7 @@ export default function LandlordPaymentsPage() {
                       <div className="space-y-1 md:col-span-1">
                         <label className="block text-slate-300">Tenant</label>
                         <select
-                          value={
-                            editTenantId === '' ? '' : String(editTenantId)
-                          }
+                          value={editTenantId === '' ? '' : String(editTenantId)}
                           onChange={(e) =>
                             setEditTenantId(
                               e.target.value ? Number(e.target.value) : ''
@@ -955,9 +998,7 @@ export default function LandlordPaymentsPage() {
                       </div>
 
                       <div className="space-y-1 md:col-span-1">
-                        <label className="block text-slate-300">
-                          Property
-                        </label>
+                        <label className="block text-slate-300">Property</label>
                         <select
                           value={
                             editPropertyId === '' ? '' : String(editPropertyId)
@@ -986,7 +1027,7 @@ export default function LandlordPaymentsPage() {
                           value={editMethod}
                           onChange={(e) => setEditMethod(e.target.value)}
                           className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                          placeholder="e.g. Cash, Card"
+                          placeholder="e.g. Cash, Check"
                         />
                       </div>
 

@@ -120,6 +120,25 @@ const parseDueDate = (value: string | null | undefined) => {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 };
 
+// Friendly method label (so ACH delays are obvious)
+const formatMethodLabel = (method: string | null | undefined) => {
+  const m = (method || '').toLowerCase();
+
+  if (!m) return 'Method not specified';
+
+  // Be flexible: you may store different strings over time
+  if (m.includes('ach') || m.includes('bank') || m.includes('us_bank')) {
+    return 'Bank transfer (ACH)';
+  }
+  if (m.includes('card')) {
+    // Covers "card", "card_autopay", etc.
+    return m.includes('autopay') ? 'Card (autopay)' : 'Card';
+  }
+
+  // Fallback: show raw, but nicer
+  return method || 'Method not specified';
+};
+
 // ---------- Component ----------
 
 export default function LandlordDashboardPage() {
@@ -150,13 +169,16 @@ export default function LandlordDashboardPage() {
 
       try {
         // 1) Get auth user
-        const { data: authData, error: authError } = await supabase.auth.getUser();
+        const { data: authData, error: authError } =
+          await supabase.auth.getUser();
         if (authError) throw authError;
 
         const user = authData.user;
         const email = user?.email;
         if (!user || !email) {
-          throw new Error('Unable to load landlord account. Please log in again.');
+          throw new Error(
+            'Unable to load landlord account. Please log in again.'
+          );
         }
 
         let landlordRow: LandlordRow | null = null;
@@ -653,6 +675,18 @@ export default function LandlordDashboardPage() {
           </div>
         )}
 
+        {/* ACH / Card info banner (clear + short, not scary) */}
+        <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-[12px] text-slate-300">
+          <p className="font-semibold text-slate-100">Payment timing note</p>
+          <p className="mt-1 text-slate-400">
+            <span className="text-slate-200 font-medium">Card</span> payments usually confirm quickly.
+            <span className="mx-1">•</span>
+            <span className="text-slate-200 font-medium">Bank transfer (ACH)</span> payments can take{' '}
+            <span className="text-slate-200 font-medium">1–5 business days</span> to fully clear.
+            During that time, the tenant may show as “paid” on their side while the payout is still processing.
+          </p>
+        </div>
+
         {/* Summary cards */}
         <div className="grid gap-4 md:grid-cols-3 mb-6">
           <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
@@ -859,6 +893,9 @@ export default function LandlordDashboardPage() {
               <p className="mt-1 text-sm font-medium text-slate-50">
                 Overdue, upcoming, and future rent
               </p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Tip: If a tenant pays by bank transfer (ACH), it may take 1–5 business days to clear.
+              </p>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -919,9 +956,7 @@ export default function LandlordDashboardPage() {
             {/* Upcoming 7 days */}
             <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold text-amber-200">
-                  Upcoming 7 days
-                </p>
+                <p className="font-semibold text-amber-200">Upcoming 7 days</p>
                 <span className="text-[11px] text-amber-200/80">
                   {upcoming7.length}
                 </span>
@@ -954,9 +989,7 @@ export default function LandlordDashboardPage() {
             {/* Not due yet */}
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold text-emerald-200">
-                  Not due yet
-                </p>
+                <p className="font-semibold text-emerald-200">Not due yet</p>
                 <span className="text-[11px] text-emerald-200/80">
                   {notDueYet.length}
                 </span>
@@ -1115,7 +1148,7 @@ export default function LandlordDashboardPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-[11px] text-slate-400">
-                          {p.method || 'Method not specified'}
+                          {formatMethodLabel(p.method)}
                         </p>
                         {p.note && (
                           <p className="mt-0.5 max-w-[180px] truncate text-[11px] text-slate-500">
@@ -1130,8 +1163,7 @@ export default function LandlordDashboardPage() {
             )}
 
             <p className="mt-3 text-[11px] text-slate-500">
-              Card payments from tenants are recorded here automatically after
-              Stripe confirms the payment.
+              Payments show here after Stripe confirms them. Bank transfer (ACH) payments may take 1–5 business days to clear.
             </p>
           </section>
         </div>

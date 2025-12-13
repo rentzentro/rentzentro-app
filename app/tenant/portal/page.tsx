@@ -934,6 +934,16 @@ export default function TenantPortalPage() {
                 </button>
               </div>
 
+              {/* NEW: payout timing disclosure */}
+              <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-[11px] text-slate-300">
+                <p className="font-semibold text-slate-100">Payout timing</p>
+                <p className="mt-1 text-slate-400">
+                  Your payment is processed securely by Stripe. After Stripe confirms your payment,
+                  funds are sent to your landlord&apos;s bank by Stripe — this
+                  can take a few business days depending on the landlord&apos;s bank and Stripe settings.
+                </p>
+              </div>
+
               <p className="mt-3 text-[11px] text-slate-500">
                 Card / ACH payments are processed securely by Stripe. You&apos;ll
                 get a confirmation once your payment is completed.
@@ -986,6 +996,11 @@ export default function TenantPortalPage() {
                   ))}
                 </div>
               )}
+
+              {/* NEW: small reminder under history */}
+              <p className="mt-3 text-[11px] text-slate-500">
+                Note: A successful payment here means Stripe confirmed the payment. Bank payouts to your landlord can take additional time.
+              </p>
             </section>
           </div>
 
