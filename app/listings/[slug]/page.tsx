@@ -6,12 +6,15 @@ import Link from 'next/link';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  'https://www.rentzentro.com';
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL as string,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
-  {
-    auth: { persistSession: false },
-  }
+  { auth: { persistSession: false } }
 );
 
 type Listing = {
@@ -59,6 +62,12 @@ const fmtDate = (value: string | null | undefined) => {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
+const absoluteUrl = (pathOrUrl: string) => {
+  if (!pathOrUrl) return SITE_URL;
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return `${SITE_URL.replace(/\/$/, '')}${pathOrUrl.startsWith('/') ? '' : '/'}${pathOrUrl}`;
+};
+
 async function getListing(slug: string) {
   const { data, error } = await supabase
     .from('listings')
@@ -94,6 +103,16 @@ export async function generateMetadata(
     };
   }
 
+  // Pull first photo for OG/Twitter previews
+  let ogImage: string | undefined;
+  try {
+    const photos = await getPhotos(listing.id);
+    const first = photos?.[0]?.image_url;
+    if (first) ogImage = absoluteUrl(first);
+  } catch {
+    // ignore photo errors in metadata
+  }
+
   const locParts = [listing.neighborhood, listing.city, listing.state].filter(Boolean).join(', ');
   const price = money(listing.rent_amount);
   const beds = listing.beds != null ? `${listing.beds} bed` : null;
@@ -123,15 +142,26 @@ export async function generateMetadata(
     descBits.join(' ') ||
     'View rental details and contact the landlord.';
 
+  const canonicalPath = `/listings/${listing.slug}`;
+  const canonical = absoluteUrl(canonicalPath);
+
   return {
     title,
     description,
-    alternates: { canonical: `/listings/${listing.slug}` },
+    alternates: { canonical: canonicalPath },
+    robots: { index: true, follow: true },
     openGraph: {
       title,
       description,
-      url: `/listings/${listing.slug}`,
+      url: canonical,
       type: 'website',
+      images: ogImage ? [{ url: ogImage }] : undefined,
+    },
+    twitter: {
+      card: ogImage ? 'summary_large_image' : 'summary',
+      title,
+      description,
+      images: ogImage ? [ogImage] : undefined,
     },
   };
 }
@@ -176,9 +206,45 @@ export default async function PublicListingPage({
           .filter(Boolean)
           .join(', ');
 
+  const canonical = absoluteUrl(`/listings/${listing.slug}`);
+
+  // Simple SEO boost: structured data
+  const ldJson: any = {
+    '@context': 'https://schema.org',
+    '@type': 'Offer',
+    url: canonical,
+    availability: 'https://schema.org/InStock',
+    price: listing.rent_amount ?? undefined,
+    priceCurrency: listing.rent_amount != null ? 'USD' : undefined,
+    itemOffered: {
+      '@type': 'Apartment',
+      name: listing.title,
+      description: listing.description || undefined,
+      numberOfRooms: listing.beds ?? undefined,
+      floorSize: listing.sqft ? { '@type': 'QuantitativeValue', value: listing.sqft, unitCode: 'FTK' } : undefined,
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: listing.city || undefined,
+        addressRegion: listing.state || undefined,
+        postalCode: listing.postal_code || undefined,
+        streetAddress: listing.hide_exact_address ? undefined : [listing.address_line1, listing.address_line2].filter(Boolean).join(', ') || undefined,
+      },
+    },
+  };
+
+  // IMPORTANT: make sure this matches your actual API route file.
+  // If your working route is app/api/listings/inquiry/route.ts => keep "/api/listings/inquiry"
+  // If your working route is app/api/listing-inquiry/route.ts => change to "/api/listing-inquiry"
+  const inquiryAction = '/api/listings/inquiry';
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-10">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(ldJson) }}
+        />
+
         <div className="mb-6 flex items-center justify-between gap-3">
           <div className="text-xs text-slate-500">
             Public Listing • Powered by{' '}
@@ -197,9 +263,7 @@ export default async function PublicListingPage({
           <section className="space-y-4">
             <div className="rounded-3xl border border-slate-800 bg-slate-900/40 p-5">
               <h1 className="text-xl font-semibold text-slate-50">{listing.title}</h1>
-              <p className="mt-2 text-sm text-slate-300">
-                {loc || 'Location not specified'}
-              </p>
+              <p className="mt-2 text-sm text-slate-300">{loc || 'Location not specified'}</p>
 
               <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
@@ -251,8 +315,9 @@ export default async function PublicListingPage({
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={ph.image_url}
-                        alt="Listing photo"
+                        alt={`${listing.title} photo`}
                         className="h-56 w-full object-cover"
+                        loading="lazy"
                       />
                     </div>
                   ))}
@@ -280,11 +345,7 @@ export default async function PublicListingPage({
               Send a message to the landlord. You’ll get a reply using the contact info provided.
             </p>
 
-            <form
-              action={`/api/listings/inquiry`}
-              method="POST"
-              className="mt-4 space-y-3"
-            >
+            <form action={inquiryAction} method="POST" className="mt-4 space-y-3">
               <input type="hidden" name="listing_id" value={String(listing.id)} />
 
               <div>
