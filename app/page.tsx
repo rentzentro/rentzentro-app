@@ -90,6 +90,99 @@ async function getHomepageListings(limit = 6) {
   return { listings: (listings || []) as Listing[], coverMap };
 }
 
+type DemoCard = {
+  title: string;
+  loc: string;
+  price: string;
+  bedsBaths: string;
+  available: string;
+  area: string;
+  image: string;
+};
+
+const demoCards: DemoCard[] = [
+  {
+    title: 'Bright 2BR • Renovated kitchen • Parking',
+    loc: 'East Side, Providence, RI',
+    price: '$2,350/mo',
+    bedsBaths: '2 / 1',
+    available: 'Now',
+    area: 'East Side, Providence, RI',
+    image:
+      'https://images.unsplash.com/photo-1501183638710-841dd1904471?auto=format&fit=crop&w=1200&q=70',
+  },
+  {
+    title: 'Modern 1BR • In-unit laundry • Gym access',
+    loc: 'Somerville, MA',
+    price: '$2,150/mo',
+    bedsBaths: '1 / 1',
+    available: 'Jan 5, 2026',
+    area: 'Somerville, MA',
+    image:
+      'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=1200&q=70',
+  },
+  {
+    title: 'Spacious 3BR • Backyard • Pet-friendly',
+    loc: 'Warwick, RI',
+    price: '$2,850/mo',
+    bedsBaths: '3 / 1.5',
+    available: 'Feb 1, 2026',
+    area: 'Warwick, RI',
+    image:
+      'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1200&q=70',
+  },
+];
+
+function DemoListingCard({ d }: { d: DemoCard }) {
+  return (
+    <div className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70">
+      <div className="relative h-44 w-full overflow-hidden bg-slate-950/50">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={d.image}
+          alt="Example listing"
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+        />
+        <div className="absolute left-3 top-3 inline-flex items-center rounded-full border border-slate-700 bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-slate-100 backdrop-blur">
+          {d.price}
+        </div>
+
+        <div className="absolute right-3 top-3 inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-200 backdrop-blur">
+          Example
+        </div>
+      </div>
+
+      <div className="p-4">
+        <p className="text-sm font-semibold text-slate-50">{d.title}</p>
+        <p className="mt-1 text-[12px] text-slate-300">{d.loc}</p>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
+            <p className="text-slate-500">Beds / Baths</p>
+            <p className="mt-0.5 text-slate-100 font-semibold">{d.bedsBaths}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
+            <p className="text-slate-500">Available</p>
+            <p className="mt-0.5 text-slate-100 font-semibold">{d.available}</p>
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
+          <p className="text-[11px] text-slate-500">Area</p>
+          <p className="mt-0.5 text-[12px] text-slate-200">{d.area}</p>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Exact address hidden until a showing is scheduled.
+          </p>
+        </div>
+
+        <div className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-emerald-200">
+          Preview style <span className="text-emerald-300">→</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default async function HomePage() {
   let publicListings: Listing[] = [];
   let coverMap = new Map<number, PhotoRow>();
@@ -200,10 +293,10 @@ export default async function HomePage() {
                 Stop chasing rent. Start running your rentals like a business.
               </h1>
               <p className="mt-3 max-w-xl text-sm text-slate-400">
-                RentZentro is software for landlords—not a management company. Get a clean
-                dashboard, tenant portal, online card & ACH rent payments, automatic rent payments
-                (auto-pay), automatic rent reminders, document sharing, and maintenance tracking
-                without the corporate bloat.
+                RentZentro is software for landlords—not a management company. Get a clean dashboard,
+                tenant portal, online card & ACH rent payments, automatic rent payments (auto-pay),
+                automatic rent reminders, document sharing, and maintenance tracking without the corporate
+                bloat.
               </p>
             </div>
 
@@ -222,7 +315,7 @@ export default async function HomePage() {
                 I&apos;m a tenant
               </Link>
 
-              {/* NEW: Public listings CTA */}
+              {/* Public listings CTA */}
               <Link
                 href="/listings"
                 className="inline-flex items-center justify-center rounded-full border border-emerald-500/50 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/15"
@@ -261,8 +354,8 @@ export default async function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Tenants pay rent online with card or ACH through Stripe. Payments log
-                    automatically to your dashboard—RentZentro never holds your funds.
+                    Tenants pay rent online with card or ACH through Stripe. Payments log automatically
+                    to your dashboard—RentZentro never holds your funds.
                   </p>
                 </div>
 
@@ -271,8 +364,8 @@ export default async function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Offer tenants automatic rent payments (auto-pay) so on-time rent becomes the
-                    default instead of a monthly chase.
+                    Offer tenants automatic rent payments (auto-pay) so on-time rent becomes the default
+                    instead of a monthly chase.
                   </p>
                 </div>
 
@@ -281,8 +374,8 @@ export default async function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Automatic rent reminders emailed to your tenants and maintenance requests that
-                    hit your inbox and show on your maintenance board instantly.
+                    Automatic rent reminders emailed to your tenants and maintenance requests that hit
+                    your inbox and show on your maintenance board instantly.
                   </p>
                 </div>
 
@@ -291,8 +384,8 @@ export default async function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Built-in messaging with each tenant, so questions, updates, and photos stay in
-                    one thread instead of scattered across texts and emails.
+                    Built-in messaging with each tenant, so questions, updates, and photos stay in one
+                    thread instead of scattered across texts and emails.
                   </p>
                 </div>
 
@@ -301,8 +394,8 @@ export default async function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Add trusted team members to help manage rent, maintenance, and messaging while
-                    they share access to your landlord dashboard.
+                    Add trusted team members to help manage rent, maintenance, and messaging while they
+                    share access to your landlord dashboard.
                   </p>
                 </div>
               </div>
@@ -317,8 +410,8 @@ export default async function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Simple tenant portal to see rent due, payment history, and shared documents—and
-                    pay rent online with card or bank (ACH).
+                    Simple tenant portal to see rent due, payment history, and shared documents—and pay
+                    rent online with card or bank (ACH).
                   </p>
                 </div>
 
@@ -327,8 +420,7 @@ export default async function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Submit maintenance requests with details, then track status and see landlord
-                    updates.
+                    Submit maintenance requests with details, then track status and see landlord updates.
                   </p>
                 </div>
 
@@ -337,8 +429,8 @@ export default async function HomePage() {
                     ✓
                   </span>
                   <p>
-                    Access files and important documents in one place instead of digging through old
-                    email threads.
+                    Access files and important documents in one place instead of digging through old email
+                    threads.
                   </p>
                 </div>
 
@@ -496,18 +588,17 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* NEW: Public Listings Preview */}
+        {/* Public Listings Preview */}
         <section className="mb-8 border-t border-slate-900 pt-6">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Public listings
               </p>
-              <h2 className="text-lg font-semibold text-slate-50">
-                Browse rentals posted by RentZentro landlords
-              </h2>
+              <h2 className="text-lg font-semibold text-slate-50">Browse rentals</h2>
               <p className="mt-2 text-[11px] text-slate-400">
-                Publishing makes your listing visible here and shareable by link.
+                When landlords publish listings, they can be shared by link — and can also appear here for
+                renters to browse.
               </p>
             </div>
 
@@ -518,104 +609,126 @@ export default async function HomePage() {
               >
                 Browse all listings
               </Link>
-              <Link
-                href="/landlord/listings"
-                className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/15"
-              >
-                I&apos;m a landlord
-              </Link>
             </div>
           </div>
 
           {publicListings.length === 0 ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-6">
-              <p className="text-sm font-semibold text-slate-100">No public listings yet</p>
-              <p className="mt-2 text-[11px] text-slate-400">
-                As soon as landlords publish listings, they’ll appear here and on the public browse page.
+            <>
+              {/* Premium “preview” instead of “no listings yet” */}
+              <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">Listing preview</p>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Here’s what RentZentro listings look like. (Real published listings will show here automatically.)
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href="/landlord/signup"
+                      className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/15"
+                    >
+                      Publish your first listing
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {demoCards.map((d) => (
+                  <DemoListingCard key={d.title} d={d} />
+                ))}
+              </div>
+
+              <p className="mt-3 text-[10px] text-slate-500">
+                Note: Example listings above are demos for presentation. Real listings are published by
+                individual landlords. RentZentro is software for managing rentals — not a property management company.
               </p>
-            </div>
+            </>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {publicListings.map((l) => {
-                const cover = coverMap.get(l.id);
-                const loc = [l.neighborhood, l.city, l.state].filter(Boolean).join(', ');
-                const price = money(l.rent_amount);
-                const available = fmtDate(l.available_date) || 'Now';
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {publicListings.map((l) => {
+                  const cover = coverMap.get(l.id);
+                  const loc = [l.neighborhood, l.city, l.state].filter(Boolean).join(', ');
+                  const price = money(l.rent_amount);
+                  const available = fmtDate(l.available_date) || 'Now';
 
-                const addressLine = l.hide_exact_address
-                  ? [l.neighborhood, l.city, l.state].filter(Boolean).join(', ')
-                  : [l.address_line1, l.address_line2, l.city, l.state, l.postal_code]
-                      .filter(Boolean)
-                      .join(', ');
+                  const addressLine = l.hide_exact_address
+                    ? [l.neighborhood, l.city, l.state].filter(Boolean).join(', ')
+                    : [l.address_line1, l.address_line2, l.city, l.state, l.postal_code]
+                        .filter(Boolean)
+                        .join(', ');
 
-                return (
-                  <Link
-                    key={l.id}
-                    href={`/listings/${l.slug}`}
-                    className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 hover:bg-slate-900/55 transition-colors"
-                  >
-                    <div className="relative h-44 w-full overflow-hidden bg-slate-950/50">
-                      {cover?.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={cover.image_url}
-                          alt="Listing cover"
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
-                          No cover photo
-                        </div>
-                      )}
-
-                      <div className="absolute left-3 top-3 inline-flex items-center rounded-full border border-slate-700 bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-slate-100 backdrop-blur">
-                        {price ? `${price}/mo` : 'Price not listed'}
-                      </div>
-                    </div>
-
-                    <div className="p-4">
-                      <p className="text-sm font-semibold text-slate-50">{l.title}</p>
-                      <p className="mt-1 text-[12px] text-slate-300">{loc || 'Location not specified'}</p>
-
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                        <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
-                          <p className="text-slate-500">Beds / Baths</p>
-                          <p className="mt-0.5 text-slate-100 font-semibold">
-                            {(l.beds ?? '-') + ' / ' + (l.baths ?? '-')}
-                          </p>
-                        </div>
-                        <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
-                          <p className="text-slate-500">Available</p>
-                          <p className="mt-0.5 text-slate-100 font-semibold">{available}</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
-                        <p className="text-[11px] text-slate-500">Area / Address</p>
-                        <p className="mt-0.5 text-[12px] text-slate-200">
-                          {addressLine || 'Not provided'}
-                        </p>
-                        {l.hide_exact_address && (
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            Exact address hidden until a showing is scheduled.
-                          </p>
+                  return (
+                    <Link
+                      key={l.id}
+                      href={`/listings/${l.slug}`}
+                      className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 hover:bg-slate-900/55 transition-colors"
+                    >
+                      <div className="relative h-44 w-full overflow-hidden bg-slate-950/50">
+                        {cover?.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={cover.image_url}
+                            alt="Listing cover"
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
+                            No cover photo
+                          </div>
                         )}
+
+                        <div className="absolute left-3 top-3 inline-flex items-center rounded-full border border-slate-700 bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-slate-100 backdrop-blur">
+                          {price ? `${price}/mo` : 'Price not listed'}
+                        </div>
                       </div>
 
-                      <div className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-emerald-200">
-                        View listing <span className="text-emerald-300">→</span>
+                      <div className="p-4">
+                        <p className="text-sm font-semibold text-slate-50">{l.title}</p>
+                        <p className="mt-1 text-[12px] text-slate-300">{loc || 'Location not specified'}</p>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
+                            <p className="text-slate-500">Beds / Baths</p>
+                            <p className="mt-0.5 text-slate-100 font-semibold">
+                              {(l.beds ?? '-') + ' / ' + (l.baths ?? '-')}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
+                            <p className="text-slate-500">Available</p>
+                            <p className="mt-0.5 text-slate-100 font-semibold">{available}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
+                          <p className="text-[11px] text-slate-500">Area / Address</p>
+                          <p className="mt-0.5 text-[12px] text-slate-200">
+                            {addressLine || 'Not provided'}
+                          </p>
+                          {l.hide_exact_address && (
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              Exact address hidden until a showing is scheduled.
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-emerald-200">
+                          View listing <span className="text-emerald-300">→</span>
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <p className="mt-3 text-[10px] text-slate-500">
+                Note: Listings shown here are published by individual landlords. RentZentro is software for
+                managing rentals — not a property management company.
+              </p>
+            </>
           )}
-
-          <p className="mt-3 text-[10px] text-slate-500">
-            Note: Listings shown here are published by individual landlords. RentZentro is software for
-            managing rentals — not a property management company.
-          </p>
         </section>
 
         {/* December promo explanation */}
