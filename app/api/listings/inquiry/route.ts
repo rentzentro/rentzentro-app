@@ -33,6 +33,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
 
     const listingId = Number(body?.listingId);
+
     const name = String(body?.name || '').trim();
     const email = String(body?.email || '').trim();
     const phone = body?.phone ? String(body?.phone || '').trim() : null;
@@ -68,13 +69,11 @@ export async function POST(req: Request) {
     const slug = (listing as any).slug as string;
     const contactEmail = (listing as any).contact_email as string | null;
 
-    // -------------------------
     // Collect recipients (landlord + accepted team members)
-    // -------------------------
     const recipientCandidates: string[] = [];
 
-    // Landlord email
     if (ownerId) {
+      // Landlord email
       const { data: landlordRow } = await supabaseAdmin
         .from('landlords')
         .select('email')
@@ -84,9 +83,7 @@ export async function POST(req: Request) {
       const landlordEmail = (landlordRow as any)?.email as string | undefined;
       if (landlordEmail) recipientCandidates.push(landlordEmail);
 
-      // Team emails (THIS is the correct table in your DB: landlord_team_members)
-      // Your screenshot shows RLS warnings, but service role ignores RLS.
-      // We only email accepted team members.
+      // Team emails (accepted only) from landlord_team_members
       const { data: teamRows } = await supabaseAdmin
         .from('landlord_team_members')
         .select('member_email, invite_email, status, accepted_at')
@@ -132,27 +129,24 @@ export async function POST(req: Request) {
 
     const listingUrl = `${String(baseUrl).replace(/\/$/, '')}/listings/${slug}`;
 
-    // -------------------------
-    // Store inquiry in Supabase (do not silently swallow errors)
-    // -------------------------
+    // Save inquiry (match YOUR table columns exactly)
     let dbSaved = false;
     let dbError: string | null = null;
 
     const { error: insErr } = await supabaseAdmin.from('listing_inquiries').insert({
       listing_id: listingId,
-      listing_slug: slug,
-      listing_title: title,
-      sender_name: name,
-      sender_email: email,
-      sender_phone: phone,
+      owner_id: ownerId, // IMPORTANT: your table has owner_id uuid
+      name,
+      email,
+      phone,
       message,
-      created_at: new Date().toISOString(),
+      status: 'new', // your table default is 'new' but we set it explicitly
+      // created_at is default now() in your table, so we do not need to pass it
     });
 
     if (insErr) {
       dbSaved = false;
       dbError = insErr.message || 'Insert failed.';
-      // We still continue to email so the inquiry flow works even if DB table/policies need tweaks.
       console.error('listing_inquiries insert error:', insErr);
     } else {
       dbSaved = true;
@@ -173,7 +167,6 @@ export async function POST(req: Request) {
     }
 
     const subject = `New inquiry: ${title}`;
-
     const safeMessage = message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     const html = `
