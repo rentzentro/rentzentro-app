@@ -18,14 +18,21 @@ function isEmail(v: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
+function uniqEmails(arr: string[]) {
+  return Array.from(
+    new Set(
+      (arr || [])
+        .map((s) => String(s || '').trim().toLowerCase())
+        .filter((s) => !!s && isEmail(s))
+    )
+  );
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
 
     const listingId = Number(body?.listingId);
-    const listingTitle = String(body?.listingTitle || '').trim();
-    const listingSlug = String(body?.listingSlug || '').trim();
-
     const name = String(body?.name || '').trim();
     const email = String(body?.email || '').trim();
     const phone = body?.phone ? String(body?.phone || '').trim() : null;
@@ -61,11 +68,13 @@ export async function POST(req: Request) {
     const slug = (listing as any).slug as string;
     const contactEmail = (listing as any).contact_email as string | null;
 
-    // Collect recipients (landlord + team)
-    let toEmails: string[] = [];
+    // -------------------------
+    // Collect recipients (landlord + accepted team members)
+    // -------------------------
+    const recipientCandidates: string[] = [];
 
+    // Landlord email
     if (ownerId) {
-      // Landlord email
       const { data: landlordRow } = await supabaseAdmin
         .from('landlords')
         .select('email')
@@ -73,39 +82,41 @@ export async function POST(req: Request) {
         .maybeSingle();
 
       const landlordEmail = (landlordRow as any)?.email as string | undefined;
-      if (landlordEmail && isEmail(landlordEmail)) toEmails.push(landlordEmail);
+      if (landlordEmail) recipientCandidates.push(landlordEmail);
 
-      // Team emails (best-effort)
-      try {
-        const { data: teamRows } = await supabaseAdmin
-          .from('team_members')
-          .select('email')
-          .eq('landlord_user_id', ownerId);
+      // Team emails (THIS is the correct table in your DB: landlord_team_members)
+      // Your screenshot shows RLS warnings, but service role ignores RLS.
+      // We only email accepted team members.
+      const { data: teamRows } = await supabaseAdmin
+        .from('landlord_team_members')
+        .select('member_email, invite_email, status, accepted_at')
+        .eq('owner_user_id', ownerId);
 
-        for (const r of (teamRows || []) as any[]) {
-          if (r?.email && isEmail(r.email)) toEmails.push(r.email);
-        }
-      } catch {
-        // ignore if table doesn't exist
+      for (const r of (teamRows || []) as any[]) {
+        const status = String(r?.status || '').toLowerCase();
+        const accepted = !!r?.accepted_at || status === 'accepted';
+        if (!accepted) continue;
+
+        if (r?.member_email) recipientCandidates.push(String(r.member_email));
+        if (r?.invite_email) recipientCandidates.push(String(r.invite_email));
       }
     }
 
     // Fallback to listing contact email
-    if (toEmails.length === 0 && contactEmail && isEmail(contactEmail)) {
-      toEmails.push(contactEmail);
+    if (recipientCandidates.length === 0 && contactEmail) {
+      recipientCandidates.push(contactEmail);
     }
 
-    // Absolute last resort fallback (recommended)
+    // Absolute last resort fallback
     if (
-      toEmails.length === 0 &&
+      recipientCandidates.length === 0 &&
       process.env.INQUIRY_FALLBACK_EMAIL &&
       isEmail(process.env.INQUIRY_FALLBACK_EMAIL)
     ) {
-      toEmails.push(process.env.INQUIRY_FALLBACK_EMAIL);
+      recipientCandidates.push(process.env.INQUIRY_FALLBACK_EMAIL);
     }
 
-    // Dedup
-    toEmails = Array.from(new Set(toEmails));
+    const toEmails = uniqEmails(recipientCandidates);
 
     if (toEmails.length === 0) {
       return NextResponse.json(
@@ -114,28 +125,49 @@ export async function POST(req: Request) {
       );
     }
 
-    const listingUrl = `https://www.rentzentro.com/listings/${slug}`;
+    const baseUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      'https://www.rentzentro.com';
 
-    // Optional: store inquiry (best-effort if table exists)
-    try {
-      await supabaseAdmin.from('listing_inquiries').insert({
-        listing_id: listingId,
-        listing_slug: listingSlug || slug,
-        listing_title: listingTitle || title,
-        sender_name: name,
-        sender_email: email,
-        sender_phone: phone,
-        message,
-        created_at: new Date().toISOString(),
-      });
-    } catch {
-      // ignore (table may not exist yet)
+    const listingUrl = `${String(baseUrl).replace(/\/$/, '')}/listings/${slug}`;
+
+    // -------------------------
+    // Store inquiry in Supabase (do not silently swallow errors)
+    // -------------------------
+    let dbSaved = false;
+    let dbError: string | null = null;
+
+    const { error: insErr } = await supabaseAdmin.from('listing_inquiries').insert({
+      listing_id: listingId,
+      listing_slug: slug,
+      listing_title: title,
+      sender_name: name,
+      sender_email: email,
+      sender_phone: phone,
+      message,
+      created_at: new Date().toISOString(),
+    });
+
+    if (insErr) {
+      dbSaved = false;
+      dbError = insErr.message || 'Insert failed.';
+      // We still continue to email so the inquiry flow works even if DB table/policies need tweaks.
+      console.error('listing_inquiries insert error:', insErr);
+    } else {
+      dbSaved = true;
     }
 
     // If Resend isn't configured, still return OK (so form doesn't feel broken)
     if (!resend) {
       return NextResponse.json(
-        { ok: true, warning: 'RESEND_API_KEY missing — email was not sent.' },
+        {
+          ok: true,
+          warning: 'RESEND_API_KEY missing — email was not sent.',
+          dbSaved,
+          dbError,
+          recipients: toEmails,
+        },
         { status: 200 }
       );
     }
@@ -172,7 +204,15 @@ export async function POST(req: Request) {
       html,
     });
 
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return NextResponse.json(
+      {
+        ok: true,
+        dbSaved,
+        dbError,
+        recipients: toEmails,
+      },
+      { status: 200 }
+    );
   } catch (e: any) {
     console.error('Inquiry route error:', e);
     return NextResponse.json({ error: e?.message || 'Server error.' }, { status: 500 });
