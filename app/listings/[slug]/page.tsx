@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import type { Metadata } from 'next';
 import PhotoGallery from './PhotoGallery';
+import ListingInquiryForm from './ListingInquiryForm';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -16,6 +18,7 @@ const supabase = createClient(
 
 type Listing = {
   id: number;
+  owner_id: string;
   title: string;
   slug: string;
   published: boolean;
@@ -66,13 +69,115 @@ const fmtDate = (value: string | null | undefined) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (m) {
     const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
   }
 
   const d = new Date(value);
   if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 };
+
+function safeText(input: string | null | undefined) {
+  return (input || '').replace(/\s+/g, ' ').trim();
+}
+
+function buildListingMeta(l: Listing, coverUrl: string | null): Metadata {
+  const loc = [l.neighborhood, l.city, l.state].filter(Boolean).join(', ');
+  const price = money(l.rent_amount);
+  const bedsBaths =
+    l.beds != null || l.baths != null ? `${l.beds ?? '—'} bd · ${l.baths ?? '—'} ba` : '';
+  const titleBits = [safeText(l.title), loc ? `— ${loc}` : '', price ? `— ${price}/mo` : '']
+    .filter(Boolean)
+    .join(' ');
+
+  const desc =
+    safeText(l.description) ||
+    `View details for ${safeText(l.title)}${loc ? ` in ${loc}` : ''}.`;
+
+  const url = `https://www.rentzentro.com/listings/${l.slug}`;
+
+  return {
+    title: titleBits || l.title,
+    description: desc.slice(0, 160),
+    alternates: { canonical: url },
+    openGraph: {
+      title: titleBits || l.title,
+      description: desc.slice(0, 200),
+      url,
+      siteName: 'RentZentro',
+      type: 'article',
+      images: coverUrl ? [{ url: coverUrl }] : undefined,
+    },
+    twitter: {
+      card: coverUrl ? 'summary_large_image' : 'summary',
+      title: titleBits || l.title,
+      description: desc.slice(0, 200),
+      images: coverUrl ? [coverUrl] : undefined,
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
+    keywords: [
+      'rentals',
+      'apartments',
+      'houses for rent',
+      'rent listing',
+      'RentZentro',
+      loc || '',
+      bedsBaths || '',
+    ].filter(Boolean),
+  };
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { slug: string };
+}): Promise<Metadata> {
+  const slug = (params?.slug || '').trim();
+  if (!slug) return {};
+
+  const { data: listing } = await supabase
+    .from('listings')
+    .select(
+      `
+      id, owner_id, title, slug, published, published_at, status,
+      city, state, neighborhood,
+      rent_amount, deposit_amount, available_date,
+      beds, baths, sqft,
+      description,
+      hide_exact_address, address_line1, address_line2, postal_code,
+      contact_email, contact_phone
+    `
+    )
+    .eq('slug', slug)
+    .eq('published', true)
+    .maybeSingle();
+
+  if (!listing) return {};
+
+  const l = listing as Listing;
+
+  const { data: photosData } = await supabase
+    .from('listing_photos')
+    .select('image_url, sort_order')
+    .eq('listing_id', l.id)
+    .order('sort_order', { ascending: true })
+    .limit(1);
+
+  const coverUrl = (photosData && photosData[0]?.image_url) || null;
+
+  return buildListingMeta(l, coverUrl);
+}
 
 export default async function ListingDetailsPage({
   params,
@@ -86,7 +191,7 @@ export default async function ListingDetailsPage({
     .from('listings')
     .select(
       `
-      id, title, slug, published, published_at, status,
+      id, owner_id, title, slug, published, published_at, status,
       city, state, neighborhood,
       rent_amount, deposit_amount, available_date,
       beds, baths, sqft,
@@ -118,7 +223,11 @@ export default async function ListingDetailsPage({
 
   const addressLine = l.hide_exact_address
     ? [l.neighborhood, l.city, l.state].filter(Boolean).join(', ')
-    : [l.address_line1, l.address_line2, l.city, l.state, l.postal_code].filter(Boolean).join(', ');
+    : [l.address_line1, l.address_line2, l.city, l.state, l.postal_code]
+        .filter(Boolean)
+        .join(', ');
+
+  const showDirectContact = !!(l.contact_email || l.contact_phone);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
@@ -212,41 +321,56 @@ export default async function ListingDetailsPage({
                 )}
               </div>
 
+              {/* Inquiry form (1-way, goes to landlord + team) */}
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Contact
+                  Send an inquiry
                 </p>
-                <div className="mt-2 space-y-1 text-sm">
-                  <p className="text-slate-200">
-                    Email:{' '}
-                    {l.contact_email ? (
-                      <a
-                        className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
-                        href={`mailto:${l.contact_email}`}
-                      >
-                        {l.contact_email}
-                      </a>
-                    ) : (
-                      <span className="text-slate-400">Available via inquiry form</span>
-                    )}
-                  </p>
-                  <p className="text-slate-200">
-                    Phone:{' '}
-                    {l.contact_phone ? (
-                      <a
-                        className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
-                        href={`tel:${l.contact_phone}`}
-                      >
-                        {l.contact_phone}
-                      </a>
-                    ) : (
-                      <span className="text-slate-400">Available via inquiry form</span>
-                    )}
-                  </p>
+                <p className="mt-2 text-[11px] text-slate-400">
+                  This sends a one-way inquiry to the landlord (and any authorized team members).
+                  You’ll get a reply directly from them using the contact info you provide.
+                </p>
+
+                <div className="mt-4">
+                  <ListingInquiryForm listingId={l.id} listingTitle={l.title} listingSlug={l.slug} />
                 </div>
 
+                {showDirectContact && (
+                  <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-3">
+                    <p className="text-[11px] font-semibold text-slate-200">Direct contact (optional)</p>
+                    <div className="mt-2 space-y-1 text-sm">
+                      <p className="text-slate-200">
+                        Email:{' '}
+                        {l.contact_email ? (
+                          <a
+                            className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
+                            href={`mailto:${l.contact_email}`}
+                          >
+                            {l.contact_email}
+                          </a>
+                        ) : (
+                          <span className="text-slate-500">Not provided</span>
+                        )}
+                      </p>
+                      <p className="text-slate-200">
+                        Phone:{' '}
+                        {l.contact_phone ? (
+                          <a
+                            className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
+                            href={`tel:${l.contact_phone}`}
+                          >
+                            {l.contact_phone}
+                          </a>
+                        ) : (
+                          <span className="text-slate-500">Not provided</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <p className="mt-3 text-[11px] text-slate-500">
-                  Tip: If contact isn’t shown, use the inquiry form (if enabled) or ask the landlord directly.
+                  Safety tip: Never send sensitive info (SSN, bank details, etc.) in an inquiry.
                 </p>
               </div>
             </div>
