@@ -752,40 +752,7 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
-
-        {/* Contact */}
-        <section className="mb-8 border-t border-slate-900 pt-6">
-          <div className="max-w-xl">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Contact RentZentro
-            </h2>
-            <p className="text-sm font-semibold text-slate-50">Questions about rent collection, listings, or getting started?</p>
-            <div className="mt-4 space-y-1 text-[11px]">
-              <p className="font-medium text-slate-300">Email</p>
-              <a
-                href="mailto:info@rentzentro.com"
-                className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
-              >
-                info@rentzentro.com
-              </a>
-            </div>
-          </div>
-        </section>
-
-        {/* Footer */}
-        <footer className="mt-auto border-t border-slate-900 pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
-            <p>© {new Date().getFullYear()} RentZentro. All rights reserved.</p>
-            <div className="flex items-center gap-4">
-              <Link href="/terms" className="hover:text-emerald-300 hover:underline">
-                Terms of Service
-              </Link>
-              <Link href="/privacy" className="hover:text-emerald-300 hover:underline">
-                Privacy Policy
-              </Link>
-            </div>
-          </div>
-        </footer>
+        {/* IMPORTANT: Footer removed — now handled globally in app/layout.tsx */}
       </div>
     </main>
   );
