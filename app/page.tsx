@@ -5,6 +5,29 @@ import { createClient } from '@supabase/supabase-js';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+export const metadata = {
+  title: 'RentZentro | Rent collection, tenant portal, maintenance, listings & e-sign',
+  description:
+    'RentZentro is software for landlords (not a property management company). Collect rent online (ACH + card), enable auto-pay, send reminders, track maintenance, share documents, message tenants, publish listings, and manage e-signatures—without the corporate bloat.',
+  alternates: {
+    canonical: 'https://www.rentzentro.com/',
+  },
+  openGraph: {
+    title: 'RentZentro | Run rentals like a business',
+    description:
+      'Collect rent online, enable auto-pay, send reminders, track maintenance, share documents, message tenants, publish listings, and manage e-signatures.',
+    url: 'https://www.rentzentro.com/',
+    siteName: 'RentZentro',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'RentZentro | Run rentals like a business',
+    description:
+      'Rent collection + tenant portal + maintenance + listings + e-signatures—built for landlords.',
+  },
+};
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL as string,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
@@ -109,7 +132,7 @@ const demoCards: DemoCard[] = [
     available: 'Now',
     area: 'East Side, Providence, RI',
     image:
-      'https://images.unsplash.com/photo-1501183638710-841dd1904471?auto=format&fit=crop&w=1200&q=70',
+      'https://images.unsplash.com/photo-1501183638710-841dd1904471?auto=format&fit=crop&w=1400&q=70',
   },
   {
     title: 'Modern 1BR • In-unit laundry • Gym access',
@@ -119,7 +142,7 @@ const demoCards: DemoCard[] = [
     available: 'Jan 5, 2026',
     area: 'Somerville, MA',
     image:
-      'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=1200&q=70',
+      'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=1400&q=70',
   },
   {
     title: 'Spacious 3BR • Backyard • Pet-friendly',
@@ -129,7 +152,7 @@ const demoCards: DemoCard[] = [
     available: 'Feb 1, 2026',
     area: 'Warwick, RI',
     image:
-      'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1200&q=70',
+      'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1400&q=70',
   },
 ];
 
@@ -140,8 +163,9 @@ function DemoListingCard({ d }: { d: DemoCard }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={d.image}
-          alt="Example listing"
+          alt="Example rental listing preview"
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          loading="lazy"
         />
         <div className="absolute left-3 top-3 inline-flex items-center rounded-full border border-slate-700 bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-slate-100 backdrop-blur">
           {d.price}
@@ -191,14 +215,36 @@ export default async function HomePage() {
     const res = await getHomepageListings(6);
     publicListings = res.listings;
     coverMap = res.coverMap;
-  } catch (e) {
-    // Homepage must still render if listings fetch fails
+  } catch {
     publicListings = [];
     coverMap = new Map<number, PhotoRow>();
   }
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'SoftwareApplication',
+    name: 'RentZentro',
+    applicationCategory: 'BusinessApplication',
+    operatingSystem: 'Web',
+    url: 'https://www.rentzentro.com/',
+    description:
+      'RentZentro is software for landlords (not a property management company). Collect rent online (ACH + card), enable auto-pay, send reminders, track maintenance, share documents, message tenants, publish listings, and manage e-signatures.',
+    offers: {
+      '@type': 'Offer',
+      price: '29.95',
+      priceCurrency: 'USD',
+      url: 'https://www.rentzentro.com/landlord/signup',
+    },
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
       {/* Top shell */}
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 lg:px-6">
         {/* Holiday promo ribbon */}
@@ -258,7 +304,7 @@ export default async function HomePage() {
                   RentZentro Landlord Plan — <span className="text-emerald-300">$29.95/mo</span>
                 </p>
                 <p className="text-[11px] text-emerald-100/80">
-                  Flat monthly price. Unlimited units, tenants, payments, and maintenance requests.
+                  Flat monthly price. Unlimited units, tenants, payments, maintenance requests, listings, and more.
                 </p>
                 <p className="mt-1 text-[11px] font-medium text-emerald-200">
                   🎁 Free for new landlords through December — no card required to start.
@@ -269,8 +315,7 @@ export default async function HomePage() {
                     Powered by Stripe
                   </span>
                   <span className="text-[10px] text-emerald-100/80">
-                    Secure card & ACH rent payments, including automatic rent payments (auto-pay) for
-                    your tenants.
+                    Secure card & ACH rent payments, including automatic rent payments (auto-pay).
                   </span>
                 </div>
               </div>
@@ -286,17 +331,16 @@ export default async function HomePage() {
 
         {/* Hero + demo */}
         <section className="flex flex-1 flex-col gap-8 pb-10 pt-2 lg:flex-row lg:items-stretch">
-          {/* Left: copy + CTAs */}
+          {/* Left */}
           <div className="flex flex-1 flex-col justify-center gap-5">
             <div>
               <h1 className="text-balance text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl lg:text-[2.6rem]">
-                Stop chasing rent. Start running your rentals like a business.
+                Rent collection software for landlords — plus listings and e-sign.
               </h1>
               <p className="mt-3 max-w-xl text-sm text-slate-400">
-                RentZentro is software for landlords—not a management company. Get a clean dashboard,
-                tenant portal, online card & ACH rent payments, automatic rent payments (auto-pay),
-                automatic rent reminders, document sharing, and maintenance tracking without the corporate
-                bloat.
+                RentZentro is software for landlords—not a management company. Collect rent online (ACH + card),
+                enable auto-pay, send reminders, track maintenance, share documents, message tenants, publish
+                listings, and manage e-signatures without the corporate bloat.
               </p>
             </div>
 
@@ -314,8 +358,6 @@ export default async function HomePage() {
               >
                 I&apos;m a tenant
               </Link>
-
-              {/* Public listings CTA */}
               <Link
                 href="/listings"
                 className="inline-flex items-center justify-center rounded-full border border-emerald-500/50 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/15"
@@ -323,134 +365,64 @@ export default async function HomePage() {
                 Browse rentals
               </Link>
 
-              <span className="text-[11px] text-slate-500">
-                No card required for December promo · Cancel anytime
-              </span>
+              <span className="text-[11px] text-slate-500">No card required · Cancel anytime</span>
             </div>
 
             <p className="mt-1 text-[11px] text-emerald-300">
               Portfolios with 50+ properties are actively managed through RentZentro.
             </p>
 
-            {/* Why RentZentro / feature checks */}
-            <div className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
+            {/* Features */}
+            <section className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   For landlords
-                </p>
+                </h2>
 
-                <div className="flex items-start gap-2 text-xs text-slate-200">
-                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                    ✓
-                  </span>
-                  <p>
-                    See all units, rent statuses, and maintenance requests in one clean, modern
-                    dashboard.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-2 text-xs text-slate-200">
-                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                    ✓
-                  </span>
-                  <p>
-                    Tenants pay rent online with card or ACH through Stripe. Payments log automatically
-                    to your dashboard—RentZentro never holds your funds.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-2 text-xs text-slate-200">
-                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                    ✓
-                  </span>
-                  <p>
-                    Offer tenants automatic rent payments (auto-pay) so on-time rent becomes the default
-                    instead of a monthly chase.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-2 text-xs text-slate-200">
-                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                    ✓
-                  </span>
-                  <p>
-                    Automatic rent reminders emailed to your tenants and maintenance requests that hit
-                    your inbox and show on your maintenance board instantly.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-2 text-xs text-slate-200">
-                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                    ✓
-                  </span>
-                  <p>
-                    Built-in messaging with each tenant, so questions, updates, and photos stay in one
-                    thread instead of scattered across texts and emails.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-2 text-xs text-slate-200">
-                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                    ✓
-                  </span>
-                  <p>
-                    Add trusted team members to help manage rent, maintenance, and messaging while they
-                    share access to your landlord dashboard.
-                  </p>
-                </div>
+                {[
+                  'See all units, rent statuses, and maintenance requests in one clean, modern dashboard.',
+                  'Tenants pay rent online with card or ACH through Stripe. Payments log automatically—RentZentro never holds your funds.',
+                  'Offer tenants automatic rent payments (auto-pay) so on-time rent becomes the default.',
+                  'Publish a rental listing with photos and share it by link (plus show on the public listings page).',
+                  'Send leases and documents for e-signatures and track signature status in one place.',
+                  'Built-in messaging with each tenant, so questions, updates, and photos stay in one thread.',
+                  'Add trusted team members to help manage rent, maintenance, listings, and messaging.',
+                ].map((t) => (
+                  <div key={t} className="flex items-start gap-2 text-xs text-slate-200">
+                    <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                      ✓
+                    </span>
+                    <p>{t}</p>
+                  </div>
+                ))}
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   For tenants
-                </p>
+                </h2>
 
-                <div className="flex items-start gap-2 text-xs text-slate-200">
-                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                    ✓
-                  </span>
-                  <p>
-                    Simple tenant portal to see rent due, payment history, and shared documents—and pay
-                    rent online with card or bank (ACH).
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-2 text-xs text-slate-200">
-                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                    ✓
-                  </span>
-                  <p>
-                    Submit maintenance requests with details, then track status and see landlord updates.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-2 text-xs text-slate-200">
-                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                    ✓
-                  </span>
-                  <p>
-                    Access files and important documents in one place instead of digging through old email
-                    threads.
-                  </p>
-                </div>
-
-                <div className="flex items-start gap-2 text-xs text-slate-200">
-                  <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                    ✓
-                  </span>
-                  <p>
-                    Secure in-app messaging to ask questions or share photos with your landlord—without
-                    hunting through old text messages.
-                  </p>
-                </div>
+                {[
+                  'Simple tenant portal to see rent due, payment history, and shared documents—and pay rent online with card or bank (ACH).',
+                  'Set up auto-pay (if enabled by your landlord) and avoid late fees and reminders.',
+                  'Submit maintenance requests with details, then track status and see updates.',
+                  'View and sign lease documents electronically (e-sign) when your landlord sends them.',
+                  'Secure in-app messaging to ask questions or share photos without hunting through old text messages.',
+                ].map((t) => (
+                  <div key={t} className="flex items-start gap-2 text-xs text-slate-200">
+                    <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                      ✓
+                    </span>
+                    <p>{t}</p>
+                  </div>
+                ))}
               </div>
-            </div>
+            </section>
           </div>
 
           {/* Right: demo card */}
           <div className="flex flex-1 items-center justify-center">
             <div className="w-full max-w-xl rounded-3xl border border-slate-800 bg-slate-950/70 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.65)]">
-              {/* Demo header */}
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-slate-500">Demo snapshot</p>
@@ -462,11 +434,8 @@ export default async function HomePage() {
                 </span>
               </div>
 
-              {/* Demo main grid */}
               <div className="grid gap-3 md:grid-cols-[1.4fr_1.1fr]">
-                {/* Left: cards */}
                 <div className="space-y-3">
-                  {/* Summary row */}
                   <div className="grid gap-2 text-[11px] sm:grid-cols-3">
                     <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
                       <p className="text-[10px] text-slate-500 uppercase tracking-wide">Properties</p>
@@ -474,22 +443,17 @@ export default async function HomePage() {
                       <p className="mt-0.5 text-[10px] text-slate-400">Active rental units</p>
                     </div>
                     <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wide">
-                        Active tenants
-                      </p>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wide">Active tenants</p>
                       <p className="mt-1 text-lg font-semibold text-slate-50">11</p>
                       <p className="mt-0.5 text-[10px] text-slate-400">In good standing</p>
                     </div>
                     <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/30 p-3">
-                      <p className="text-[10px] text-emerald-300 uppercase tracking-wide">
-                        Monthly rent roll
-                      </p>
+                      <p className="text-[10px] text-emerald-300 uppercase tracking-wide">Monthly rent roll</p>
                       <p className="mt-1 text-lg font-semibold text-emerald-300">$14,750</p>
                       <p className="mt-0.5 text-[10px] text-emerald-100/80">Across all units</p>
                     </div>
                   </div>
 
-                  {/* Rent status */}
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-[11px] font-medium text-slate-100">Rent status snapshot</p>
@@ -504,9 +468,7 @@ export default async function HomePage() {
                       <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-2">
                         <p className="text-[11px] font-semibold text-amber-100">Due in 7 days</p>
                         <p className="mt-1 text-[11px] text-amber-100/90">3 units · $3,450</p>
-                        <p className="mt-0.5 text-[10px] text-amber-100/80">
-                          Auto-reminders enabled
-                        </p>
+                        <p className="mt-0.5 text-[10px] text-amber-100/80">Auto-reminders enabled</p>
                       </div>
                       <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-2">
                         <p className="text-[11px] font-semibold text-emerald-100">Paid</p>
@@ -517,9 +479,7 @@ export default async function HomePage() {
                   </div>
                 </div>
 
-                {/* Right: recent payments + maintenance */}
                 <div className="space-y-3 text-[11px]">
-                  {/* Recent payments */}
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="font-medium text-slate-100">Recent payments</p>
@@ -545,7 +505,6 @@ export default async function HomePage() {
                     </div>
                   </div>
 
-                  {/* Maintenance */}
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="font-medium text-slate-100">Maintenance queue</p>
@@ -559,9 +518,7 @@ export default async function HomePage() {
                       <div className="flex items-start justify-between rounded-xl border border-amber-500/40 bg-amber-950/40 px-2.5 py-1.5">
                         <div className="min-w-0">
                           <p className="truncate text-[11px] font-medium text-amber-50">No heat in bedroom</p>
-                          <p className="text-[10px] text-amber-100/90">
-                            14 Maple · 2B • High priority
-                          </p>
+                          <p className="text-[10px] text-amber-100/90">14 Maple · 2B • High priority</p>
                         </div>
                         <span className="shrink-0 rounded-full border border-amber-400/60 bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-50">
                           New
@@ -584,6 +541,10 @@ export default async function HomePage() {
                   </div>
                 </div>
               </div>
+
+              <p className="mt-3 text-[10px] text-slate-500">
+                Built for landlords who want control—without a complicated property management platform.
+              </p>
             </div>
           </div>
         </section>
@@ -592,13 +553,13 @@ export default async function HomePage() {
         <section className="mb-8 border-t border-slate-900 pt-6">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Public listings
-              </p>
-              <h2 className="text-lg font-semibold text-slate-50">Browse rentals</h2>
+              </h2>
+              <p className="text-lg font-semibold text-slate-50">Browse rentals</p>
               <p className="mt-2 text-[11px] text-slate-400">
-                When landlords publish listings, they can be shared by link — and can also appear here for
-                renters to browse.
+                RentZentro landlords can publish listings with photos and share them by link. Published rentals may appear
+                here and on the public browse page.
               </p>
             </div>
 
@@ -614,13 +575,12 @@ export default async function HomePage() {
 
           {publicListings.length === 0 ? (
             <>
-              {/* Premium “preview” instead of “no listings yet” */}
               <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-slate-100">Listing preview</p>
                     <p className="mt-1 text-[11px] text-slate-400">
-                      Here’s what RentZentro listings look like. (Real published listings will show here automatically.)
+                      Here’s what RentZentro listings look like. Real published listings will show here automatically.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -641,8 +601,8 @@ export default async function HomePage() {
               </div>
 
               <p className="mt-3 text-[10px] text-slate-500">
-                Note: Example listings above are demos for presentation. Real listings are published by
-                individual landlords. RentZentro is software for managing rentals — not a property management company.
+                Note: Example listings above are demos for presentation. Real listings are published by individual landlords.
+                RentZentro is software for managing rentals — not a property management company.
               </p>
             </>
           ) : (
@@ -671,12 +631,13 @@ export default async function HomePage() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={cover.image_url}
-                            alt="Listing cover"
+                            alt={`${l.title} cover photo`}
                             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                            loading="lazy"
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
-                            No cover photo
+                            Listing preview
                           </div>
                         )}
 
@@ -704,9 +665,7 @@ export default async function HomePage() {
 
                         <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
                           <p className="text-[11px] text-slate-500">Area / Address</p>
-                          <p className="mt-0.5 text-[12px] text-slate-200">
-                            {addressLine || 'Not provided'}
-                          </p>
+                          <p className="mt-0.5 text-[12px] text-slate-200">{addressLine || 'Not provided'}</p>
                           {l.hide_exact_address && (
                             <p className="mt-1 text-[11px] text-slate-500">
                               Exact address hidden until a showing is scheduled.
@@ -724,8 +683,8 @@ export default async function HomePage() {
               </div>
 
               <p className="mt-3 text-[10px] text-slate-500">
-                Note: Listings shown here are published by individual landlords. RentZentro is software for
-                managing rentals — not a property management company.
+                Note: Listings shown here are published by individual landlords. RentZentro is software for managing rentals —
+                not a property management company.
               </p>
             </>
           )}
@@ -734,83 +693,73 @@ export default async function HomePage() {
         {/* December promo explanation */}
         <section className="mb-8 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-5">
           <div className="max-w-2xl">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-300">
-              Now - December free access
-            </p>
-            <h2 className="text-sm font-semibold text-slate-50">
-              Start the new year organized — Now - December is on us.
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-300">
+              December free access
             </h2>
+            <p className="text-sm font-semibold text-slate-50">
+              Start the new year organized — December is on us.
+            </p>
             <p className="mt-2 text-[11px] text-slate-300">
-              Create a new landlord account now and use RentZentro free through December 31st. No credit
-              card required to start. On January 1st, you can add your card to keep your account active at{' '}
+              Create a new landlord account now and use RentZentro free through December 31st. No credit card required to start.
+              On January 1st, you can add your card to keep your account active at{' '}
               <span className="font-semibold text-emerald-200">$29.95/month</span> or simply walk away.
             </p>
+
             <div className="mt-3 grid gap-3 text-[11px] sm:grid-cols-3">
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                 <p className="mb-1 text-[11px] font-semibold text-slate-100">Try it with real tenants</p>
-                <p className="text-slate-400">
-                  Add properties, invite tenants, and send real rent reminders during the free period.
-                </p>
+                <p className="text-slate-400">Add properties, invite tenants, and run real rent reminders during the free period.</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                 <p className="mb-1 text-[11px] font-semibold text-slate-100">No card, no surprise billing</p>
-                <p className="text-slate-400">
-                  We won&apos;t charge you during December. You choose whether to continue in January.
-                </p>
+                <p className="text-slate-400">We won&apos;t charge you in December. You choose whether to continue in January.</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <p className="mb-1 text-[11px] font-semibold text-slate-100">Keep everything you set up</p>
-                <p className="text-slate-400">
-                  If you subscribe, your tenants, payments, and maintenance history are already in place.
-                </p>
+                <p className="mb-1 text-[11px] font-semibold text-slate-100">Keep what you set up</p>
+                <p className="text-slate-400">If you subscribe, your tenants, payments, listings, and history stay in place.</p>
               </div>
             </div>
+
             <p className="mt-3 text-[10px] text-slate-500">
-              Free access applies to new landlord accounts created now through January 1st. A payment method
-              is required to continue service after the free period ends.
+              Free access applies to new landlord accounts created now through January 1st. A payment method is required to continue service after the free period ends.
             </p>
           </div>
         </section>
 
         {/* How it works */}
         <section className="mb-8 border-t border-slate-900 pt-6">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
             How RentZentro fits into your day
-          </p>
+          </h2>
           <div className="grid gap-4 text-sm md:grid-cols-3">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="mb-1 text-xs font-semibold text-slate-200">1. Create your landlord account</p>
               <p className="text-[11px] text-slate-400">
-                Sign up, add your properties and tenants, and turn on online payments and reminders in
-                minutes—not hours.
+                Sign up, add your properties and tenants, and turn on online payments, auto-pay, listings, and reminders.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="mb-1 text-xs font-semibold text-slate-200">2. Invite tenants & go live</p>
               <p className="text-[11px] text-slate-400">
-                RentZentro emails your tenants. They get a simple portal to pay rent by card or ACH, view
-                documents, and submit maintenance requests.
+                Tenants get a clean portal to pay rent, view documents, e-sign leases, and submit maintenance requests.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <p className="mb-1 text-xs font-semibold text-slate-200">3. See everything in one place</p>
+              <p className="mb-1 text-xs font-semibold text-slate-200">3. Stay organized in one dashboard</p>
               <p className="text-[11px] text-slate-400">
-                Log in once a day, check what&apos;s overdue, what&apos;s paid, and what needs fixing.
-                RentZentro keeps the details organized.
+                Check what&apos;s overdue, what&apos;s paid, what needs fixing, and which documents need signatures—fast.
               </p>
             </div>
           </div>
         </section>
 
-        {/* Contact Us */}
+        {/* Contact */}
         <section className="mb-8 border-t border-slate-900 pt-6">
           <div className="max-w-xl">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Contact RentZentro
-            </p>
-            <h2 className="text-sm font-semibold text-slate-50">
-              Questions about RentZentro or getting started?
             </h2>
+            <p className="text-sm font-semibold text-slate-50">Questions about rent collection, listings, or getting started?</p>
             <div className="mt-4 space-y-1 text-[11px]">
               <p className="font-medium text-slate-300">Email</p>
               <a
