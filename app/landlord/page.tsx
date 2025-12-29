@@ -11,10 +11,16 @@ type LandlordRow = {
   id: number;
   email: string;
   name: string | null;
+
+  // Stripe-ish informational fields (NOT used for gating)
   subscription_status: string | null;
   subscription_current_period_end: string | null;
+
+  // Supabase truth fields (USED for gating)
+  subscription_active: boolean | null;
   trial_active: boolean | null;
   trial_end: string | null;
+
   user_id: string | null;
 };
 
@@ -99,6 +105,31 @@ const formatDate = (value: string | null | undefined) => {
   });
 };
 
+// Parse YYYY-MM-DD safely as a local date (no timezone shift)
+const parseDateOnlySafe = (value: string | null | undefined): Date | null => {
+  if (!value) return null;
+
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (!y || !mo || !d) return null;
+    return new Date(y, mo - 1, d);
+  }
+
+  const dt = new Date(value);
+  if (isNaN(dt.getTime())) return null;
+
+  // Normalize to date-only for comparisons
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+};
+
+const todayDateOnly = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
 // Parse due dates for comparisons, also guarding against timezone shifts
 const parseDueDate = (value: string | null | undefined) => {
   if (!value) return null;
@@ -131,27 +162,22 @@ const formatMethodLabel = (method: string | null | undefined) => {
   return method || 'Method not specified';
 };
 
-// Promo / subscription access checker
+// ✅ Single source of truth access check (Supabase booleans)
 const hasLandlordAccess = (l: LandlordRow | null): boolean => {
   if (!l) return false;
 
-  const status = (l.subscription_status || '').toLowerCase();
+  // Primary: subscription_active boolean
+  if (l.subscription_active === true) return true;
 
-  const isPaidPlanActive =
-    status === 'active' ||
-    status === 'trialing' ||
-    status === 'active_cancel_at_period_end';
+  // Secondary: promo trial window
+  const end = parseDateOnlySafe(l.trial_end);
+  const promoOk =
+    l.trial_active === true &&
+    !!end &&
+    !Number.isNaN(end.getTime()) &&
+    end >= todayDateOnly();
 
-  const now = new Date();
-
-  const trialEnd = l.trial_end ? parseDueDate(l.trial_end) : null;
-  const promoActive =
-    !!l.trial_active &&
-    !!trialEnd &&
-    !Number.isNaN(trialEnd.getTime()) &&
-    trialEnd >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  return isPaidPlanActive || promoActive;
+  return promoOk;
 };
 
 // ---------- Component ----------
@@ -211,6 +237,7 @@ export default function LandlordDashboardPage() {
               name,
               subscription_status,
               subscription_current_period_end,
+              subscription_active,
               trial_active,
               trial_end,
               user_id
@@ -235,6 +262,7 @@ export default function LandlordDashboardPage() {
                 name,
                 subscription_status,
                 subscription_current_period_end,
+                subscription_active,
                 trial_active,
                 trial_end,
                 user_id
@@ -280,6 +308,7 @@ export default function LandlordDashboardPage() {
                   name,
                   subscription_status,
                   subscription_current_period_end,
+                  subscription_active,
                   trial_active,
                   trial_end,
                   user_id
@@ -404,27 +433,23 @@ export default function LandlordDashboardPage() {
   );
 
   const today = new Date();
-  const todayDateOnly = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
+  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const sevenDaysFromNow = new Date(
-    todayDateOnly.getFullYear(),
-    todayDateOnly.getMonth(),
-    todayDateOnly.getDate() + 7
+    todayOnly.getFullYear(),
+    todayOnly.getMonth(),
+    todayOnly.getDate() + 7
   );
 
   const overdue = properties.filter((p) => {
     const due = parseDueDate(p.next_due_date);
     if (!due) return false;
-    return due < todayDateOnly;
+    return due < todayOnly;
   });
 
   const upcoming7 = properties.filter((p) => {
     const due = parseDueDate(p.next_due_date);
     if (!due) return false;
-    return due >= todayDateOnly && due <= sevenDaysFromNow;
+    return due >= todayOnly && due <= sevenDaysFromNow;
   });
 
   const notDueYet = properties.filter((p) => {
@@ -452,15 +477,15 @@ export default function LandlordDashboardPage() {
     const firstUnpaidDue = parseDueDate(p.next_due_date);
     if (!firstUnpaidDue) return null;
 
-    if (firstUnpaidDue >= todayDateOnly) {
+    if (firstUnpaidDue >= todayOnly) {
       return rent;
     }
 
     let monthsBehind =
-      (todayDateOnly.getFullYear() - firstUnpaidDue.getFullYear()) * 12 +
-      (todayDateOnly.getMonth() - firstUnpaidDue.getMonth());
+      (todayOnly.getFullYear() - firstUnpaidDue.getFullYear()) * 12 +
+      (todayOnly.getMonth() - firstUnpaidDue.getMonth());
 
-    if (todayDateOnly.getDate() >= firstUnpaidDue.getDate()) {
+    if (todayOnly.getDate() >= firstUnpaidDue.getDate()) {
       monthsBehind += 1;
     }
 
@@ -477,7 +502,7 @@ export default function LandlordDashboardPage() {
       const paidDate = parseDueDate(pay.paid_on);
       if (!paidDate) return sum;
 
-      if (paidDate < firstUnpaidDue || paidDate > todayDateOnly) return sum;
+      if (paidDate < firstUnpaidDue || paidDate > todayOnly) return sum;
       return sum + pay.amount;
     }, 0);
 
@@ -525,7 +550,7 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // Team member: if we cannot resolve the owner’s landlord row, we must block (no guessing "active")
+  // Team member: if we cannot resolve the owner’s landlord row, we must block (no guessing)
   if (isTeamMember && ownerLookupFailed) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
@@ -553,14 +578,11 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // MAIN ACCESS GATE (owners + team members, using the resolved landlordRow)
+  // ✅ MAIN ACCESS GATE: uses subscription_active + trial window ONLY
   const canAccess = hasLandlordAccess(landlord);
 
   if (!canAccess) {
-    const statusLower = (landlord.subscription_status || '').toLowerCase();
-
-    const isPastDueOrUnpaid =
-      statusLower === 'past_due' || statusLower === 'unpaid';
+    const isTrialConfigured = landlord.trial_active === true && !!landlord.trial_end;
 
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
@@ -570,30 +592,18 @@ export default function LandlordDashboardPage() {
           </p>
 
           <h1 className="text-lg font-semibold text-slate-50">
-            {isPastDueOrUnpaid ? 'Payment required to continue' : 'Subscription required'}
+            Subscription required
           </h1>
 
           <p className="text-sm text-slate-300">
-            {isPastDueOrUnpaid ? (
-              <>
-                Your RentZentro subscription is currently{' '}
-                <span className="font-semibold text-amber-200">
-                  {statusLower.replace('_', ' ')}
-                </span>
-                . To restore access to your dashboard, tenants, and online rent collection,
-                please update billing and reactivate your plan.
-              </>
-            ) : (
-              <>
-                Your landlord account is created, but your subscription isn&apos;t active
-                and your free promo period has ended. To access your dashboard, properties,
-                tenants, and online rent collection, please activate the{' '}
-                <span className="font-semibold text-emerald-300">
-                  $29.95/mo RentZentro Landlord Plan
-                </span>
-                .
-              </>
-            )}
+            Your landlord account is created, but your subscription isn&apos;t active
+            {isTrialConfigured ? ' and your promo access has ended' : ''}.
+            To access your dashboard, properties, tenants, and online rent collection,
+            please activate the{' '}
+            <span className="font-semibold text-emerald-300">
+              $29.95/mo RentZentro Landlord Plan
+            </span>
+            .
           </p>
 
           <div className="space-y-2 text-[11px] text-slate-400 text-left rounded-2xl bg-slate-950/70 border border-slate-800 px-4 py-3">
@@ -695,7 +705,7 @@ export default function LandlordDashboardPage() {
               Properties
             </p>
             <p className="mt-2 text-2xl font-semibold text-slate-50">
-              {totalProperties}
+              {properties.length}
             </p>
             <p className="mt-1 text-xs text-slate-400">
               Total units you&apos;re tracking in RentZentro.
