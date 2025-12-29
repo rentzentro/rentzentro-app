@@ -359,7 +359,8 @@ export default function LandlordSubscriptionPage() {
     ? formatDate(landlord.trial_end || null)
     : null;
 
-  const showPromoBanner = isOnPromoTrial && !isActive && !landlord.subscription_status;
+  const showPromoBanner =
+    isOnPromoTrial && !isActive && !landlord.subscription_status;
   const showPromoAsStatusNote = showPromoBanner;
 
   return (
@@ -411,9 +412,9 @@ export default function LandlordSubscriptionPage() {
               <span className="font-semibold text-emerald-200">
                 {trialEndLabel || 'the end of your promo period'}
               </span>
-              . During this time, you won&apos;t be billed. When you&apos;re ready
-              to continue after the promo, start your $29.95/mo subscription
-              from this page.
+              . During this time, you won&apos;t be billed. When you&apos;re
+              ready to continue after the promo, start your $29.95/mo
+              subscription from this page.
             </p>
           </div>
         )}
@@ -439,7 +440,9 @@ export default function LandlordSubscriptionPage() {
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
               <p className="text-2xl font-semibold text-slate-50">$29.95</p>
-              <p className="text-xs text-slate-300">per month • cancel anytime</p>
+              <p className="text-xs text-slate-300">
+                per month • cancel anytime
+              </p>
               {showPromoBanner && trialEndLabel && (
                 <p className="mt-1 text-[11px] text-emerald-200">
                   You&apos;re not being billed yet. Promo access lasts until{' '}
@@ -481,24 +484,34 @@ export default function LandlordSubscriptionPage() {
 
               <p>
                 <span className="text-slate-500">Subscription status:</span>{' '}
-                <span className={isActive ? 'text-emerald-300' : 'text-slate-100'}>
+                <span
+                  className={
+                    isActive ? 'text-emerald-300' : 'text-slate-100'
+                  }
+                >
                   {prettyStatus(landlord.subscription_status)}
                   {showPromoAsStatusNote && !landlord.subscription_status && (
-                    <span className="ml-1 text-emerald-300">(on free access)</span>
+                    <span className="ml-1 text-emerald-300">
+                      (on free access)
+                    </span>
                   )}
                 </span>
               </p>
 
               <p>
                 <span className="text-slate-500">
-                  {isOnPromoTrial && !isActive && !landlord.subscription_status
+                  {isOnPromoTrial &&
+                  !isActive &&
+                  !landlord.subscription_status
                     ? 'Promo period ends:'
                     : isScheduledToCancel
                     ? 'Cancellation date:'
                     : 'Next billing date:'}
                 </span>{' '}
                 <span className="text-slate-100">
-                  {isOnPromoTrial && !isActive && !landlord.subscription_status ? (
+                  {isOnPromoTrial &&
+                  !isActive &&
+                  !landlord.subscription_status ? (
                     trialEndLabel || 'Not available'
                   ) : effectiveDateLabel ? (
                     isScheduledToCancel ? (
@@ -525,7 +538,9 @@ export default function LandlordSubscriptionPage() {
                   disabled={startingCheckout}
                   className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {startingCheckout ? 'Starting subscription…' : 'Subscribe for $29.95/mo'}
+                  {startingCheckout
+                    ? 'Starting subscription…'
+                    : 'Subscribe for $29.95/mo'}
                 </button>
               )}
 
@@ -536,7 +551,9 @@ export default function LandlordSubscriptionPage() {
                   disabled={cancelling}
                   className="rounded-full bg-red-500/90 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-red-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {cancelling ? 'Scheduling cancellation…' : 'Cancel subscription'}
+                  {cancelling
+                    ? 'Scheduling cancellation…'
+                    : 'Cancel subscription'}
                 </button>
               )}
 
@@ -553,9 +570,10 @@ export default function LandlordSubscriptionPage() {
           {isActive && (
             <div className="pt-2 border-t border-slate-800 mt-2 text-[11px]">
               <p className="text-slate-400">
-                Your subscription is active and renews automatically each month unless you cancel. If
-                you&apos;ve scheduled cancellation, you&apos;ll keep full access until the cancellation date
-                shown above.
+                Your subscription is active and renews automatically each month
+                unless you cancel. If you&apos;ve scheduled cancellation,
+                you&apos;ll keep full access until the cancellation date shown
+                above.
               </p>
             </div>
           )}
@@ -563,8 +581,9 @@ export default function LandlordSubscriptionPage() {
           {showPromoBanner && (
             <div className="pt-2 border-t border-slate-800 mt-2 text-[11px] text-slate-400">
               <p>
-                During your free access period, you can still set up payouts in settings and use RentZentro
-                with real tenants. You&apos;ll only be billed if you choose to start the $29.95/mo subscription.
+                During your free access period, you can still set up payouts in
+                settings and use RentZentro with real tenants. You&apos;ll only
+                be billed if you choose to start the $29.95/mo subscription.
               </p>
             </div>
           )}
@@ -574,7 +593,8 @@ export default function LandlordSubscriptionPage() {
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-300 space-y-1">
           <p className="font-medium text-slate-100">Billing & support</p>
           <p>
-            If you have questions about your subscription or billing, contact RentZentro support:
+            If you have questions about your subscription or billing, contact
+            RentZentro support:
           </p>
           <p className="text-emerald-300">support@rentzentro.com</p>
         </section>
@@ -585,8 +605,9 @@ export default function LandlordSubscriptionPage() {
             <div className="space-y-1">
               <p className="font-medium text-slate-100">Delete account</p>
               <p className="text-[11px] text-slate-400">
-                Request permanent deletion of your RentZentro account. We will remove your personal data and
-                revoke access. Payment/transaction records may be retained for legal/accounting purposes.
+                Request permanent deletion of your RentZentro account. We will
+                remove your personal data and revoke access. Payment/transaction
+                records may be retained for legal/accounting purposes.
               </p>
             </div>
             <button
@@ -604,13 +625,17 @@ export default function LandlordSubscriptionPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
             <div
               className="absolute inset-0 bg-black/70"
-              onClick={() => (!requestingDeletion ? setShowDeleteModal(false) : null)}
+              onClick={() =>
+                !requestingDeletion ? setShowDeleteModal(false) : null
+              }
             />
             <div className="relative w-full max-w-md rounded-2xl border border-slate-700 bg-slate-950 p-5 shadow-2xl">
-              <p className="text-sm font-semibold text-slate-50">Confirm account deletion request</p>
+              <p className="text-sm font-semibold text-slate-50">
+                Confirm account deletion request
+              </p>
               <p className="mt-2 text-[12px] text-slate-300">
-                This will submit a deletion request to RentZentro support. Your access will be removed after the
-                request is processed.
+                This will submit a deletion request to RentZentro support. Your
+                access will be removed after the request is processed.
               </p>
 
               <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-[11px] text-slate-300 space-y-1">
@@ -619,13 +644,16 @@ export default function LandlordSubscriptionPage() {
                 <p>• Personal information (name/email) where allowed</p>
                 <p>• Stored files/documents where applicable</p>
                 <p className="pt-1 text-slate-400">
-                  Note: Payment/transaction records may be retained for legal/accounting purposes.
+                  Note: Payment/transaction records may be retained for
+                  legal/accounting purposes.
                 </p>
               </div>
 
               <div className="mt-3 space-y-2">
                 <label className="block text-[11px] text-slate-400">
-                  Type <span className="font-semibold text-slate-200">DELETE</span> to confirm:
+                  Type{' '}
+                  <span className="font-semibold text-slate-200">DELETE</span>{' '}
+                  to confirm:
                 </label>
                 <input
                   value={deleteConfirmText}
@@ -648,7 +676,10 @@ export default function LandlordSubscriptionPage() {
                 <button
                   type="button"
                   onClick={handleRequestAccountDeletion}
-                  disabled={requestingDeletion || deleteConfirmText.trim().toUpperCase() !== 'DELETE'}
+                  disabled={
+                    requestingDeletion ||
+                    deleteConfirmText.trim().toUpperCase() !== 'DELETE'
+                  }
                   className="rounded-md bg-red-500/90 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-red-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {requestingDeletion ? 'Submitting…' : 'Submit deletion request'}
