@@ -307,7 +307,7 @@ export default function TenantPortalPage() {
       setError(null);
       setSuccess(null);
 
-      // Default: block until we confirm landlord access is active
+      // Default: allow; we will block only if landlord is not active or cannot be verified
       setLandlordBillingBlocked(false);
       setLandlordBillingMsg(null);
 
@@ -388,7 +388,10 @@ export default function TenantPortalPage() {
             .maybeSingle();
 
           if (landlordErr) {
-            console.error('Tenant portal landlord access lookup error:', landlordErr);
+            console.error(
+              'Tenant portal landlord access lookup error:',
+              landlordErr
+            );
             // Safer to block if we cannot verify status
             setLandlordBillingBlocked(true);
             setLandlordBillingMsg(
@@ -456,9 +459,7 @@ export default function TenantPortalPage() {
         if (!prop && t.owner_id) {
           const { data: propRows2, error: propError2 } = await supabase
             .from('properties')
-            .select(
-              'id, name, unit_label, monthly_rent, next_due_date, owner_id'
-            )
+            .select('id, name, unit_label, monthly_rent, next_due_date, owner_id')
             .eq('owner_id', t.owner_id)
             .order('created_at', { ascending: true })
             .limit(1);
@@ -521,9 +522,7 @@ export default function TenantPortalPage() {
           .order('created_at', { ascending: false });
 
         if (prop?.id) {
-          docQuery = docQuery.or(
-            `property_id.eq.${prop.id},tenant_id.eq.${t.id}`
-          );
+          docQuery = docQuery.or(`property_id.eq.${prop.id},tenant_id.eq.${t.id}`);
         } else {
           docQuery = docQuery.eq('tenant_id', t.id);
         }
@@ -607,8 +606,7 @@ export default function TenantPortalPage() {
     setError(null);
     setSuccess(null);
 
-    const effectiveRent =
-      property?.monthly_rent ?? tenant.monthly_rent ?? null;
+    const effectiveRent = property?.monthly_rent ?? tenant.monthly_rent ?? null;
 
     if (!effectiveRent || effectiveRent <= 0) {
       setError(
@@ -631,9 +629,7 @@ export default function TenantPortalPage() {
         const data = await res.json().catch(() => ({} as any));
 
         if (!res.ok || !data?.url) {
-          throw new Error(
-            data?.error || 'Failed to start automatic payment setup.'
-          );
+          throw new Error(data?.error || 'Failed to start automatic payment setup.');
         }
 
         // Redirect to Stripe Checkout
@@ -654,9 +650,7 @@ export default function TenantPortalPage() {
         const data = await res.json().catch(() => ({} as any));
 
         if (!res.ok) {
-          throw new Error(
-            data?.error || 'Failed to turn off automatic payments.'
-          );
+          throw new Error(data?.error || 'Failed to turn off automatic payments.');
         }
 
         setAutoPayEnabled(false);
@@ -711,8 +705,7 @@ export default function TenantPortalPage() {
     }
 
     const earlyAllowed = !!tenant.allow_early_payment;
-    const isBeforeFirstDue =
-      !!earliestDue && todayMidnight < earliestDue;
+    const isBeforeFirstDue = !!earliestDue && todayMidnight < earliestDue;
 
     if (isBeforeFirstDue && !earlyAllowed) {
       setError(
@@ -724,9 +717,7 @@ export default function TenantPortalPage() {
 
     // Charge outstanding if any, otherwise base rent
     const amount =
-      rentStatus && rentStatus.outstanding > 0
-        ? rentStatus.outstanding
-        : baseRent;
+      rentStatus && rentStatus.outstanding > 0 ? rentStatus.outstanding : baseRent;
 
     if (!amount || amount <= 0) {
       setError(
@@ -757,8 +748,7 @@ export default function TenantPortalPage() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(
-          data?.error ||
-            `Failed to create payment session (status ${res.status}).`
+          data?.error || `Failed to create payment session (status ${res.status}).`
         );
       }
 
@@ -808,30 +798,20 @@ export default function TenantPortalPage() {
     );
   }
 
-  const currentRent =
-    property?.monthly_rent ?? tenant.monthly_rent ?? null;
+  const currentRent = property?.monthly_rent ?? tenant.monthly_rent ?? null;
 
   // For status + early-pay text
   const dueDateObj = parseSupabaseDate(
-    (rentStatus?.nextDueDate as string | null) ||
-      property?.next_due_date ||
-      null
+    (rentStatus?.nextDueDate as string | null) || property?.next_due_date || null
   );
   const today = new Date();
-  const todayMidnight = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  const isRentOverdue =
-    !!dueDateObj && dueDateObj.getTime() < todayMidnight.getTime();
+  const isRentOverdue = !!dueDateObj && dueDateObj.getTime() < todayMidnight.getTime();
 
-  const earliestDueDate =
-    parseSupabaseDate(tenant.lease_start) || dueDateObj;
+  const earliestDueDate = parseSupabaseDate(tenant.lease_start) || dueDateObj;
 
-  const isBeforeDue =
-    !!earliestDueDate && todayMidnight < earliestDueDate;
+  const isBeforeDue = !!earliestDueDate && todayMidnight < earliestDueDate;
 
   const earlyAllowed = !!tenant.allow_early_payment;
   const isTooEarlyToPay = isBeforeDue && !earlyAllowed;
@@ -895,19 +875,14 @@ export default function TenantPortalPage() {
             >
               ← Back
             </button>
-            <h1 className="text-lg font-semibold text-slate-50">
-              Tenant portal
-            </h1>
+            <h1 className="text-lg font-semibold text-slate-50">Tenant portal</h1>
             <p className="text-[11px] text-slate-400">
-              View your rent details, lease info, documents, and payment
-              history.
+              View your rent details, lease info, documents, and payment history.
             </p>
           </div>
           <div className="flex flex-col items-end gap-2 text-right">
             <div className="text-xs">
-              <p className="font-medium text-slate-100">
-                {tenant.name || 'Tenant'}
-              </p>
+              <p className="font-medium text-slate-100">{tenant.name || 'Tenant'}</p>
               <p className="text-slate-400 text-[11px]">{tenant.email}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -938,9 +913,7 @@ export default function TenantPortalPage() {
           <div className="space-y-4">
             {/* Current rent / actions */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Current rent
-              </p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Current rent</p>
               <div className="mt-1 flex items-baseline gap-2">
                 <p className="text-2xl font-semibold text-slate-50">
                   {formatCurrency(currentRent)}
@@ -949,10 +922,7 @@ export default function TenantPortalPage() {
               <p className="mt-1 text-xs text-slate-400">
                 Next due date:{' '}
                 <span className="text-slate-200">
-                  {formatDate(
-                    (rentStatus?.nextDueDate as string | null) ||
-                      property?.next_due_date
-                  )}
+                  {formatDate((rentStatus?.nextDueDate as string | null) || property?.next_due_date)}
                 </span>
               </p>
               <p className="mt-1 text-xs text-slate-400">
@@ -968,9 +938,7 @@ export default function TenantPortalPage() {
                 <>
                   <p className="mt-2 text-xs text-slate-400">
                     Total paid toward rent:{' '}
-                    <span className="text-slate-200">
-                      {formatCurrency(rentStatus.totalPaid)}
-                    </span>
+                    <span className="text-slate-200">{formatCurrency(rentStatus.totalPaid)}</span>
                   </p>
                   <p className="mt-1 text-xs text-slate-400">
                     Total outstanding rent:{' '}
@@ -985,9 +953,7 @@ export default function TenantPortalPage() {
               <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-2.5 text-[11px]">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-slate-100">
-                      Automatic payments
-                    </p>
+                    <p className="font-semibold text-slate-100">Automatic payments</p>
                     <p className="text-slate-400">
                       {tenantActionsBlocked
                         ? 'Automatic payments are temporarily unavailable.'
@@ -1004,16 +970,8 @@ export default function TenantPortalPage() {
                       autoPayEnabled
                         ? 'bg-emerald-500 border-emerald-400'
                         : 'bg-slate-800 border-slate-600'
-                    } ${
-                      autoPayLoading || tenantActionsBlocked
-                        ? 'opacity-60 cursor-not-allowed'
-                        : ''
-                    }`}
-                    title={
-                      tenantActionsBlocked
-                        ? 'Temporarily unavailable'
-                        : undefined
-                    }
+                    } ${autoPayLoading || tenantActionsBlocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    title={tenantActionsBlocked ? 'Temporarily unavailable' : undefined}
                   >
                     <span
                       className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -1023,8 +981,8 @@ export default function TenantPortalPage() {
                   </button>
                 </div>
                 <p className="mt-2 text-[10px] text-slate-500">
-                  You&apos;ll be taken to a secure Stripe page to set up or
-                  update automatic payments. You can turn this off at any time.
+                  You&apos;ll be taken to a secure Stripe page to set up or update
+                  automatic payments. You can turn this off at any time.
                 </p>
               </div>
 
@@ -1057,15 +1015,15 @@ export default function TenantPortalPage() {
               <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-[11px] text-slate-300">
                 <p className="font-semibold text-slate-100">Payout timing</p>
                 <p className="mt-1 text-slate-400">
-                  Your payment is processed securely by Stripe. After Stripe confirms your payment,
-                  funds are sent to your landlord&apos;s bank by Stripe — this
-                  can take a few business days depending on the landlord&apos;s bank and Stripe settings.
+                  Your payment is processed securely by Stripe. After Stripe confirms your
+                  payment, funds are sent to your landlord&apos;s bank by Stripe — this can take
+                  a few business days depending on the landlord&apos;s bank and Stripe settings.
                 </p>
               </div>
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Card / ACH payments are processed securely by Stripe. You&apos;ll
-                get a confirmation once your payment is completed.
+                Card / ACH payments are processed securely by Stripe. You&apos;ll get a
+                confirmation once your payment is completed.
               </p>
             </section>
 
@@ -1073,19 +1031,13 @@ export default function TenantPortalPage() {
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">
-                    Payment history
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-slate-50">
-                    Your recent payments
-                  </p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Payment history</p>
+                  <p className="mt-1 text-sm font-medium text-slate-50">Your recent payments</p>
                 </div>
               </div>
 
               {payments.length === 0 ? (
-                <p className="mt-3 text-xs text-slate-500">
-                  No rent payments recorded yet.
-                </p>
+                <p className="mt-3 text-xs text-slate-500">No rent payments recorded yet.</p>
               ) : (
                 <div className="mt-3 space-y-2 text-xs">
                   {payments.map((p) => (
@@ -1102,13 +1054,9 @@ export default function TenantPortalPage() {
                         </span>
                       </div>
                       <div className="text-right">
-                        <p className="text-[11px] text-slate-300">
-                          {p.method || 'Payment'}
-                        </p>
+                        <p className="text-[11px] text-slate-300">{p.method || 'Payment'}</p>
                         {p.note && (
-                          <p className="mt-0.5 text-[10px] text-slate-500">
-                            {p.note}
-                          </p>
+                          <p className="mt-0.5 text-[10px] text-slate-500">{p.note}</p>
                         )}
                       </div>
                     </div>
@@ -1117,7 +1065,8 @@ export default function TenantPortalPage() {
               )}
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Note: A successful payment here means Stripe confirmed the payment. Bank payouts to your landlord can take additional time.
+                Note: A successful payment here means Stripe confirmed the payment. Bank payouts
+                to your landlord can take additional time.
               </p>
             </section>
           </div>
@@ -1126,9 +1075,7 @@ export default function TenantPortalPage() {
           <div className="space-y-4">
             {/* Account Status / Lease info */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Account status
-              </p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Account status</p>
               <h2 className="mt-1 text-sm font-semibold text-slate-50">
                 {tenant.name || 'Tenant account'}
               </h2>
@@ -1142,44 +1089,33 @@ export default function TenantPortalPage() {
               <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-[11px]">
                 <div>
                   <dt className="text-slate-500">Lease start</dt>
-                  <dd className="text-slate-100">
-                    {formatDate(tenant.lease_start)}
-                  </dd>
+                  <dd className="text-slate-100">{formatDate(tenant.lease_start)}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Lease end</dt>
-                  <dd className="text-slate-100">
-                    {formatDate(tenant.lease_end)}
-                  </dd>
+                  <dd className="text-slate-100">{formatDate(tenant.lease_end)}</dd>
                 </div>
                 <div>
                   <dt className="text-slate-500">Tenant phone</dt>
-                  <dd className="text-slate-100">
-                    {tenant.phone || 'Not provided'}
-                  </dd>
+                  <dd className="text-slate-100">{tenant.phone || 'Not provided'}</dd>
                 </div>
               </dl>
 
               <p className="mt-3 text-[11px] text-slate-500">
-                For changes to your lease, rent amount, or due date, please
-                reach out to your landlord or property manager.
+                For changes to your lease, rent amount, or due date, please reach out to your
+                landlord or property manager.
               </p>
             </section>
 
             {/* Lease & documents */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Lease & documents
-              </p>
-              <p className="mt-1 text-sm font-medium text-slate-50">
-                Files shared for your unit
-              </p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Lease & documents</p>
+              <p className="mt-1 text-sm font-medium text-slate-50">Files shared for your unit</p>
 
               {documents.length === 0 ? (
                 <p className="mt-3 text-xs text-slate-500">
-                  Your landlord hasn&apos;t shared any documents for this unit
-                  yet. If you&apos;re expecting a copy of your lease or other
-                  paperwork, please contact them directly.
+                  Your landlord hasn&apos;t shared any documents for this unit yet. If you&apos;re
+                  expecting a copy of your lease or other paperwork, please contact them directly.
                 </p>
               ) : (
                 <div className="mt-3 space-y-2 text-xs">
@@ -1189,9 +1125,7 @@ export default function TenantPortalPage() {
                       className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-slate-50 text-[13px]">
-                          {doc.title}
-                        </p>
+                        <p className="truncate text-slate-50 text-[13px]">{doc.title}</p>
                         <p className="mt-0.5 text-[11px] text-slate-500">
                           Added {formatDateTime(doc.created_at)}
                         </p>
@@ -1210,30 +1144,25 @@ export default function TenantPortalPage() {
               )}
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Documents here are read-only. For questions about any lease
-                terms, reach out to your landlord.
+                Documents here are read-only. For questions about any lease terms, reach out to
+                your landlord.
               </p>
             </section>
 
             {/* Maintenance overview */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Maintenance
-              </p>
-              <p className="mt-1 text-sm font-medium text-slate-50">
-                Requests for your unit
-              </p>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Maintenance</p>
+              <p className="mt-1 text-sm font-medium text-slate-50">Requests for your unit</p>
 
               <p className="mt-2 text-[11px] text-slate-400">
-                Use a maintenance request to report issues with your unit—for
-                example plumbing, heating, appliances, or general repairs. Your
-                requests are sent to your landlord and tracked for your records.
+                Use a maintenance request to report issues with your unit—for example plumbing,
+                heating, appliances, or general repairs. Your requests are sent to your landlord
+                and tracked for your records.
               </p>
               <p className="mt-1 text-[10px] text-amber-300 flex items-start gap-1">
                 <span className="text-amber-300 text-xs mt-[1px]">⚠️</span>
-                For true emergencies (fire, active flooding, gas smells, or
-                anything life-threatening), call your local emergency services
-                first, then contact your landlord or property manager directly.
+                For true emergencies (fire, active flooding, gas smells, or anything life-threatening),
+                call your local emergency services first, then contact your landlord or property manager directly.
               </p>
 
               {maintenance.length === 0 ? (
@@ -1249,9 +1178,7 @@ export default function TenantPortalPage() {
                     >
                       <div className="flex items-start justify-between gap-3 min-w-0">
                         <div className="flex-1 min-w-0">
-                          <p className="truncate text-slate-50 text-[13px]">
-                            {m.title}
-                          </p>
+                          <p className="truncate text-slate-50 text-[13px]">{m.title}</p>
                           <p className="mt-0.5 text-[11px] text-slate-400">
                             {formatDateTime(m.created_at)}
                           </p>
@@ -1263,9 +1190,7 @@ export default function TenantPortalPage() {
 
                           {m.resolution_note && (
                             <p className="mt-1 text-[10px] text-slate-300 line-clamp-2 break-words">
-                              <span className="font-semibold text-slate-200">
-                                Landlord note:{' '}
-                              </span>
+                              <span className="font-semibold text-slate-200">Landlord note:{' '}</span>
                               {m.resolution_note}
                             </p>
                           )}
