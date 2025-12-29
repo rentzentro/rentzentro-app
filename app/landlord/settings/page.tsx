@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
@@ -11,6 +11,23 @@ type LandlordRow = {
   name: string | null;
   stripe_connect_account_id: string | null;
   stripe_connect_onboarded: boolean | null;
+
+  // Billing gate fields
+  subscription_status: string | null;
+  trial_active: boolean | null;
+  trial_end: string | null;
+};
+
+const parseSupabaseDate = (value: string | null | undefined): Date | null => {
+  if (!value) return null;
+  // Pure date (YYYY-MM-DD) → avoid timezone shift
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
 };
 
 export default function LandlordSettingsPage() {
@@ -42,7 +59,7 @@ export default function LandlordSettingsPage() {
         let { data: landlordRow, error: landlordError } = await supabase
           .from('landlords')
           .select(
-            'id, email, name, stripe_connect_account_id, stripe_connect_onboarded'
+            'id, email, name, stripe_connect_account_id, stripe_connect_onboarded, subscription_status, trial_active, trial_end'
           )
           .eq('user_id', user.id)
           .maybeSingle();
@@ -57,7 +74,7 @@ export default function LandlordSettingsPage() {
           const byEmail = await supabase
             .from('landlords')
             .select(
-              'id, email, name, stripe_connect_account_id, stripe_connect_onboarded'
+              'id, email, name, stripe_connect_account_id, stripe_connect_onboarded, subscription_status, trial_active, trial_end'
             )
             .eq('email', user.email)
             .maybeSingle();
@@ -88,6 +105,54 @@ export default function LandlordSettingsPage() {
 
     load();
   }, [router]);
+
+  const billing = useMemo(() => {
+    const status = (landlord?.subscription_status || '').toLowerCase();
+
+    // Treat these as "allowed"
+    const isPaidPlanActive =
+      status === 'active' ||
+      status === 'trialing' ||
+      status === 'active_cancel_at_period_end';
+
+    const now = new Date();
+    const trialEnd = parseSupabaseDate(landlord?.trial_end || null);
+    const promoActive =
+      !!landlord?.trial_active &&
+      !!trialEnd &&
+      !Number.isNaN(trialEnd.getTime()) &&
+      trialEnd >= now;
+
+    const allowed = isPaidPlanActive || promoActive;
+
+    // Common “blocked” statuses you may see: past_due, unpaid, canceled, incomplete, incomplete_expired
+    const isPastDue =
+      status === 'past_due' || status === 'unpaid' || status === 'incomplete';
+
+    const label = allowed
+      ? 'Access active'
+      : isPastDue
+      ? 'Payment past due'
+      : 'Subscription inactive';
+
+    const message = allowed
+      ? null
+      : promoActive
+      ? null
+      : isPastDue
+      ? 'Your subscription payment is past due. To keep full access and allow tenants to pay online, please update your billing.'
+      : 'Your landlord subscription is not currently active. Please subscribe to restore full access and allow tenants to pay online.';
+
+    return {
+      status,
+      allowed,
+      promoActive,
+      isPaidPlanActive,
+      isPastDue,
+      label,
+      message,
+    };
+  }, [landlord]);
 
   const handleStripeConnect = async () => {
     if (!landlord) return;
@@ -127,6 +192,11 @@ export default function LandlordSettingsPage() {
   };
 
   const handleBackToDashboard = () => {
+    // Enforce billing gate: if not allowed, keep them in billing flow
+    if (!billing.allowed) {
+      router.push('/landlord/subscription?reason=inactive');
+      return;
+    }
     router.push('/landlord');
   };
 
@@ -188,7 +258,9 @@ export default function LandlordSettingsPage() {
             <p className="mt-1 text-[11px] text-slate-500">
               Signed in as{' '}
               <span className="text-slate-300">
-                {landlord.name ? `${landlord.name} · ${landlord.email}` : landlord.email}
+                {landlord.name
+                  ? `${landlord.name} · ${landlord.email}`
+                  : landlord.email}
               </span>
             </p>
           </div>
@@ -221,6 +293,32 @@ export default function LandlordSettingsPage() {
             }`}
           >
             {success || error}
+          </div>
+        )}
+
+        {/* NEW: Billing gate banner (settings stays accessible, but dashboard access is gated) */}
+        {!billing.allowed && (
+          <div className="rounded-2xl border border-amber-500/50 bg-amber-950/40 px-4 py-3 text-[12px] text-amber-100">
+            <p className="font-semibold text-amber-200">
+              Limited access: billing required
+            </p>
+            <p className="mt-1 text-amber-100/90">
+              {billing.message ||
+                'Your subscription is not currently active. Please update billing to restore full access.'}
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Link
+                href="/landlord/subscription?reason=inactive"
+                className="inline-flex items-center justify-center rounded-full bg-amber-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-amber-300"
+              >
+                Fix billing now
+              </Link>
+              <p className="text-[11px] text-amber-100/80 sm:flex-1">
+                You can still access Settings and Subscription to resolve this.
+                Dashboard access will be restored once billing is active (or a
+                valid trial is active).
+              </p>
+            </div>
           </div>
         )}
 
@@ -288,6 +386,24 @@ export default function LandlordSettingsPage() {
                 RentZentro landlord plan
               </h2>
             </div>
+
+            {/* Small status pill */}
+            <span
+              className={
+                'inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium border ' +
+                (billing.allowed
+                  ? 'bg-emerald-500/15 text-emerald-200 border-emerald-500/40'
+                  : 'bg-amber-500/15 text-amber-200 border-amber-500/40')
+              }
+              title={
+                landlord.subscription_status
+                  ? `Status: ${landlord.subscription_status}`
+                  : 'Status: unknown'
+              }
+            >
+              <span className="mr-1 h-1.5 w-1.5 rounded-full bg-current" />
+              {billing.label}
+            </span>
           </div>
 
           <p className="text-xs text-slate-400">
@@ -299,7 +415,7 @@ export default function LandlordSettingsPage() {
 
           <div className="mt-3">
             <Link
-              href="/landlord/subscription"
+              href="/landlord/subscription?reason=settings"
               className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800"
             >
               Open subscription &amp; billing

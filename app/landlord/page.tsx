@@ -74,13 +74,11 @@ const formatCurrency = (v: number | null | undefined) =>
 const formatDate = (value: string | null | undefined) => {
   if (!value) return '-';
 
-  // If it's a plain date like "2025-01-01", avoid timezone parsing
   const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (dateOnlyMatch) {
     const year = Number(dateOnlyMatch[1]);
-    const month = Number(dateOnlyMatch[2]); // 1–12
+    const month = Number(dateOnlyMatch[2]);
     const day = Number(dateOnlyMatch[3]);
-
     if (!year || !month || !day) return '-';
 
     const d = new Date(year, month - 1, day);
@@ -91,7 +89,6 @@ const formatDate = (value: string | null | undefined) => {
     });
   }
 
-  // Fallback for real datetime strings
   const d = new Date(value);
   if (isNaN(d.getTime())) return '-';
 
@@ -125,18 +122,36 @@ const formatMethodLabel = (method: string | null | undefined) => {
   const m = (method || '').toLowerCase();
 
   if (!m) return 'Method not specified';
-
-  // Be flexible: you may store different strings over time
   if (m.includes('ach') || m.includes('bank') || m.includes('us_bank')) {
     return 'Bank transfer (ACH)';
   }
   if (m.includes('card')) {
-    // Covers "card", "card_autopay", etc.
     return m.includes('autopay') ? 'Card (autopay)' : 'Card';
   }
-
-  // Fallback: show raw, but nicer
   return method || 'Method not specified';
+};
+
+// Promo / subscription access checker
+const hasLandlordAccess = (l: LandlordRow | null): boolean => {
+  if (!l) return false;
+
+  const status = (l.subscription_status || '').toLowerCase();
+
+  const isPaidPlanActive =
+    status === 'active' ||
+    status === 'trialing' ||
+    status === 'active_cancel_at_period_end';
+
+  const now = new Date();
+
+  const trialEnd = l.trial_end ? parseDueDate(l.trial_end) : null;
+  const promoActive =
+    !!l.trial_active &&
+    !!trialEnd &&
+    !Number.isNaN(trialEnd.getTime()) &&
+    trialEnd >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  return isPaidPlanActive || promoActive;
 };
 
 // ---------- Component ----------
@@ -254,74 +269,50 @@ export default function LandlordDashboardPage() {
             actingAsTeamMember = true;
             teamRoleLocal = tm.role;
 
-            // Try to look up the owner's landlord row by owner_user_id
-            let ownerLandlord: LandlordRow | null = null;
-            try {
-              const { data: ownerLandlordData, error: ownerLandlordError } =
-                await supabase
-                  .from('landlords')
-                  .select(
-                    `
-                    id,
-                    email,
-                    name,
-                    subscription_status,
-                    subscription_current_period_end,
-                    trial_active,
-                    trial_end,
-                    user_id
+            // Look up the owner landlord row by owner_user_id (REQUIRED for access gating)
+            const { data: ownerLandlordData, error: ownerLandlordError } =
+              await supabase
+                .from('landlords')
+                .select(
                   `
-                  )
-                  .eq('user_id', tm.owner_user_id)
-                  .maybeSingle();
+                  id,
+                  email,
+                  name,
+                  subscription_status,
+                  subscription_current_period_end,
+                  trial_active,
+                  trial_end,
+                  user_id
+                `
+                )
+                .eq('user_id', tm.owner_user_id)
+                .maybeSingle();
 
-              if (ownerLandlordError) {
-                console.error(
-                  'Error loading owner landlord for team member:',
-                  ownerLandlordError
-                );
-              } else if (ownerLandlordData) {
-                ownerLandlord = ownerLandlordData as LandlordRow;
-              }
-            } catch (lookupErr) {
-              console.error('Owner landlord lookup threw:', lookupErr);
-            }
-
-            if (ownerLandlord) {
-              landlordRow = ownerLandlord;
-            } else {
-              // Fallback when owner landlord row not found
-              console.warn(
-                'Team member login: team access found, but owner landlord row not found. Using fallback landlord shell.'
+            if (ownerLandlordError) {
+              console.error(
+                'Error loading owner landlord for team member:',
+                ownerLandlordError
               );
               setOwnerLookupFailed(true);
-
-              landlordRow = {
-                id: -1, // synthetic
-                email: 'Linked landlord account',
-                name: null,
-                subscription_status: 'active', // treat as active so no gate
-                subscription_current_period_end: null,
-                trial_active: false,
-                trial_end: null,
-                user_id: tm.owner_user_id,
-              };
+            } else if (ownerLandlordData) {
+              landlordRow = ownerLandlordData as LandlordRow;
+            } else {
+              setOwnerLookupFailed(true);
             }
           }
         }
 
         if (!landlordRow) {
           throw new Error(
-            'Landlord record not found for this account. If you were invited as a teammate, ask the landlord to send a new invite.'
+            'Landlord record not found for this account. If you were invited as a teammate, ask the landlord to resend your invite.'
           );
         }
 
-        const landlordTyped = landlordRow as LandlordRow;
-        setLandlord(landlordTyped);
+        setLandlord(landlordRow as LandlordRow);
         setIsTeamMember(actingAsTeamMember);
         setTeamRole(teamRoleLocal);
 
-        // 5) Load dashboard data (RLS enforces access)
+        // NOTE: We still load data here; UI below will gate rendering.
         const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
           supabase
             .from('properties')
@@ -331,7 +322,6 @@ export default function LandlordDashboardPage() {
             .from('tenants')
             .select('*')
             .order('created_at', { ascending: false }),
-          // Payments: need more history so overdue math matches tenant portal
           supabase
             .from('payments')
             .select('*')
@@ -353,11 +343,10 @@ export default function LandlordDashboardPage() {
         setPayments((paymentRes.data || []) as PaymentRow[]);
         setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
 
-        // 6) Unread messages (for landlord + team)
+        // Unread messages (for landlord + team)
         try {
           let unreadCount = 0;
 
-          // Prefer landlord_user_id (works for owner + team)
           if (landlordRow.user_id) {
             const { data: msgRows, error: msgError } = await supabase
               .from('messages')
@@ -372,7 +361,6 @@ export default function LandlordDashboardPage() {
               unreadCount = msgRows.length;
             }
           } else {
-            // Fallback for any older rows keyed by landlord_id
             const { data: msgRows, error: msgError } = await supabase
               .from('messages')
               .select('id')
@@ -410,7 +398,6 @@ export default function LandlordDashboardPage() {
     (t) => t.status?.toLowerCase() === 'current'
   ).length;
 
-  // Sum monthly_rent for all properties
   const monthlyRentRoll = properties.reduce(
     (sum, p) => sum + (p.monthly_rent || 0),
     0
@@ -465,17 +452,14 @@ export default function LandlordDashboardPage() {
     const firstUnpaidDue = parseDueDate(p.next_due_date);
     if (!firstUnpaidDue) return null;
 
-    // If not actually overdue, just show a single period of rent
     if (firstUnpaidDue >= todayDateOnly) {
       return rent;
     }
 
-    // How many due periods exist between firstUnpaidDue and today?
     let monthsBehind =
       (todayDateOnly.getFullYear() - firstUnpaidDue.getFullYear()) * 12 +
       (todayDateOnly.getMonth() - firstUnpaidDue.getMonth());
 
-    // If we've passed the due day this month, count the current month too.
     if (todayDateOnly.getDate() >= firstUnpaidDue.getDate()) {
       monthsBehind += 1;
     }
@@ -486,8 +470,6 @@ export default function LandlordDashboardPage() {
 
     const baseDue = monthsBehind * rent;
 
-    // Payments applied toward these overdue periods:
-    // any payments for this property from firstUnpaidDue through today.
     const paidToward = payments.reduce((sum, pay) => {
       if (pay.property_id !== p.id) return sum;
       if (!pay.amount || !pay.paid_on) return sum;
@@ -502,34 +484,6 @@ export default function LandlordDashboardPage() {
     const remaining = baseDue - paidToward;
     return remaining <= 0 ? 0 : remaining;
   };
-
-  // Subscription / trial status
-  let hasActiveTrial = false;
-  let subscribedViaStripe = false;
-
-  if (landlord) {
-    const statusLower = (landlord.subscription_status || '').toLowerCase();
-    subscribedViaStripe =
-      statusLower === 'active' ||
-      statusLower === 'trialing' ||
-      statusLower === 'active_cancel_at_period_end';
-
-    if (landlord.trial_active) {
-      if (landlord.trial_end) {
-        const trialEndDate = new Date(landlord.trial_end);
-        const trialEndDateOnly = new Date(
-          trialEndDate.getFullYear(),
-          trialEndDate.getMonth(),
-          trialEndDate.getDate()
-        );
-        hasActiveTrial = trialEndDateOnly >= todayDateOnly;
-      } else {
-        hasActiveTrial = true;
-      }
-    }
-  }
-
-  const isSubscribedOrTrial = subscribedViaStripe || hasActiveTrial;
 
   // ---------- Actions ----------
 
@@ -571,25 +525,75 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // For TEAM MEMBERS where owner landlord lookup failed, we SKIP the subscription gate.
-  if (!isTeamMember && !isSubscribedOrTrial) {
+  // Team member: if we cannot resolve the owner’s landlord row, we must block (no guessing "active")
+  if (isTeamMember && ownerLookupFailed) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-3xl bg-slate-900/80 border border-amber-500/60 p-6 shadow-xl space-y-4 text-center">
           <p className="text-xs text-amber-300 font-semibold uppercase tracking-wide">
-            Subscription required
+            Team access pending
           </p>
           <h1 className="text-lg font-semibold text-slate-50">
-            Unlock your RentZentro landlord tools
+            We couldn’t verify the landlord account
           </h1>
           <p className="text-sm text-slate-300">
-            Your landlord account is created, but your subscription isn&apos;t active
-            and your free promo period has ended. To access your dashboard, properties,
-            tenants, and online rent collection, please activate the{' '}
-            <span className="font-semibold text-emerald-300">
-              $29.95/mo RentZentro Landlord Plan
-            </span>
-            .
+            Your team membership is active, but RentZentro couldn’t locate the
+            landlord account tied to your invite. Please ask the landlord to
+            resend your invite or contact support.
+          </p>
+
+          <button
+            onClick={handleSignOut}
+            className="w-full rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
+          >
+            Log out
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // MAIN ACCESS GATE (owners + team members, using the resolved landlordRow)
+  const canAccess = hasLandlordAccess(landlord);
+
+  if (!canAccess) {
+    const statusLower = (landlord.subscription_status || '').toLowerCase();
+
+    const isPastDueOrUnpaid =
+      statusLower === 'past_due' || statusLower === 'unpaid';
+
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
+        <div className="w-full max-w-md rounded-3xl bg-slate-900/80 border border-amber-500/60 p-6 shadow-xl space-y-4 text-center">
+          <p className="text-xs text-amber-300 font-semibold uppercase tracking-wide">
+            Access locked
+          </p>
+
+          <h1 className="text-lg font-semibold text-slate-50">
+            {isPastDueOrUnpaid ? 'Payment required to continue' : 'Subscription required'}
+          </h1>
+
+          <p className="text-sm text-slate-300">
+            {isPastDueOrUnpaid ? (
+              <>
+                Your RentZentro subscription is currently{' '}
+                <span className="font-semibold text-amber-200">
+                  {statusLower.replace('_', ' ')}
+                </span>
+                . To restore access to your dashboard, tenants, and online rent collection,
+                please update billing and reactivate your plan.
+              </>
+            ) : (
+              <>
+                Your landlord account is created, but your subscription isn&apos;t active
+                and your free promo period has ended. To access your dashboard, properties,
+                tenants, and online rent collection, please activate the{' '}
+                <span className="font-semibold text-emerald-300">
+                  $29.95/mo RentZentro Landlord Plan
+                </span>
+                .
+              </>
+            )}
           </p>
 
           <div className="space-y-2 text-[11px] text-slate-400 text-left rounded-2xl bg-slate-950/70 border border-slate-800 px-4 py-3">
@@ -601,6 +605,8 @@ export default function LandlordDashboardPage() {
               <li>• Tenant and property management</li>
               <li>• Maintenance request tracking + email alerts</li>
               <li>• Document sharing with tenants</li>
+              <li>• Listings + inquiries</li>
+              <li>• Team members access</li>
             </ul>
           </div>
 
@@ -608,7 +614,7 @@ export default function LandlordDashboardPage() {
             onClick={goToSubscription}
             className="w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
           >
-            Go to subscription settings
+            Go to account & billing
           </button>
 
           <button
@@ -622,8 +628,7 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // If we're here: landlord exists AND either owner or (team member, with or without
-  // real owner landlord row) has access → show full dashboard
+  // If we're here: landlord is allowed → show full dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -649,14 +654,11 @@ export default function LandlordDashboardPage() {
                 {teamRole === 'viewer'
                   ? 'viewer (read-only)'
                   : 'manager team member'}
-                {ownerLookupFailed
-                  ? ' for this RentZentro account.'
-                  : ` for ${landlord.email}.`}
+                .
               </p>
             )}
           </div>
 
-          {/* Top-right: Log out pill */}
           <div className="flex flex-wrap gap-2 md:justify-end">
             <button
               type="button"
@@ -668,14 +670,13 @@ export default function LandlordDashboardPage() {
           </div>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="mb-4 text-sm p-3 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-100">
             {error}
           </div>
         )}
 
-        {/* ACH / Card info banner (clear + short, not scary) */}
+        {/* ACH / Card info banner */}
         <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-[12px] text-slate-300">
           <p className="font-semibold text-slate-100">Payment timing note</p>
           <p className="mt-1 text-slate-400">
@@ -832,7 +833,6 @@ export default function LandlordDashboardPage() {
               </p>
             </Link>
 
-            {/* UPDATED: Documents & e-sign button with icons side-by-side */}
             <Link
               href="/landlord/documents"
               className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
@@ -881,7 +881,6 @@ export default function LandlordDashboardPage() {
               </p>
             </Link>
 
-            {/* UPDATED: Listings (wired up) */}
             <Link
               href="/landlord/listings"
               className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"

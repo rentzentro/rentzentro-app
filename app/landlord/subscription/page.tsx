@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
@@ -20,9 +20,21 @@ type LandlordRow = {
 };
 
 // ---------- Helpers ----------
+const parseSupabaseDate = (value: string | null | undefined): Date | null => {
+  if (!value) return null;
+  // Pure date (YYYY-MM-DD) → avoid timezone shift
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+};
+
 const formatDate = (iso: string | null) => {
   if (!iso) return null;
-  const d = new Date(iso);
+  const d = parseSupabaseDate(iso) || new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleDateString('en-US', {
     year: 'numeric',
@@ -41,6 +53,17 @@ const prettyStatus = (status: string | null) => {
   if (status === 'canceled') return 'Canceled';
   if (status === 'unpaid') return 'Unpaid';
   return status;
+};
+
+const statusTone = (status: string | null) => {
+  const s = (status || '').toLowerCase();
+  if (s === 'active' || s === 'trialing' || s === 'active_cancel_at_period_end') {
+    return 'ok';
+  }
+  if (s === 'past_due' || s === 'unpaid') return 'bad';
+  if (s === 'canceled') return 'warn';
+  if (!s) return 'neutral';
+  return 'neutral';
 };
 
 // ---------- Component ----------
@@ -338,30 +361,81 @@ export default function LandlordSubscriptionPage() {
     );
   }
 
-  const isScheduledToCancel =
-    landlord.subscription_status === 'active_cancel_at_period_end';
-  const isActive =
-    landlord.subscription_status === 'active' || isScheduledToCancel;
+  // ---------- Access rules (THIS is the exact rule we want globally) ----------
+  const rawStatus = (landlord.subscription_status || '').toLowerCase();
 
-  const dbDateLabel = formatDate(landlord.subscription_current_period_end);
-  const effectiveDateLabel = stripeCancelDate || dbDateLabel;
+  const paidPlanActive =
+    rawStatus === 'active' ||
+    rawStatus === 'trialing' ||
+    rawStatus === 'active_cancel_at_period_end';
 
-  // Promo / free-access logic
   const now = new Date();
-  const trialEndDate = landlord.trial_end ? new Date(landlord.trial_end) : null;
-  const isOnPromoTrial =
+  const trialEndDate = parseSupabaseDate(landlord.trial_end || null);
+
+  const promoActive =
     !!landlord.trial_active &&
     !!trialEndDate &&
     !Number.isNaN(trialEndDate.getTime()) &&
     trialEndDate >= now;
 
-  const trialEndLabel = trialEndDate
-    ? formatDate(landlord.trial_end || null)
-    : null;
+  // This is the gate condition you’ll reuse in LandlordAccessGate
+  const allowAccess = paidPlanActive || promoActive;
 
+  const isScheduledToCancel = rawStatus === 'active_cancel_at_period_end';
+  const isActive = paidPlanActive; // IMPORTANT: past_due/unpaid are NOT active
+
+  const dbDateLabel = formatDate(landlord.subscription_current_period_end);
+  const effectiveDateLabel = stripeCancelDate || dbDateLabel;
+
+  const trialEndLabel = trialEndDate ? formatDate(landlord.trial_end || null) : null;
+
+  // Promo banner for free-access logic (only when no paid subscription status)
   const showPromoBanner =
-    isOnPromoTrial && !isActive && !landlord.subscription_status;
+    promoActive && !isActive && !landlord.subscription_status;
+
   const showPromoAsStatusNote = showPromoBanner;
+
+  const tone = useMemo(() => statusTone(landlord.subscription_status), [landlord.subscription_status]);
+
+  const lockBanner = useMemo(() => {
+    if (allowAccess) return null;
+
+    if (rawStatus === 'past_due' || rawStatus === 'unpaid') {
+      return {
+        title: 'Account access locked — payment required',
+        body:
+          'Your subscription payment is past due, so landlord features are temporarily locked until billing is resolved. Start/renew your subscription below to restore access.',
+        kind: 'bad' as const,
+      };
+    }
+
+    if (rawStatus === 'canceled') {
+      return {
+        title: 'Account access locked — subscription canceled',
+        body:
+          'Your subscription is canceled, so landlord features are locked. Subscribe again below to restore access.',
+        kind: 'warn' as const,
+      };
+    }
+
+    return {
+      title: 'Account access locked — subscription required',
+      body:
+        'To use RentZentro landlord features, you must have an active subscription or an active free-access promo period.',
+      kind: 'neutral' as const,
+    };
+  }, [allowAccess, rawStatus]);
+
+  const handleBackToDashboard = () => {
+    if (!allowAccess) {
+      setError(
+        'Access is locked. Please fix billing or start a subscription to continue to the dashboard.'
+      );
+      setInfo(null);
+      return;
+    }
+    router.push('/landlord');
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -384,13 +458,21 @@ export default function LandlordSubscriptionPage() {
             >
               Back to homepage
             </button>
+
             <button
               type="button"
-              onClick={() => router.push('/landlord')}
-              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+              onClick={handleBackToDashboard}
+              disabled={!allowAccess}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium border ${
+                allowAccess
+                  ? 'bg-slate-800 text-slate-50 hover:bg-slate-700 border border-slate-600'
+                  : 'bg-slate-900 text-slate-400 border-slate-700 opacity-70 cursor-not-allowed'
+              }`}
+              title={!allowAccess ? 'Locked until billing is active' : undefined}
             >
               Back to dashboard
             </button>
+
             <button
               type="button"
               onClick={handleLogOut}
@@ -400,6 +482,26 @@ export default function LandlordSubscriptionPage() {
             </button>
           </div>
         </div>
+
+        {/* Hard lock banner (when NOT allowed) */}
+        {lockBanner && (
+          <div
+            className={`rounded-2xl border px-4 py-3 text-xs space-y-1 ${
+              lockBanner.kind === 'bad'
+                ? 'border-red-500/50 bg-red-950/35 text-red-100'
+                : lockBanner.kind === 'warn'
+                ? 'border-amber-500/50 bg-amber-950/35 text-amber-100'
+                : 'border-slate-700 bg-slate-900/60 text-slate-200'
+            }`}
+          >
+            <p className="font-semibold">
+              {lockBanner.title}
+            </p>
+            <p className="text-[11px] opacity-90">
+              {lockBanner.body}
+            </p>
+          </div>
+        )}
 
         {/* Promo banner for free period */}
         {showPromoBanner && (
@@ -486,7 +588,13 @@ export default function LandlordSubscriptionPage() {
                 <span className="text-slate-500">Subscription status:</span>{' '}
                 <span
                   className={
-                    isActive ? 'text-emerald-300' : 'text-slate-100'
+                    tone === 'ok'
+                      ? 'text-emerald-300'
+                      : tone === 'bad'
+                      ? 'text-red-300'
+                      : tone === 'warn'
+                      ? 'text-amber-300'
+                      : 'text-slate-100'
                   }
                 >
                   {prettyStatus(landlord.subscription_status)}
@@ -500,18 +608,14 @@ export default function LandlordSubscriptionPage() {
 
               <p>
                 <span className="text-slate-500">
-                  {isOnPromoTrial &&
-                  !isActive &&
-                  !landlord.subscription_status
+                  {showPromoBanner
                     ? 'Promo period ends:'
                     : isScheduledToCancel
                     ? 'Cancellation date:'
                     : 'Next billing date:'}
                 </span>{' '}
                 <span className="text-slate-100">
-                  {isOnPromoTrial &&
-                  !isActive &&
-                  !landlord.subscription_status ? (
+                  {showPromoBanner ? (
                     trialEndLabel || 'Not available'
                   ) : effectiveDateLabel ? (
                     isScheduledToCancel ? (
@@ -528,6 +632,16 @@ export default function LandlordSubscriptionPage() {
                   )}
                 </span>
               </p>
+
+              <p className="pt-1 text-[11px] text-slate-400">
+                Access required: <span className="text-slate-200 font-medium">Paid active</span> or{' '}
+                <span className="text-slate-200 font-medium">active promo trial</span>.
+                {allowAccess ? (
+                  <span className="ml-1 text-emerald-300">(access granted)</span>
+                ) : (
+                  <span className="ml-1 text-red-300">(access locked)</span>
+                )}
+              </p>
             </div>
 
             <div className="flex flex-col sm:items-end gap-2 text-xs">
@@ -540,6 +654,8 @@ export default function LandlordSubscriptionPage() {
                 >
                   {startingCheckout
                     ? 'Starting subscription…'
+                    : rawStatus === 'past_due' || rawStatus === 'unpaid' || rawStatus === 'canceled'
+                    ? 'Fix billing / Reactivate'
                     : 'Subscribe for $29.95/mo'}
                 </button>
               )}
@@ -584,6 +700,15 @@ export default function LandlordSubscriptionPage() {
                 During your free access period, you can still set up payouts in
                 settings and use RentZentro with real tenants. You&apos;ll only
                 be billed if you choose to start the $29.95/mo subscription.
+              </p>
+            </div>
+          )}
+
+          {!allowAccess && (
+            <div className="pt-2 border-t border-slate-800 mt-2 text-[11px] text-slate-400">
+              <p>
+                While access is locked, you won&apos;t be able to use the landlord dashboard or manage tenants/properties.
+                Restore access by starting/reactivating your subscription above.
               </p>
             </div>
           )}
