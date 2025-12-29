@@ -9,6 +9,7 @@ import { supabase } from '../../../supabaseClient';
 
 type TenantRow = {
   id: number;
+  owner_id: string | null; // landlord auth UID
   name: string | null;
   email: string;
   phone: string | null;
@@ -20,6 +21,12 @@ type PropertyRow = {
   name: string | null;
   unit_label: string | null;
   landlord_email: string | null;
+};
+
+type LandlordAccessRow = {
+  subscription_status: string | null;
+  trial_active: boolean | null;
+  trial_end: string | null;
 };
 
 type Priority = 'low' | 'normal' | 'high' | 'emergency';
@@ -34,6 +41,17 @@ const emptyForm: FormState = {
   title: '',
   description: '',
   priority: 'normal',
+};
+
+const parseSupabaseDate = (value: string | null | undefined): Date | null => {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
 };
 
 // ---------- Component ----------
@@ -51,50 +69,135 @@ export default function TenantMaintenanceSubmitPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // ---------- Load tenant + property ----------
+  // NEW: billing gate
+  const [billingBlocked, setBillingBlocked] = useState(false);
+  const [billingMsg, setBillingMsg] = useState<string | null>(null);
+
+  // ---------- Load tenant + property + billing gate ----------
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setSuccess(null);
+      setBillingBlocked(false);
+      setBillingMsg(null);
 
       try {
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
         if (authError) throw authError;
 
-        const email = authData.user?.email;
-        if (!email) {
-          throw new Error('Unable to load tenant: missing email.');
+        const user = authData.user;
+        const email = user?.email;
+        const authUserId = user?.id;
+
+        if (!email || !authUserId) {
+          throw new Error('Unable to load tenant: missing account data.');
         }
 
-        const { data: tenantRow, error: tenantError } = await supabase
+        // Tenant: prefer user_id match, fall back to email
+        const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
-          .select('id, name, email, phone, property_id')
-          .eq('email', email)
-          .maybeSingle();
+          .select('id, owner_id, name, email, phone, property_id, user_id')
+          .or(`user_id.eq.${authUserId},email.eq.${email}`)
+          .order('created_at', { ascending: true });
 
         if (tenantError) throw tenantError;
-        if (!tenantRow) {
+
+        let t: any =
+          tenantRows && tenantRows.length > 0
+            ? (tenantRows.find((row: any) => row.user_id === authUserId) ??
+              tenantRows[0])
+            : null;
+
+        if (!t) {
           throw new Error(
             "We couldn't find your tenant record. Please contact your landlord."
           );
         }
 
-        const t = tenantRow as TenantRow;
-        setTenant(t);
+        // Auto-link tenant.user_id on first login (same pattern as portal)
+        if (!t.user_id) {
+          const { data: updated, error: updateError } = await supabase
+            .from('tenants')
+            .update({ user_id: authUserId })
+            .eq('id', t.id)
+            .select('id, owner_id, name, email, phone, property_id, user_id')
+            .maybeSingle();
 
-        if (t.property_id) {
+          if (updateError) {
+            console.error('Failed to link tenant.user_id:', updateError);
+          } else if (updated) {
+            t = updated;
+          }
+        }
+
+        const tenantRow = t as TenantRow;
+        setTenant(tenantRow);
+
+        // Property (optional)
+        if (tenantRow.property_id) {
           const { data: propRow, error: propError } = await supabase
             .from('properties')
             .select('id, name, unit_label, landlord_email')
-            .eq('id', t.property_id)
+            .eq('id', tenantRow.property_id)
             .maybeSingle();
 
           if (propError) throw propError;
           setProperty((propRow || null) as PropertyRow | null);
         } else {
           setProperty(null);
+        }
+
+        // ---- Billing gate (IMPORTANT) ----
+        if (!tenantRow.owner_id) {
+          setBillingBlocked(true);
+          setBillingMsg(
+            'Maintenance requests are temporarily unavailable because this tenant account is not linked to a landlord yet. Please contact your landlord.'
+          );
+        } else {
+          const { data: landlordRow, error: landlordErr } = await supabase
+            .from('landlords')
+            .select('subscription_status, trial_active, trial_end')
+            .eq('user_id', tenantRow.owner_id)
+            .maybeSingle();
+
+          if (landlordErr) {
+            console.error('Maintenance page landlord lookup error:', landlordErr);
+            setBillingBlocked(true);
+            setBillingMsg(
+              'Maintenance requests are temporarily unavailable because your landlord’s RentZentro account status could not be verified. Please contact your landlord.'
+            );
+          } else {
+            const lr = landlordRow as LandlordAccessRow | null;
+            const status = (lr?.subscription_status || '').toLowerCase();
+
+            const isPaidPlanActive =
+              status === 'active' ||
+              status === 'trialing' ||
+              status === 'active_cancel_at_period_end';
+
+            const now = new Date();
+            const trialEnd = parseSupabaseDate(lr?.trial_end || null);
+            const promoActive =
+              !!lr?.trial_active &&
+              !!trialEnd &&
+              !Number.isNaN(trialEnd.getTime()) &&
+              trialEnd >= now;
+
+            const allowMaintenance = isPaidPlanActive || promoActive;
+
+            if (!allowMaintenance) {
+              setBillingBlocked(true);
+              setBillingMsg(
+                'Maintenance requests are temporarily unavailable because your landlord’s RentZentro account is not currently active. Please contact your landlord or property manager.'
+              );
+            } else {
+              setBillingBlocked(false);
+              setBillingMsg(null);
+            }
+          }
         }
       } catch (err: any) {
         console.error(err);
@@ -127,6 +230,17 @@ export default function TenantMaintenanceSubmitPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    // Hard stop if billing blocked (prevents any bypass)
+    if (billingBlocked) {
+      setError(
+        billingMsg ||
+          'Maintenance requests are temporarily unavailable because your landlord’s RentZentro account is not currently active.'
+      );
+      setSuccess(null);
+      return;
+    }
+
     if (!tenant) {
       setError('Missing tenant information.');
       setSuccess(null);
@@ -162,7 +276,7 @@ export default function TenantMaintenanceSubmitPage() {
 
       console.log('Maintenance request created:', insertData);
 
-      // 2) Call your existing API route and WAIT for the result
+      // 2) Send email (Resend route)
       const emailRes = await fetch('/api/maintenance-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -194,7 +308,7 @@ export default function TenantMaintenanceSubmitPage() {
         );
       }
 
-      // 3) Show global success banner and clear the form
+      // 3) Success + clear
       setForm(emptyForm);
       setSuccess('Your maintenance request has been submitted.');
       setError(null);
@@ -260,6 +374,19 @@ export default function TenantMaintenanceSubmitPage() {
           </p>
         </header>
 
+        {/* NEW: Billing lock banner */}
+        {billingBlocked && (
+          <div className="rounded-2xl border border-amber-500/50 bg-amber-950/40 px-4 py-3 text-[12px] text-amber-100">
+            <p className="font-semibold text-amber-200">
+              Maintenance temporarily unavailable
+            </p>
+            <p className="mt-1 text-amber-100/90">
+              {billingMsg ||
+                'Maintenance requests are temporarily unavailable because your landlord’s RentZentro account is not currently active.'}
+            </p>
+          </div>
+        )}
+
         {/* Global banner (success / error) */}
         {(success || error) && (
           <div
@@ -285,7 +412,8 @@ export default function TenantMaintenanceSubmitPage() {
                 name="title"
                 value={form.title}
                 onChange={handleChange}
-                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                disabled={billingBlocked || submitting}
+                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
                 placeholder="Short summary (e.g., Leaking kitchen sink)"
               />
             </div>
@@ -299,7 +427,8 @@ export default function TenantMaintenanceSubmitPage() {
                 value={form.description}
                 onChange={handleChange}
                 rows={5}
-                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                disabled={billingBlocked || submitting}
+                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
                 placeholder="Describe the issue, when it started, and anything else your landlord should know."
               />
             </div>
@@ -312,7 +441,8 @@ export default function TenantMaintenanceSubmitPage() {
                 name="priority"
                 value={form.priority}
                 onChange={handleChange}
-                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                disabled={billingBlocked || submitting}
+                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
               >
                 <option value="low">Low – minor issue</option>
                 <option value="normal">Normal</option>
@@ -333,10 +463,14 @@ export default function TenantMaintenanceSubmitPage() {
             <div className="pt-2 flex items-center gap-2">
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || billingBlocked}
                 className="inline-flex flex-1 items-center justify-center rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {submitting ? 'Submitting…' : 'Submit request'}
+                {submitting
+                  ? 'Submitting…'
+                  : billingBlocked
+                  ? 'Temporarily unavailable'
+                  : 'Submit request'}
               </button>
               <button
                 type="button"

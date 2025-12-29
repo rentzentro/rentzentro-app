@@ -72,6 +72,12 @@ type RentStatus = {
   isCaughtUp: boolean;
 };
 
+type LandlordAccessRow = {
+  subscription_status: string | null;
+  trial_active: boolean | null;
+  trial_end: string | null;
+};
+
 // ---------- Helpers ----------
 
 const parseSupabaseDate = (value: string | null | undefined): Date | null => {
@@ -287,6 +293,12 @@ export default function TenantPortalPage() {
   const [autoPayEnabled, setAutoPayEnabled] = useState(false);
   const [autoPayLoading, setAutoPayLoading] = useState(false);
 
+  // NEW: landlord billing gate (block tenant actions if landlord account not active)
+  const [landlordBillingBlocked, setLandlordBillingBlocked] = useState(false);
+  const [landlordBillingMsg, setLandlordBillingMsg] = useState<string | null>(
+    null
+  );
+
   // ---------- Load tenant + related data ----------
 
   useEffect(() => {
@@ -294,6 +306,10 @@ export default function TenantPortalPage() {
       setLoading(true);
       setError(null);
       setSuccess(null);
+
+      // Default: block until we confirm landlord access is active
+      setLandlordBillingBlocked(false);
+      setLandlordBillingMsg(null);
 
       try {
         const { data: authData, error: authError } =
@@ -361,6 +377,60 @@ export default function TenantPortalPage() {
 
         setTenant(t);
         setAutoPayEnabled(!!t.auto_pay_enabled);
+
+        // NEW: Check landlord subscription / promo status and gate tenant actions
+        // If landlord is not active, tenants should not be able to pay rent or submit maintenance.
+        if (t.owner_id) {
+          const { data: landlordRow, error: landlordErr } = await supabase
+            .from('landlords')
+            .select('subscription_status, trial_active, trial_end')
+            .eq('user_id', t.owner_id)
+            .maybeSingle();
+
+          if (landlordErr) {
+            console.error('Tenant portal landlord access lookup error:', landlordErr);
+            // Safer to block if we cannot verify status
+            setLandlordBillingBlocked(true);
+            setLandlordBillingMsg(
+              'Online payments and maintenance are temporarily unavailable because your landlord’s RentZentro account status could not be verified. Please contact your landlord.'
+            );
+          } else {
+            const lr = landlordRow as LandlordAccessRow | null;
+
+            const status = (lr?.subscription_status || '').toLowerCase();
+
+            const isPaidPlanActive =
+              status === 'active' ||
+              status === 'trialing' ||
+              status === 'active_cancel_at_period_end';
+
+            const now = new Date();
+            const trialEnd = parseSupabaseDate(lr?.trial_end || null);
+            const promoActive =
+              !!lr?.trial_active &&
+              !!trialEnd &&
+              !Number.isNaN(trialEnd.getTime()) &&
+              trialEnd >= now;
+
+            const allowTenantActions = isPaidPlanActive || promoActive;
+
+            if (!allowTenantActions) {
+              setLandlordBillingBlocked(true);
+              setLandlordBillingMsg(
+                'Online payments and maintenance are temporarily unavailable because your landlord’s RentZentro account is not currently active. Please contact your landlord or property manager.'
+              );
+            } else {
+              setLandlordBillingBlocked(false);
+              setLandlordBillingMsg(null);
+            }
+          }
+        } else {
+          // Missing owner_id = can't link to a landlord; block to prevent payments going to nowhere
+          setLandlordBillingBlocked(true);
+          setLandlordBillingMsg(
+            'Online payments and maintenance are temporarily unavailable because this tenant account is not linked to a landlord yet. Please contact your landlord.'
+          );
+        }
 
         // -------- Property: try by property_id first --------
         let prop: PropertyRow | null = null;
@@ -524,6 +594,16 @@ export default function TenantPortalPage() {
   const handleToggleAutoPay = async () => {
     if (!tenant) return;
 
+    // NEW: block if landlord account not active
+    if (landlordBillingBlocked) {
+      setError(
+        landlordBillingMsg ||
+          'Automatic payments are temporarily unavailable because your landlord’s RentZentro account is not currently active.'
+      );
+      setSuccess(null);
+      return;
+    }
+
     setError(null);
     setSuccess(null);
 
@@ -597,6 +677,16 @@ export default function TenantPortalPage() {
 
   const handlePayWithCard = async () => {
     if (!tenant) return;
+
+    // NEW: block if landlord account not active
+    if (landlordBillingBlocked) {
+      setError(
+        landlordBillingMsg ||
+          'Online rent payments are temporarily unavailable because your landlord’s RentZentro account is not currently active.'
+      );
+      setSuccess(null);
+      return;
+    }
 
     const baseRent = property?.monthly_rent ?? tenant.monthly_rent ?? 0;
 
@@ -765,6 +855,8 @@ export default function TenantPortalPage() {
     ? 'inline-block h-1.5 w-1.5 rounded-full bg-red-400'
     : 'inline-block h-1.5 w-1.5 rounded-full bg-emerald-400';
 
+  const tenantActionsBlocked = landlordBillingBlocked;
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
       <div className="mx-auto max-w-5xl space-y-4">
@@ -777,6 +869,19 @@ export default function TenantPortalPage() {
             }`}
           >
             {success || error}
+          </div>
+        )}
+
+        {/* NEW: Tenant action lock banner */}
+        {tenantActionsBlocked && (
+          <div className="rounded-2xl border border-amber-500/50 bg-amber-950/40 px-4 py-3 text-[12px] text-amber-100">
+            <p className="font-semibold text-amber-200">
+              Payments & maintenance temporarily unavailable
+            </p>
+            <p className="mt-1 text-amber-100/90">
+              {landlordBillingMsg ||
+                'Your landlord’s RentZentro account is not currently active, so online payments and maintenance requests are temporarily disabled.'}
+            </p>
           </div>
         )}
 
@@ -884,7 +989,9 @@ export default function TenantPortalPage() {
                       Automatic payments
                     </p>
                     <p className="text-slate-400">
-                      {autoPayEnabled
+                      {tenantActionsBlocked
+                        ? 'Automatic payments are temporarily unavailable.'
+                        : autoPayEnabled
                         ? 'Rent will be charged automatically each period using your saved payment method.'
                         : 'Set up automatic rent payments so you don’t have to remember each month.'}
                     </p>
@@ -892,12 +999,21 @@ export default function TenantPortalPage() {
                   <button
                     type="button"
                     onClick={handleToggleAutoPay}
-                    disabled={autoPayLoading}
+                    disabled={autoPayLoading || tenantActionsBlocked}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${
                       autoPayEnabled
                         ? 'bg-emerald-500 border-emerald-400'
                         : 'bg-slate-800 border-slate-600'
-                    } ${autoPayLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    } ${
+                      autoPayLoading || tenantActionsBlocked
+                        ? 'opacity-60 cursor-not-allowed'
+                        : ''
+                    }`}
+                    title={
+                      tenantActionsBlocked
+                        ? 'Temporarily unavailable'
+                        : undefined
+                    }
                   >
                     <span
                       className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -918,6 +1034,7 @@ export default function TenantPortalPage() {
                   onClick={handlePayWithCard}
                   disabled={
                     paying ||
+                    tenantActionsBlocked ||
                     isTooEarlyToPay ||
                     !amountToPayNow ||
                     amountToPayNow <= 0
@@ -926,6 +1043,8 @@ export default function TenantPortalPage() {
                 >
                   {paying
                     ? 'Starting payment…'
+                    : tenantActionsBlocked
+                    ? 'Payments temporarily unavailable'
                     : isTooEarlyToPay
                     ? 'Online payment not available until due date'
                     : !amountToPayNow || amountToPayNow <= 0
@@ -934,7 +1053,7 @@ export default function TenantPortalPage() {
                 </button>
               </div>
 
-              {/* NEW: payout timing disclosure */}
+              {/* payout timing disclosure */}
               <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-[11px] text-slate-300">
                 <p className="font-semibold text-slate-100">Payout timing</p>
                 <p className="mt-1 text-slate-400">
@@ -997,7 +1116,6 @@ export default function TenantPortalPage() {
                 </div>
               )}
 
-              {/* NEW: small reminder under history */}
               <p className="mt-3 text-[11px] text-slate-500">
                 Note: A successful payment here means Stripe confirmed the payment. Bank payouts to your landlord can take additional time.
               </p>
@@ -1167,18 +1285,53 @@ export default function TenantPortalPage() {
               )}
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <Link
-                  href="/tenant/maintenance"
-                  className="flex-1 inline-flex items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
-                >
-                  Submit a maintenance request
-                </Link>
-                <Link
-                  href="/tenant/maintenance"
-                  className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800"
-                >
-                  View all requests
-                </Link>
+                {tenantActionsBlocked ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(
+                          landlordBillingMsg ||
+                            'Maintenance requests are temporarily unavailable because your landlord’s RentZentro account is not currently active.'
+                        );
+                        setSuccess(null);
+                      }}
+                      className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-200 opacity-70 cursor-not-allowed"
+                      disabled
+                    >
+                      Submit a maintenance request
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(
+                          landlordBillingMsg ||
+                            'Maintenance requests are temporarily unavailable because your landlord’s RentZentro account is not currently active.'
+                        );
+                        setSuccess(null);
+                      }}
+                      className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-200 opacity-70 cursor-not-allowed"
+                      disabled
+                    >
+                      View all requests
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/tenant/maintenance"
+                      className="flex-1 inline-flex items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
+                    >
+                      Submit a maintenance request
+                    </Link>
+                    <Link
+                      href="/tenant/maintenance"
+                      className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800"
+                    >
+                      View all requests
+                    </Link>
+                  </>
+                )}
               </div>
             </section>
           </div>
