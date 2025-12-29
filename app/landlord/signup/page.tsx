@@ -130,7 +130,7 @@ export default function LandlordSignupPage() {
           collection.
         </p>
         <p className="text-[11px] text-emerald-300 mb-4">
-          Promo: Sign up now and get free access until January 1st. No card
+          Promo: Sign up now and get free access until January 31st. No card
           required until you&apos;re ready to subscribe.
         </p>
 
