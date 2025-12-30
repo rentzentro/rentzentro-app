@@ -72,12 +72,6 @@ type RentStatus = {
   isCaughtUp: boolean;
 };
 
-type LandlordAccessRow = {
-  subscription_status: string | null;
-  trial_active: boolean | null;
-  trial_end: string | null;
-};
-
 // ---------- Helpers ----------
 
 const parseSupabaseDate = (value: string | null | undefined): Date | null => {
@@ -293,7 +287,7 @@ export default function TenantPortalPage() {
   const [autoPayEnabled, setAutoPayEnabled] = useState(false);
   const [autoPayLoading, setAutoPayLoading] = useState(false);
 
-  // NEW: landlord billing gate (block tenant actions if landlord account not active)
+  // Landlord billing gate (block tenant actions if landlord account not active)
   const [landlordBillingBlocked, setLandlordBillingBlocked] = useState(false);
   const [landlordBillingMsg, setLandlordBillingMsg] = useState<string | null>(
     null
@@ -378,54 +372,33 @@ export default function TenantPortalPage() {
         setTenant(t);
         setAutoPayEnabled(!!t.auto_pay_enabled);
 
-        // NEW: Check landlord subscription / promo status and gate tenant actions
-        // If landlord is not active, tenants should not be able to pay rent or submit maintenance.
+        // ✅ FIX: Verify landlord access via server API (avoids RLS issues for tenants)
         if (t.owner_id) {
-          const { data: landlordRow, error: landlordErr } = await supabase
-            .from('landlords')
-            .select('subscription_status, trial_active, trial_end')
-            .eq('user_id', t.owner_id)
-            .maybeSingle();
+          try {
+            const res = await fetch('/api/tenant-landlord-access', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ownerId: t.owner_id }),
+            });
 
-          if (landlordErr) {
-            console.error(
-              'Tenant portal landlord access lookup error:',
-              landlordErr
-            );
-            // Safer to block if we cannot verify status
-            setLandlordBillingBlocked(true);
-            setLandlordBillingMsg(
-              'Online payments and maintenance are temporarily unavailable because your landlord’s RentZentro account status could not be verified. Please contact your landlord.'
-            );
-          } else {
-            const lr = landlordRow as LandlordAccessRow | null;
+            const data = await res.json().catch(() => ({} as any));
 
-            const status = (lr?.subscription_status || '').toLowerCase();
-
-            const isPaidPlanActive =
-              status === 'active' ||
-              status === 'trialing' ||
-              status === 'active_cancel_at_period_end';
-
-            const now = new Date();
-            const trialEnd = parseSupabaseDate(lr?.trial_end || null);
-            const promoActive =
-              !!lr?.trial_active &&
-              !!trialEnd &&
-              !Number.isNaN(trialEnd.getTime()) &&
-              trialEnd >= now;
-
-            const allowTenantActions = isPaidPlanActive || promoActive;
-
-            if (!allowTenantActions) {
-              setLandlordBillingBlocked(true);
-              setLandlordBillingMsg(
-                'Online payments and maintenance are temporarily unavailable because your landlord’s RentZentro account is not currently active. Please contact your landlord or property manager.'
-              );
-            } else {
+            if (data?.allowed) {
               setLandlordBillingBlocked(false);
               setLandlordBillingMsg(null);
+            } else {
+              setLandlordBillingBlocked(true);
+              setLandlordBillingMsg(
+                data?.reason ||
+                  'Online payments and maintenance are temporarily unavailable because your landlord’s RentZentro account is not currently active. Please contact your landlord or property manager.'
+              );
             }
+          } catch (e) {
+            console.error('Tenant portal landlord access API error:', e);
+            setLandlordBillingBlocked(true);
+            setLandlordBillingMsg(
+              'Online payments and maintenance are temporarily unavailable because your landlord’s account status could not be verified. Please contact your landlord.'
+            );
           }
         } else {
           // Missing owner_id = can't link to a landlord; block to prevent payments going to nowhere
@@ -522,7 +495,9 @@ export default function TenantPortalPage() {
           .order('created_at', { ascending: false });
 
         if (prop?.id) {
-          docQuery = docQuery.or(`property_id.eq.${prop.id},tenant_id.eq.${t.id}`);
+          docQuery = docQuery.or(
+            `property_id.eq.${prop.id},tenant_id.eq.${t.id}`
+          );
         } else {
           docQuery = docQuery.eq('tenant_id', t.id);
         }
@@ -593,7 +568,7 @@ export default function TenantPortalPage() {
   const handleToggleAutoPay = async () => {
     if (!tenant) return;
 
-    // NEW: block if landlord account not active
+    // Block if landlord account not active
     if (landlordBillingBlocked) {
       setError(
         landlordBillingMsg ||
@@ -629,7 +604,9 @@ export default function TenantPortalPage() {
         const data = await res.json().catch(() => ({} as any));
 
         if (!res.ok || !data?.url) {
-          throw new Error(data?.error || 'Failed to start automatic payment setup.');
+          throw new Error(
+            data?.error || 'Failed to start automatic payment setup.'
+          );
         }
 
         // Redirect to Stripe Checkout
@@ -672,7 +649,7 @@ export default function TenantPortalPage() {
   const handlePayWithCard = async () => {
     if (!tenant) return;
 
-    // NEW: block if landlord account not active
+    // Block if landlord account not active
     if (landlordBillingBlocked) {
       setError(
         landlordBillingMsg ||
@@ -737,9 +714,9 @@ export default function TenantPortalPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount,
-          description: `Rent payment for ${
-            property?.name || 'your unit'
-          }${property?.unit_label ? ` · ${property.unit_label}` : ''}`,
+          description: `Rent payment for ${property?.name || 'your unit'}${
+            property?.unit_label ? ` · ${property.unit_label}` : ''
+          }`,
           tenantId: tenant.id,
           propertyId: property?.id ?? null,
         }),
@@ -805,7 +782,11 @@ export default function TenantPortalPage() {
     (rentStatus?.nextDueDate as string | null) || property?.next_due_date || null
   );
   const today = new Date();
-  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayMidnight = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
 
   const isRentOverdue = !!dueDateObj && dueDateObj.getTime() < todayMidnight.getTime();
 
@@ -852,7 +833,7 @@ export default function TenantPortalPage() {
           </div>
         )}
 
-        {/* NEW: Tenant action lock banner */}
+        {/* Tenant action lock banner */}
         {tenantActionsBlocked && (
           <div className="rounded-2xl border border-amber-500/50 bg-amber-950/40 px-4 py-3 text-[12px] text-amber-100">
             <p className="font-semibold text-amber-200">
@@ -922,7 +903,10 @@ export default function TenantPortalPage() {
               <p className="mt-1 text-xs text-slate-400">
                 Next due date:{' '}
                 <span className="text-slate-200">
-                  {formatDate((rentStatus?.nextDueDate as string | null) || property?.next_due_date)}
+                  {formatDate(
+                    (rentStatus?.nextDueDate as string | null) ||
+                      property?.next_due_date
+                  )}
                 </span>
               </p>
               <p className="mt-1 text-xs text-slate-400">
@@ -938,7 +922,9 @@ export default function TenantPortalPage() {
                 <>
                   <p className="mt-2 text-xs text-slate-400">
                     Total paid toward rent:{' '}
-                    <span className="text-slate-200">{formatCurrency(rentStatus.totalPaid)}</span>
+                    <span className="text-slate-200">
+                      {formatCurrency(rentStatus.totalPaid)}
+                    </span>
                   </p>
                   <p className="mt-1 text-xs text-slate-400">
                     Total outstanding rent:{' '}
@@ -970,7 +956,11 @@ export default function TenantPortalPage() {
                       autoPayEnabled
                         ? 'bg-emerald-500 border-emerald-400'
                         : 'bg-slate-800 border-slate-600'
-                    } ${autoPayLoading || tenantActionsBlocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    } ${
+                      autoPayLoading || tenantActionsBlocked
+                        ? 'opacity-60 cursor-not-allowed'
+                        : ''
+                    }`}
                     title={tenantActionsBlocked ? 'Temporarily unavailable' : undefined}
                   >
                     <span
@@ -981,8 +971,8 @@ export default function TenantPortalPage() {
                   </button>
                 </div>
                 <p className="mt-2 text-[10px] text-slate-500">
-                  You&apos;ll be taken to a secure Stripe page to set up or update
-                  automatic payments. You can turn this off at any time.
+                  You&apos;ll be taken to a secure Stripe page to set up or update automatic
+                  payments. You can turn this off at any time.
                 </p>
               </div>
 
@@ -1015,15 +1005,15 @@ export default function TenantPortalPage() {
               <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-[11px] text-slate-300">
                 <p className="font-semibold text-slate-100">Payout timing</p>
                 <p className="mt-1 text-slate-400">
-                  Your payment is processed securely by Stripe. After Stripe confirms your
-                  payment, funds are sent to your landlord&apos;s bank by Stripe — this can take
-                  a few business days depending on the landlord&apos;s bank and Stripe settings.
+                  Your payment is processed securely by Stripe. After Stripe confirms your payment,
+                  funds are sent to your landlord&apos;s bank by Stripe — this can take a few business
+                  days depending on the landlord&apos;s bank and Stripe settings.
                 </p>
               </div>
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Card / ACH payments are processed securely by Stripe. You&apos;ll get a
-                confirmation once your payment is completed.
+                Card / ACH payments are processed securely by Stripe. You&apos;ll get a confirmation
+                once your payment is completed.
               </p>
             </section>
 
@@ -1065,8 +1055,8 @@ export default function TenantPortalPage() {
               )}
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Note: A successful payment here means Stripe confirmed the payment. Bank payouts
-                to your landlord can take additional time.
+                Note: A successful payment here means Stripe confirmed the payment. Bank payouts to your
+                landlord can take additional time.
               </p>
             </section>
           </div>
@@ -1102,8 +1092,8 @@ export default function TenantPortalPage() {
               </dl>
 
               <p className="mt-3 text-[11px] text-slate-500">
-                For changes to your lease, rent amount, or due date, please reach out to your
-                landlord or property manager.
+                For changes to your lease, rent amount, or due date, please reach out to your landlord or
+                property manager.
               </p>
             </section>
 
@@ -1114,8 +1104,8 @@ export default function TenantPortalPage() {
 
               {documents.length === 0 ? (
                 <p className="mt-3 text-xs text-slate-500">
-                  Your landlord hasn&apos;t shared any documents for this unit yet. If you&apos;re
-                  expecting a copy of your lease or other paperwork, please contact them directly.
+                  Your landlord hasn&apos;t shared any documents for this unit yet. If you&apos;re expecting a copy
+                  of your lease or other paperwork, please contact them directly.
                 </p>
               ) : (
                 <div className="mt-3 space-y-2 text-xs">
@@ -1144,8 +1134,7 @@ export default function TenantPortalPage() {
               )}
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Documents here are read-only. For questions about any lease terms, reach out to
-                your landlord.
+                Documents here are read-only. For questions about any lease terms, reach out to your landlord.
               </p>
             </section>
 
@@ -1155,9 +1144,8 @@ export default function TenantPortalPage() {
               <p className="mt-1 text-sm font-medium text-slate-50">Requests for your unit</p>
 
               <p className="mt-2 text-[11px] text-slate-400">
-                Use a maintenance request to report issues with your unit—for example plumbing,
-                heating, appliances, or general repairs. Your requests are sent to your landlord
-                and tracked for your records.
+                Use a maintenance request to report issues with your unit—for example plumbing, heating, appliances,
+                or general repairs. Your requests are sent to your landlord and tracked for your records.
               </p>
               <p className="mt-1 text-[10px] text-amber-300 flex items-start gap-1">
                 <span className="text-amber-300 text-xs mt-[1px]">⚠️</span>
@@ -1190,7 +1178,9 @@ export default function TenantPortalPage() {
 
                           {m.resolution_note && (
                             <p className="mt-1 text-[10px] text-slate-300 line-clamp-2 break-words">
-                              <span className="font-semibold text-slate-200">Landlord note:{' '}</span>
+                              <span className="font-semibold text-slate-200">
+                                Landlord note:{' '}
+                              </span>
                               {m.resolution_note}
                             </p>
                           )}
@@ -1214,29 +1204,17 @@ export default function TenantPortalPage() {
                   <>
                     <button
                       type="button"
-                      onClick={() => {
-                        setError(
-                          landlordBillingMsg ||
-                            'Maintenance requests are temporarily unavailable because your landlord’s RentZentro account is not currently active.'
-                        );
-                        setSuccess(null);
-                      }}
                       className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-200 opacity-70 cursor-not-allowed"
                       disabled
+                      title="Temporarily unavailable"
                     >
                       Submit a maintenance request
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setError(
-                          landlordBillingMsg ||
-                            'Maintenance requests are temporarily unavailable because your landlord’s RentZentro account is not currently active.'
-                        );
-                        setSuccess(null);
-                      }}
                       className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-200 opacity-70 cursor-not-allowed"
                       disabled
+                      title="Temporarily unavailable"
                     >
                       View all requests
                     </button>
