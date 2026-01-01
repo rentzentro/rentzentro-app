@@ -19,6 +19,12 @@ export default function LandlordSignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  // --- PROMO CONFIG (single source of truth) ---
+  // Free access through end of day Jan 31, 2026 (UTC).
+  // IMPORTANT: trial_end should match what your access gates check against.
+  const PROMO_END_YMD = '2026-01-31';
+  const PROMO_END_ISO = '2026-01-31T23:59:59Z';
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -48,9 +54,7 @@ export default function LandlordSignupPage() {
         password,
       });
 
-      if (signUpError) {
-        throw signUpError;
-      }
+      if (signUpError) throw signUpError;
 
       const user = data.user;
 
@@ -60,24 +64,28 @@ export default function LandlordSignupPage() {
         );
       }
 
-      // --- PROMO LOGIC: Now through Jan 1, 2026 ---
-      // Anyone who signs up before 2026-01-01 gets free access until that date.
+      // --- PROMO LOGIC: Active until Jan 31, 2026 (end of day UTC) ---
+      // Anyone who signs up before promo end gets free access through PROMO_END_YMD.
       const now = new Date();
-      const promoCutoff = new Date('2026-01-01T00:00:00Z'); // adjust if you change promo
-      const isPromoPeriod = now < promoCutoff;
+      const promoEndsAt = new Date(PROMO_END_ISO);
+      const isPromoPeriod = now <= promoEndsAt;
 
-      // trial_end is stored as a date string; Supabase/Postgres will cast it
-      const trialEndValue = isPromoPeriod ? '2026-01-01' : null;
+      const trialEndValue = isPromoPeriod ? PROMO_END_YMD : null;
 
       // 2) Insert landlord row linked to this auth user
+      // NOTE: subscription_status is controlled by Stripe webhook logic.
+      // We set trial flags here for promo access.
       const { error: insertError } = await supabase.from('landlords').insert([
         {
           email,
           user_id: user.id,
-          // Promo flags:
           trial_active: isPromoPeriod,
           trial_end: trialEndValue,
+          // Keep legacy flag if your DB still has it, but access should be driven by
+          // subscription_status + trial_active/trial_end (as in your dashboard code).
           subscription_active: false,
+          // Optional: if your table uses subscription_status default null, leave it.
+          // subscription_status: null,
         },
       ]);
 
@@ -91,9 +99,9 @@ export default function LandlordSignupPage() {
       // 3) Redirect based on whether they are in the promo period
       if (isPromoPeriod) {
         setInfo(
-          'Account created! You have free access until January 1st. Redirecting you to your landlord dashboard…'
+          'Account created! You have free access until January 31st. Redirecting you to your landlord dashboard…'
         );
-        router.push('/landlord'); // main landlord dashboard
+        router.push('/landlord');
       } else {
         setInfo('Account created! Redirecting you to subscription…');
         router.push('/landlord/subscription');
