@@ -77,6 +77,7 @@ export default function LandlordSubscriptionPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [openingPortal, setOpeningPortal] = useState(false);
 
   // Extra: live cancellation date from Stripe (fallback if DB has null)
   const [stripeCancelDate, setStripeCancelDate] = useState<string | null>(null);
@@ -257,6 +258,42 @@ export default function LandlordSubscriptionPage() {
     }
   };
 
+  // ✅ Billing portal (for past_due/unpaid: “retry payment / update card”)
+  const handleOpenBillingPortal = async () => {
+    if (!landlord) return;
+    setOpeningPortal(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      const res = await fetch('/api/subscription/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ landlordId: landlord.id }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'Unable to open Stripe billing portal.');
+      }
+
+      if (!data.url) {
+        throw new Error('Missing billing portal URL from server.');
+      }
+
+      window.location.href = data.url;
+    } catch (err: any) {
+      console.error('Open billing portal error:', err);
+      setError(
+        err?.message ||
+          'Failed to open billing portal. Please try again.'
+      );
+    } finally {
+      setOpeningPortal(false);
+    }
+  };
+
   const handleCancelSubscription = async () => {
     if (!landlord) return;
     setCancelling(true);
@@ -362,19 +399,16 @@ export default function LandlordSubscriptionPage() {
   const effectiveDateLabel = stripeCancelDate || dbDateLabel;
 
   // Promo / free-access logic
-  const promoEndDateObj = useMemo(() => parseSupabaseDate(PROMO_END_DATE_YMD), []);
+  useMemo(() => parseSupabaseDate(PROMO_END_DATE_YMD), []);
   const trialEndDate = landlord?.trial_end ? parseSupabaseDate(landlord.trial_end) : null;
 
   const isOnPromoTrial = (() => {
     const today = todayDateOnly();
 
-    // If landlord has explicit trial flags, use them
     if (landlord?.trial_active && trialEndDate) {
       return trialEndDate.getTime() >= today.getTime();
     }
 
-    // If trial fields are missing but the global promo is still running,
-    // we DO NOT auto-grant here (avoid accidentally giving free access).
     return false;
   })();
 
@@ -448,6 +482,19 @@ export default function LandlordSubscriptionPage() {
           </div>
         </div>
 
+        {/* ✅ Payment failed banner */}
+        {isPastDueOrUnpaid && (
+          <div className="rounded-2xl border border-amber-500/60 bg-amber-950/25 px-4 py-3 text-xs text-amber-100 space-y-1">
+            <p className="font-semibold text-amber-200">
+              Payment failed — action required
+            </p>
+            <p className="text-amber-100/90">
+              Your subscription renewal didn&apos;t go through, so your landlord access will remain inactive until payment is fixed.
+              Tap the button below to update your card and retry payment in Stripe.
+            </p>
+          </div>
+        )}
+
         {/* Promo banner for free period */}
         {showPromoBanner && (
           <div className="rounded-2xl border border-emerald-500/50 bg-emerald-950/40 px-4 py-3 text-xs text-emerald-100 space-y-1">
@@ -499,12 +546,6 @@ export default function LandlordSubscriptionPage() {
                 </p>
               )}
 
-              {isPastDueOrUnpaid && (
-                <p className="mt-1 text-[11px] text-amber-200">
-                  Your subscription needs attention. Use the button on the right to retry payment and restore access.
-                </p>
-              )}
-
               {isCanceled && (
                 <p className="mt-1 text-[11px] text-slate-300">
                   Your subscription is canceled. You can restart anytime.
@@ -546,7 +587,15 @@ export default function LandlordSubscriptionPage() {
 
               <p>
                 <span className="text-slate-500">Subscription status:</span>{' '}
-                <span className={isActive ? 'text-emerald-300' : isPastDueOrUnpaid ? 'text-amber-300' : 'text-slate-100'}>
+                <span
+                  className={
+                    isActive
+                      ? 'text-emerald-300'
+                      : isPastDueOrUnpaid
+                      ? 'text-amber-300'
+                      : 'text-slate-100'
+                  }
+                >
                   {prettyStatus(landlord.subscription_status)}
                   {showPromoBanner && !isActive && (
                     <span className="ml-1 text-emerald-300">(on free access)</span>
@@ -570,11 +619,21 @@ export default function LandlordSubscriptionPage() {
                   {showPromoBanner && !isActive ? (
                     trialEndLabel || formatDate(PROMO_END_DATE_YMD) || 'Not available'
                   ) : isScheduledToCancel ? (
-                    effectiveDateLabel ? `Scheduled to cancel on ${effectiveDateLabel}` : loadingStripeDate ? 'Loading cancellation date…' : 'Not available'
+                    effectiveDateLabel ? (
+                      `Scheduled to cancel on ${effectiveDateLabel}`
+                    ) : loadingStripeDate ? (
+                      'Loading cancellation date…'
+                    ) : (
+                      'Not available'
+                    )
                   ) : isActive ? (
-                    effectiveDateLabel ? effectiveDateLabel : 'Renewal is handled automatically through Stripe'
+                    effectiveDateLabel ? (
+                      effectiveDateLabel
+                    ) : (
+                      'Renewal is handled automatically through Stripe'
+                    )
                   ) : isPastDueOrUnpaid ? (
-                    'Retry payment to restore access'
+                    'Update card / retry payment to restore access'
                   ) : (
                     'Start your subscription when you’re ready'
                   )}
@@ -583,19 +642,19 @@ export default function LandlordSubscriptionPage() {
             </div>
 
             <div className="flex flex-col sm:items-end gap-2 text-xs">
-              {/* If past_due / unpaid: show a "Fix payment" button (same checkout flow) */}
+              {/* ✅ Past due/unpaid: billing portal retry button */}
               {isPastDueOrUnpaid && (
                 <button
                   type="button"
-                  onClick={handleStartSubscription}
-                  disabled={startingCheckout}
+                  onClick={handleOpenBillingPortal}
+                  disabled={openingPortal}
                   className="rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-amber-300 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {startingCheckout ? 'Opening Stripe…' : 'Fix payment / retry billing'}
+                  {openingPortal ? 'Opening Stripe…' : 'Retry payment / update card'}
                 </button>
               )}
 
-              {/* If not active and not past_due/unpaid: show subscribe/restart */}
+              {/* Not active & not past_due/unpaid: subscribe/restart */}
               {!isActive && !isPastDueOrUnpaid && (
                 <button
                   type="button"
@@ -611,7 +670,7 @@ export default function LandlordSubscriptionPage() {
                 </button>
               )}
 
-              {/* If active (including trialing & cancel_at_period_end): allow cancel */}
+              {/* Active: cancel */}
               {isActive && (
                 <button
                   type="button"
@@ -620,6 +679,18 @@ export default function LandlordSubscriptionPage() {
                   className="rounded-full bg-red-500/90 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-red-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {cancelling ? 'Scheduling cancellation…' : 'Cancel subscription'}
+                </button>
+              )}
+
+              {/* Active: optional manage billing */}
+              {isActive && (
+                <button
+                  type="button"
+                  onClick={handleOpenBillingPortal}
+                  disabled={openingPortal}
+                  className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-100 hover:bg-slate-800 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {openingPortal ? 'Opening Stripe…' : 'Manage billing in Stripe'}
                 </button>
               )}
 
@@ -646,8 +717,8 @@ export default function LandlordSubscriptionPage() {
             <div className="pt-2 border-t border-slate-800 mt-2 text-[11px]">
               <p className="text-slate-400">
                 Your subscription payment didn&apos;t go through. Tap{' '}
-                <span className="text-slate-200 font-semibold">Fix payment / retry billing</span>{' '}
-                to return to Stripe and update your payment method.
+                <span className="text-slate-200 font-semibold">Retry payment / update card</span>{' '}
+                to return to Stripe and restore access.
               </p>
             </div>
           )}

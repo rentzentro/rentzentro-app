@@ -12,11 +12,28 @@ const APP_URL =
   process.env.NEXT_PUBLIC_SITE_URL ||
   'http://localhost:3000';
 
-const stripe = new Stripe(STRIPE_SECRET_KEY);
+const stripe = new Stripe(STRIPE_SECRET_KEY, {
+  apiVersion: '2024-06-20' as any,
+});
+
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 export async function POST(req: Request) {
   try {
+    if (!STRIPE_SECRET_KEY) {
+      return NextResponse.json(
+        { error: 'Stripe secret key not configured on server.' },
+        { status: 500 }
+      );
+    }
+
+    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { error: 'Supabase admin credentials not configured on server.' },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const { landlordId } = body as { landlordId?: number };
 
@@ -57,7 +74,7 @@ export async function POST(req: Request) {
     }
 
     // 2) Ensure Stripe customer
-    let customerId = landlord.stripe_customer_id as string | null;
+    let customerId = (landlord.stripe_customer_id as string | null) || null;
 
     if (!customerId) {
       const customer = await stripe.customers.create({
@@ -83,9 +100,13 @@ export async function POST(req: Request) {
     }
 
     // 3) Create subscription Checkout Session
+    // IMPORTANT:
+    // - session.metadata does NOT reliably propagate to the Subscription/Invoice.
+    // - Put landlordId onto subscription_data.metadata so webhooks like invoice.* can read it.
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
+      client_reference_id: String(landlord.id),
       line_items: [
         {
           price: SUBSCRIPTION_PRICE_ID,
@@ -94,11 +115,22 @@ export async function POST(req: Request) {
       ],
       success_url: `${APP_URL}/landlord/settings?billing=success`,
       cancel_url: `${APP_URL}/landlord/settings?billing=cancelled`,
-      // 🔑 This metadata is what your webhook reads
       metadata: {
         landlordId: String(landlord.id),
       },
+      subscription_data: {
+        metadata: {
+          landlordId: String(landlord.id),
+        },
+      },
     });
+
+    if (!session.url) {
+      return NextResponse.json(
+        { error: 'Stripe session created without a redirect URL.' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ url: session.url }, { status: 200 });
   } catch (err: any) {
