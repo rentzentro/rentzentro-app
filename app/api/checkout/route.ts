@@ -14,6 +14,17 @@ const APP_URL =
 // Create a Price in Stripe and set this env var.
 const ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID as string | undefined;
 
+// ------------------------------
+// Tenant fee settings (EDITABLE)
+// ------------------------------
+// NOTE: Stripe Checkout cannot dynamically change the fee based on method (card vs ACH)
+// inside the same session. This is a “standard convenience fee” that covers typical costs.
+const CARD_FEE_PERCENT = 0.035; // 3.5%
+const CARD_FEE_FLAT_CENTS = 50; // $0.50
+const MAX_FEE_CENTS = 1500; // $15 cap
+
+const toCents = (dollars: number) => Math.max(0, Math.round(dollars * 100));
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as any;
@@ -89,7 +100,7 @@ export async function POST(req: Request) {
     }
 
     // -------------------------------------------------------------------
-    // 2) DEFAULT: TENANT RENT PAYMENT (EXISTING FLOW)
+    // 2) DEFAULT: TENANT RENT PAYMENT (FIXED: tenant covers fees)
     // -------------------------------------------------------------------
     const { amount, description, tenantId, propertyId } = body as {
       amount: number; // dollars, e.g. 1500
@@ -99,17 +110,11 @@ export async function POST(req: Request) {
     };
 
     if (!amount || amount <= 0) {
-      return NextResponse.json(
-        { error: 'Invalid amount.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid amount.' }, { status: 400 });
     }
 
     if (!tenantId) {
-      return NextResponse.json(
-        { error: 'Missing tenantId.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
     }
 
     // 1) Look up tenant (server-side admin client, bypasses RLS safely)
@@ -121,10 +126,7 @@ export async function POST(req: Request) {
 
     if (tenantError || !tenant) {
       console.error('Checkout tenant lookup error:', tenantError);
-      return NextResponse.json(
-        { error: 'Tenant not found.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Tenant not found.' }, { status: 400 });
     }
 
     // 2) Decide which property to use
@@ -178,12 +180,11 @@ export async function POST(req: Request) {
         }
       | null;
 
-    const { data: landlordById, error: landlordByIdError } =
-      await supabaseAdmin
-        .from('landlords')
-        .select('id, stripe_connect_account_id, stripe_connect_onboarded')
-        .eq('id', landlordForeign)
-        .maybeSingle();
+    const { data: landlordById, error: landlordByIdError } = await supabaseAdmin
+      .from('landlords')
+      .select('id, stripe_connect_account_id, stripe_connect_onboarded')
+      .eq('id', landlordForeign)
+      .maybeSingle();
 
     if (landlordByIdError) {
       console.error('Checkout landlordById error:', landlordByIdError);
@@ -247,11 +248,18 @@ export async function POST(req: Request) {
       );
     }
 
-    const landlordStripeAccountId =
-      landlord.stripe_connect_account_id as string;
+    const landlordStripeAccountId = landlord.stripe_connect_account_id as string;
 
-    // 7) Create Stripe Checkout Session that transfers funds to landlord
-    //    ACH added: allow both card + US bank account
+    // ----------------------------
+    // Fee math (tenant pays rent + fee)
+    // Transfer ONLY rent to landlord
+    // ----------------------------
+    const rentCents = toCents(amount);
+
+    const feeRaw = Math.round(rentCents * CARD_FEE_PERCENT) + CARD_FEE_FLAT_CENTS;
+    const feeCents = Math.min(MAX_FEE_CENTS, Math.max(0, feeRaw));
+
+    // 7) Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card', 'us_bank_account'],
@@ -263,26 +271,44 @@ export async function POST(req: Request) {
             product_data: {
               name:
                 description ||
-                `Rent payment for ${
-                  property.name || 'your rental'
-                }${property.unit_label ? ` · ${property.unit_label}` : ''}`,
+                `Rent payment for ${property.name || 'your rental'}${
+                  property.unit_label ? ` · ${property.unit_label}` : ''
+                }`,
             },
-            unit_amount: Math.round(amount * 100), // dollars → cents
+            unit_amount: rentCents,
           },
         },
+        ...(feeCents > 0
+          ? [
+              {
+                quantity: 1,
+                price_data: {
+                  currency: 'usd',
+                  product_data: {
+                    name: 'Convenience fee',
+                  },
+                  unit_amount: feeCents,
+                },
+              },
+            ]
+          : []),
       ],
       success_url: `${APP_URL}/tenant/payment-success`,
       cancel_url: `${APP_URL}/tenant/payment-cancelled`,
       metadata: {
-        tenant_id: tenant.id,
-        property_id: property.id,
-        landlord_id: landlord.id,
+        tenant_id: String(tenant.id),
+        property_id: String(property.id),
+        landlord_id: String(landlord.id),
         type: 'rent_payment',
         payment_kind: 'rent',
+        rent_cents: String(rentCents),
+        fee_cents: String(feeCents),
+        total_cents: String(rentCents + feeCents),
       },
       payment_intent_data: {
         transfer_data: {
           destination: landlordStripeAccountId,
+          amount: rentCents, // ✅ landlord gets rent only
         },
       },
       payment_method_options: {
