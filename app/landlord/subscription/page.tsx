@@ -62,9 +62,10 @@ const prettyStatus = (status: string | null) => {
   return status || 'Not subscribed';
 };
 
-// ---------- Promo config ----------
-const PROMO_END_DATE_YMD = '2026-01-31'; // free access through this date
-const PROMO_CUTOFF_ISO = '2026-02-01T00:00:00Z'; // promo applies if signup happens before this moment
+// ---------- Promo config (UPDATED TO MARCH) ----------
+const PROMO_END_DATE_YMD = '2026-03-31'; // free access through this date
+// promo applies if signup happens before this moment (end of day March 31 UTC)
+const PROMO_CUTOFF_ISO = '2026-03-31T23:59:59Z';
 
 // ---------- Component ----------
 export default function LandlordSubscriptionPage() {
@@ -113,7 +114,7 @@ export default function LandlordSubscriptionPage() {
       const email = user.email!;
       const now = new Date();
       const promoCutoff = new Date(PROMO_CUTOFF_ISO);
-      const isPromoPeriod = now < promoCutoff;
+      const isPromoPeriod = now <= promoCutoff;
 
       // 1) Try by user_id
       let { data: landlordRow, error: landlordError } = await supabase
@@ -237,8 +238,7 @@ export default function LandlordSubscriptionPage() {
 
       if (!res.ok) {
         throw new Error(
-          data?.error ||
-            `Unable to start subscription checkout (status ${res.status}).`
+          data?.error || `Unable to start subscription checkout (status ${res.status}).`
         );
       }
 
@@ -249,16 +249,13 @@ export default function LandlordSubscriptionPage() {
       window.location.href = data.url;
     } catch (err: any) {
       console.error('Start subscription error:', err);
-      setError(
-        err?.message ||
-          'Failed to begin subscription checkout. Please try again.'
-      );
+      setError(err?.message || 'Failed to begin subscription checkout. Please try again.');
     } finally {
       setStartingCheckout(false);
     }
   };
 
-  // ✅ Billing portal (for past_due/unpaid: “retry payment / update card”)
+  // ✅ Stripe Billing Portal (retry payment / update card)
   const handleOpenBillingPortal = async () => {
     if (!landlord) return;
     setOpeningPortal(true);
@@ -285,10 +282,7 @@ export default function LandlordSubscriptionPage() {
       window.location.href = data.url;
     } catch (err: any) {
       console.error('Open billing portal error:', err);
-      setError(
-        err?.message ||
-          'Failed to open billing portal. Please try again.'
-      );
+      setError(err?.message || 'Failed to open billing portal. Please try again.');
     } finally {
       setOpeningPortal(false);
     }
@@ -318,9 +312,7 @@ export default function LandlordSubscriptionPage() {
       );
     } catch (err: any) {
       console.error('Cancel subscription error:', err);
-      setError(
-        err?.message || 'Failed to cancel subscription. Please try again.'
-      );
+      setError(err?.message || 'Failed to cancel subscription. Please try again.');
     } finally {
       setCancelling(false);
     }
@@ -364,15 +356,10 @@ export default function LandlordSubscriptionPage() {
 
       setShowDeleteModal(false);
       setDeleteConfirmText('');
-      setInfo(
-        'Your account deletion request was received. RentZentro support will follow up shortly.'
-      );
+      setInfo('Your account deletion request was received. RentZentro support will follow up shortly.');
     } catch (err: any) {
       console.error('Delete request error:', err);
-      setError(
-        err?.message ||
-          'Failed to submit account deletion request. Please try again.'
-      );
+      setError(err?.message || 'Failed to submit account deletion request. Please try again.');
     } finally {
       setRequestingDeletion(false);
     }
@@ -388,8 +375,7 @@ export default function LandlordSubscriptionPage() {
 
   const isScheduledToCancel = statusLower === 'active_cancel_at_period_end';
 
-  const isPastDueOrUnpaid =
-    statusLower === 'past_due' || statusLower === 'unpaid';
+  const isPastDueOrUnpaid = statusLower === 'past_due' || statusLower === 'unpaid';
 
   const isCanceled = statusLower === 'canceled';
 
@@ -399,7 +385,7 @@ export default function LandlordSubscriptionPage() {
   const effectiveDateLabel = stripeCancelDate || dbDateLabel;
 
   // Promo / free-access logic
-  useMemo(() => parseSupabaseDate(PROMO_END_DATE_YMD), []);
+  const promoEndDateObj = useMemo(() => parseSupabaseDate(PROMO_END_DATE_YMD), []);
   const trialEndDate = landlord?.trial_end ? parseSupabaseDate(landlord.trial_end) : null;
 
   const isOnPromoTrial = (() => {
@@ -430,9 +416,7 @@ export default function LandlordSubscriptionPage() {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
         <div className="max-w-md rounded-2xl bg-slate-900/80 border border-slate-700 p-6 shadow-xl space-y-4">
-          <p className="text-sm text-red-400">
-            {error || 'Unable to load landlord account.'}
-          </p>
+          <p className="text-sm text-red-400">{error || 'Unable to load landlord account.'}</p>
           <button
             onClick={handleLogOut}
             className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
@@ -450,12 +434,8 @@ export default function LandlordSubscriptionPage() {
         {/* Header with top buttons */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-slate-50">
-              Account & subscription
-            </h1>
-            <p className="text-xs text-slate-400">
-              Manage your RentZentro landlord plan and billing.
-            </p>
+            <h1 className="text-xl font-semibold text-slate-50">Account & subscription</h1>
+            <p className="text-xs text-slate-400">Manage your RentZentro landlord plan and billing.</p>
           </div>
           <div className="flex flex-wrap gap-2 justify-end">
             <button
@@ -485,12 +465,10 @@ export default function LandlordSubscriptionPage() {
         {/* ✅ Payment failed banner */}
         {isPastDueOrUnpaid && (
           <div className="rounded-2xl border border-amber-500/60 bg-amber-950/25 px-4 py-3 text-xs text-amber-100 space-y-1">
-            <p className="font-semibold text-amber-200">
-              Payment failed — action required
-            </p>
+            <p className="font-semibold text-amber-200">Payment failed — action required</p>
             <p className="text-amber-100/90">
-              Your subscription renewal didn&apos;t go through, so your landlord access will remain inactive until payment is fixed.
-              Tap the button below to update your card and retry payment in Stripe.
+              Your subscription renewal didn&apos;t go through, so your landlord access will remain inactive until payment
+              is fixed. Tap the button below to update your card and retry payment in Stripe.
             </p>
           </div>
         )}
@@ -498,17 +476,14 @@ export default function LandlordSubscriptionPage() {
         {/* Promo banner for free period */}
         {showPromoBanner && (
           <div className="rounded-2xl border border-emerald-500/50 bg-emerald-950/40 px-4 py-3 text-xs text-emerald-100 space-y-1">
-            <p className="font-semibold text-emerald-200">
-              You&apos;re on free RentZentro access.
-            </p>
+            <p className="font-semibold text-emerald-200">You&apos;re on free RentZentro access.</p>
             <p>
               You can use RentZentro without a paid subscription until{' '}
               <span className="font-semibold text-emerald-200">
                 {trialEndLabel || formatDate(PROMO_END_DATE_YMD) || 'the end of your promo period'}
               </span>
-              . During this time, you won&apos;t be billed. When you&apos;re
-              ready to continue after the promo, start your $29.95/mo
-              subscription from this page.
+              . During this time, you won&apos;t be billed. When you&apos;re ready to continue after the promo, start your
+              $29.95/mo subscription from this page.
             </p>
           </div>
         )}
@@ -528,9 +503,7 @@ export default function LandlordSubscriptionPage() {
 
         {/* Plan card */}
         <section className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-900/30 via-slate-900 to-slate-950 px-4 py-4 space-y-3 shadow-sm">
-          <p className="text-xs text-emerald-200/90 uppercase tracking-wide">
-            RentZentro landlord plan
-          </p>
+          <p className="text-xs text-emerald-200/90 uppercase tracking-wide">RentZentro landlord plan</p>
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
               <p className="text-2xl font-semibold text-slate-50">$29.95</p>
@@ -539,17 +512,12 @@ export default function LandlordSubscriptionPage() {
               {showPromoBanner && (
                 <p className="mt-1 text-[11px] text-emerald-200">
                   You&apos;re not being billed yet. Free access lasts until{' '}
-                  <span className="font-semibold">
-                    {trialEndLabel || formatDate(PROMO_END_DATE_YMD)}
-                  </span>
-                  .
+                  <span className="font-semibold">{trialEndLabel || formatDate(PROMO_END_DATE_YMD)}</span>.
                 </p>
               )}
 
               {isCanceled && (
-                <p className="mt-1 text-[11px] text-slate-300">
-                  Your subscription is canceled. You can restart anytime.
-                </p>
+                <p className="mt-1 text-[11px] text-slate-300">Your subscription is canceled. You can restart anytime.</p>
               )}
             </div>
 
@@ -589,17 +557,11 @@ export default function LandlordSubscriptionPage() {
                 <span className="text-slate-500">Subscription status:</span>{' '}
                 <span
                   className={
-                    isActive
-                      ? 'text-emerald-300'
-                      : isPastDueOrUnpaid
-                      ? 'text-amber-300'
-                      : 'text-slate-100'
+                    isActive ? 'text-emerald-300' : isPastDueOrUnpaid ? 'text-amber-300' : 'text-slate-100'
                   }
                 >
                   {prettyStatus(landlord.subscription_status)}
-                  {showPromoBanner && !isActive && (
-                    <span className="ml-1 text-emerald-300">(on free access)</span>
-                  )}
+                  {showPromoBanner && !isActive && <span className="ml-1 text-emerald-300">(on free access)</span>}
                 </span>
               </p>
 
@@ -619,19 +581,9 @@ export default function LandlordSubscriptionPage() {
                   {showPromoBanner && !isActive ? (
                     trialEndLabel || formatDate(PROMO_END_DATE_YMD) || 'Not available'
                   ) : isScheduledToCancel ? (
-                    effectiveDateLabel ? (
-                      `Scheduled to cancel on ${effectiveDateLabel}`
-                    ) : loadingStripeDate ? (
-                      'Loading cancellation date…'
-                    ) : (
-                      'Not available'
-                    )
+                    effectiveDateLabel ? `Scheduled to cancel on ${effectiveDateLabel}` : loadingStripeDate ? 'Loading cancellation date…' : 'Not available'
                   ) : isActive ? (
-                    effectiveDateLabel ? (
-                      effectiveDateLabel
-                    ) : (
-                      'Renewal is handled automatically through Stripe'
-                    )
+                    effectiveDateLabel ? effectiveDateLabel : 'Renewal is handled automatically through Stripe'
                   ) : isPastDueOrUnpaid ? (
                     'Update card / retry payment to restore access'
                   ) : (
@@ -662,11 +614,7 @@ export default function LandlordSubscriptionPage() {
                   disabled={startingCheckout}
                   className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {startingCheckout
-                    ? 'Starting…'
-                    : isCanceled
-                    ? 'Restart subscription ($29.95/mo)'
-                    : 'Subscribe for $29.95/mo'}
+                  {startingCheckout ? 'Starting…' : isCanceled ? 'Restart subscription ($29.95/mo)' : 'Subscribe for $29.95/mo'}
                 </button>
               )}
 
@@ -682,7 +630,7 @@ export default function LandlordSubscriptionPage() {
                 </button>
               )}
 
-              {/* Active: optional manage billing */}
+              {/* Active: manage billing */}
               {isActive && (
                 <button
                   type="button"
@@ -707,8 +655,8 @@ export default function LandlordSubscriptionPage() {
           {isActive && (
             <div className="pt-2 border-t border-slate-800 mt-2 text-[11px]">
               <p className="text-slate-400">
-                Your subscription is active and renews automatically each month unless you cancel.
-                If you&apos;ve scheduled cancellation, you&apos;ll keep full access until the cancellation date shown above.
+                Your subscription is active and renews automatically each month unless you cancel. If you&apos;ve scheduled
+                cancellation, you&apos;ll keep full access until the cancellation date shown above.
               </p>
             </div>
           )}
@@ -717,8 +665,8 @@ export default function LandlordSubscriptionPage() {
             <div className="pt-2 border-t border-slate-800 mt-2 text-[11px]">
               <p className="text-slate-400">
                 Your subscription payment didn&apos;t go through. Tap{' '}
-                <span className="text-slate-200 font-semibold">Retry payment / update card</span>{' '}
-                to return to Stripe and restore access.
+                <span className="text-slate-200 font-semibold">Retry payment / update card</span> to return to Stripe and
+                restore access.
               </p>
             </div>
           )}
@@ -726,8 +674,8 @@ export default function LandlordSubscriptionPage() {
           {showPromoBanner && (
             <div className="pt-2 border-t border-slate-800 mt-2 text-[11px] text-slate-400">
               <p>
-                During your free access period, you can set up payouts and use RentZentro with real tenants.
-                You&apos;ll only be billed if you choose to start the $29.95/mo subscription.
+                During your free access period, you can set up payouts and use RentZentro with real tenants. You&apos;ll only
+                be billed if you choose to start the $29.95/mo subscription.
               </p>
             </div>
           )}
@@ -768,9 +716,7 @@ export default function LandlordSubscriptionPage() {
               onClick={() => (!requestingDeletion ? setShowDeleteModal(false) : null)}
             />
             <div className="relative w-full max-w-md rounded-2xl border border-slate-700 bg-slate-950 p-5 shadow-2xl">
-              <p className="text-sm font-semibold text-slate-50">
-                Confirm account deletion request
-              </p>
+              <p className="text-sm font-semibold text-slate-50">Confirm account deletion request</p>
               <p className="mt-2 text-[12px] text-slate-300">
                 This will submit a deletion request to RentZentro support. Your access will be removed after the request is processed.
               </p>
