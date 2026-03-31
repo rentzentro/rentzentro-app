@@ -20,6 +20,7 @@ const ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID as string | undefined;
 const CARD_FEE_PERCENT = 0.035; // 3.5%
 const CARD_FEE_FLAT_CENTS = 50; // $0.50
 const MAX_FEE_CENTS = 999999; // no cap (prevents undercharging)
+const ACH_FEE_CENTS = 500; // $5 ACH processing fee
 
 const toCents = (dollars: number) => Math.max(0, Math.round(dollars * 100));
 
@@ -101,9 +102,9 @@ export async function POST(req: Request) {
 
     // -------------------------------------------------------------------
     // 2) DEFAULT: TENANT RENT PAYMENT
-    // FIXED: method-specific checkout
-    // - card = tenant pays fee
-    // - us_bank_account = no convenience fee
+    // method-specific checkout
+    // - card = tenant pays card fee
+    // - us_bank_account = tenant pays ACH fee
     // -------------------------------------------------------------------
     const {
       amount,
@@ -131,9 +132,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
     }
 
-    // IMPORTANT:
-    // We default to CARD so you stop absorbing fees immediately,
-    // even before the frontend is updated to send the selected method.
     const requestedMethod = (
       paymentMethodType ||
       paymentMethod ||
@@ -191,8 +189,6 @@ export async function POST(req: Request) {
     }
 
     // 4) Figure out which landlord ID to use
-    // Prefer the tenant.owner_id (newer, more reliable),
-    // fall back to property.owner_id (older data).
     const landlordForeign = tenant.owner_id ?? property.owner_id;
 
     if (!landlordForeign) {
@@ -227,7 +223,6 @@ export async function POST(req: Request) {
     if (landlordById) {
       landlord = landlordById;
     } else {
-      // 6) ...if that fails, try matching a landlord.user_id (UUID) to landlordForeign
       const { data: landlordByUserId, error: landlordByUserIdError } =
         await supabaseAdmin
           .from('landlords')
@@ -286,8 +281,8 @@ export async function POST(req: Request) {
 
     // ----------------------------
     // Fee math
-    // - Card: tenant pays rent + fee
-    // - ACH: tenant pays rent only
+    // - Card: tenant pays rent + card fee
+    // - ACH: tenant pays rent + ACH fee
     // Transfer ONLY rent to landlord
     // ----------------------------
     const rentCents = toCents(amount);
@@ -295,7 +290,21 @@ export async function POST(req: Request) {
     const cardFeeRaw =
       Math.round(rentCents * CARD_FEE_PERCENT) + CARD_FEE_FLAT_CENTS;
     const cardFeeCents = Math.min(MAX_FEE_CENTS, Math.max(0, cardFeeRaw));
-    const feeCents = requestedMethod === 'card' ? cardFeeCents : 0;
+
+    const feeCents =
+      requestedMethod === 'card'
+        ? cardFeeCents
+        : requestedMethod === 'us_bank_account'
+        ? ACH_FEE_CENTS
+        : 0;
+
+    const feeLabel =
+      requestedMethod === 'card'
+        ? 'Convenience fee for card payments'
+        : requestedMethod === 'us_bank_account'
+        ? 'ACH processing fee'
+        : 'Processing fee';
+
     const totalCents = rentCents + feeCents;
 
     const rentDescription =
@@ -323,7 +332,7 @@ export async function POST(req: Request) {
         price_data: {
           currency: 'usd',
           product_data: {
-            name: 'Card processing fee',
+            name: feeLabel,
           },
           unit_amount: feeCents,
         },
