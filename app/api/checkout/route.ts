@@ -17,13 +17,13 @@ const ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID as string | undefined;
 // ------------------------------
 // Tenant fee settings (EDITABLE)
 // ------------------------------
-// NOTE: Stripe Checkout cannot dynamically change the fee based on method (card vs ACH)
-// inside the same session. This is a “standard convenience fee” that covers typical costs.
 const CARD_FEE_PERCENT = 0.035; // 3.5%
 const CARD_FEE_FLAT_CENTS = 50; // $0.50
 const MAX_FEE_CENTS = 1500; // $15 cap
 
 const toCents = (dollars: number) => Math.max(0, Math.round(dollars * 100));
+
+type RentPaymentMethod = 'card' | 'us_bank_account';
 
 export async function POST(req: Request) {
   try {
@@ -100,13 +100,27 @@ export async function POST(req: Request) {
     }
 
     // -------------------------------------------------------------------
-    // 2) DEFAULT: TENANT RENT PAYMENT (FIXED: tenant covers fees)
+    // 2) DEFAULT: TENANT RENT PAYMENT
+    // FIXED: method-specific checkout
+    // - card = tenant pays fee
+    // - us_bank_account = no convenience fee
     // -------------------------------------------------------------------
-    const { amount, description, tenantId, propertyId } = body as {
+    const {
+      amount,
+      description,
+      tenantId,
+      propertyId,
+      paymentMethodType,
+      paymentMethod,
+      method,
+    } = body as {
       amount: number; // dollars, e.g. 1500
       description?: string;
       tenantId: number;
       propertyId?: number | null;
+      paymentMethodType?: RentPaymentMethod;
+      paymentMethod?: RentPaymentMethod;
+      method?: RentPaymentMethod;
     };
 
     if (!amount || amount <= 0) {
@@ -115,6 +129,26 @@ export async function POST(req: Request) {
 
     if (!tenantId) {
       return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
+    }
+
+    // IMPORTANT:
+    // We default to CARD so you stop absorbing fees immediately,
+    // even before the frontend is updated to send the selected method.
+    const requestedMethod = (
+      paymentMethodType ||
+      paymentMethod ||
+      method ||
+      'card'
+    ) as RentPaymentMethod;
+
+    if (
+      requestedMethod !== 'card' &&
+      requestedMethod !== 'us_bank_account'
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid payment method.' },
+        { status: 400 }
+      );
     }
 
     // 1) Look up tenant (server-side admin client, bypasses RLS safely)
@@ -251,48 +285,55 @@ export async function POST(req: Request) {
     const landlordStripeAccountId = landlord.stripe_connect_account_id as string;
 
     // ----------------------------
-    // Fee math (tenant pays rent + fee)
+    // Fee math
+    // - Card: tenant pays rent + fee
+    // - ACH: tenant pays rent only
     // Transfer ONLY rent to landlord
     // ----------------------------
     const rentCents = toCents(amount);
 
-    const feeRaw = Math.round(rentCents * CARD_FEE_PERCENT) + CARD_FEE_FLAT_CENTS;
-    const feeCents = Math.min(MAX_FEE_CENTS, Math.max(0, feeRaw));
+    const cardFeeRaw =
+      Math.round(rentCents * CARD_FEE_PERCENT) + CARD_FEE_FLAT_CENTS;
+    const cardFeeCents = Math.min(MAX_FEE_CENTS, Math.max(0, cardFeeRaw));
+    const feeCents = requestedMethod === 'card' ? cardFeeCents : 0;
+    const totalCents = rentCents + feeCents;
 
-    // 7) Create Stripe Checkout Session
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: ['card', 'us_bank_account'],
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name:
-                description ||
-                `Rent payment for ${property.name || 'your rental'}${
-                  property.unit_label ? ` · ${property.unit_label}` : ''
-                }`,
-            },
-            unit_amount: rentCents,
+    const rentDescription =
+      description ||
+      `Rent payment for ${property.name || 'your rental'}${
+        property.unit_label ? ` · ${property.unit_label}` : ''
+      }`;
+
+    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+      {
+        quantity: 1,
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: rentDescription,
           },
+          unit_amount: rentCents,
         },
-        ...(feeCents > 0
-          ? [
-              {
-                quantity: 1,
-                price_data: {
-                  currency: 'usd',
-                  product_data: {
-                    name: 'Convenience fee',
-                  },
-                  unit_amount: feeCents,
-                },
-              },
-            ]
-          : []),
-      ],
+      },
+    ];
+
+    if (feeCents > 0) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Card processing fee',
+          },
+          unit_amount: feeCents,
+        },
+      });
+    }
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode: 'payment',
+      payment_method_types: [requestedMethod],
+      line_items: lineItems,
       success_url: `${APP_URL}/tenant/payment-success`,
       cancel_url: `${APP_URL}/tenant/payment-cancelled`,
       metadata: {
@@ -301,22 +342,29 @@ export async function POST(req: Request) {
         landlord_id: String(landlord.id),
         type: 'rent_payment',
         payment_kind: 'rent',
+        payment_method_type: requestedMethod,
         rent_cents: String(rentCents),
         fee_cents: String(feeCents),
-        total_cents: String(rentCents + feeCents),
+        total_cents: String(totalCents),
       },
       payment_intent_data: {
         transfer_data: {
           destination: landlordStripeAccountId,
-          amount: rentCents, // ✅ landlord gets rent only
+          amount: rentCents, // landlord gets rent only
         },
       },
-      payment_method_options: {
+    };
+
+    if (requestedMethod === 'us_bank_account') {
+      sessionParams.payment_method_options = {
         us_bank_account: {
           verification_method: 'automatic',
         },
-      },
-    });
+      };
+    }
+
+    // 7) Create Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     if (!session.url) {
       return NextResponse.json(

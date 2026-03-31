@@ -76,7 +76,6 @@ type RentStatus = {
 
 const parseSupabaseDate = (value: string | null | undefined): Date | null => {
   if (!value) return null;
-  // Pure date (YYYY-MM-DD) → avoid timezone shift
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const [y, m, d] = value.split('-').map(Number);
     return new Date(y, m - 1, d);
@@ -148,7 +147,6 @@ const statusBadgeClasses = (status: string | null) => {
   return 'bg-slate-700 text-slate-200 border border-slate-500/60';
 };
 
-// Months difference helper: whole months between two dates (ignore days)
 const monthsBetween = (from: Date, to: Date) => {
   return (
     (to.getFullYear() - from.getFullYear()) * 12 +
@@ -156,7 +154,6 @@ const monthsBetween = (from: Date, to: Date) => {
   );
 };
 
-// Calculate rent status with partial payments support
 const calculateRentStatus = (
   monthlyRent: number | null,
   firstDueDateISO: string | null,
@@ -197,7 +194,6 @@ const calculateRentStatus = (
     firstDue.getDate()
   );
 
-  // No rent due yet (first due date in the future)
   if (firstDueMidnight > todayMidnight) {
     return {
       totalDue: 0,
@@ -209,19 +205,14 @@ const calculateRentStatus = (
     };
   }
 
-  // How many monthly periods are due from firstDue through this month (inclusive)
   const mDiff = monthsBetween(firstDueMidnight, todayMidnight);
   const monthsDue = Math.max(1, mDiff + 1);
 
   const totalDue = monthsDue * monthlyRent;
-
-  // Sum all payments (assumed successful payments only)
   const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-
   const outstanding = Math.max(0, totalDue - totalPaid);
   const isCaughtUp = outstanding <= 0;
 
-  // Walk month-by-month to find the earliest unpaid (or partially unpaid) month
   let remainingPaid = totalPaid;
   let monthCursor = new Date(firstDueMidnight);
   let unpaidMonth: Date | null = null;
@@ -243,10 +234,8 @@ const calculateRentStatus = (
   let nextDueDate: string | null;
 
   if (unpaidMonth) {
-    // There is at least one month with some unpaid amount
     nextDueDate = dateToYMD(unpaidMonth);
   } else {
-    // All periods up to today fully covered; next due is the next month after the last one counted
     const next = new Date(
       firstDueMidnight.getFullYear(),
       firstDueMidnight.getMonth() + monthsDue,
@@ -283,25 +272,19 @@ export default function TenantPortalPage() {
 
   const [rentStatus, setRentStatus] = useState<RentStatus | null>(null);
 
-  // Auto-pay UI + state
   const [autoPayEnabled, setAutoPayEnabled] = useState(false);
   const [autoPayLoading, setAutoPayLoading] = useState(false);
 
-  // Landlord billing gate (block tenant actions if landlord account not active)
   const [landlordBillingBlocked, setLandlordBillingBlocked] = useState(false);
   const [landlordBillingMsg, setLandlordBillingMsg] = useState<string | null>(
     null
   );
-
-  // ---------- Load tenant + related data ----------
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setError(null);
       setSuccess(null);
-
-      // Default: allow; we will block only if landlord is not active or cannot be verified
       setLandlordBillingBlocked(false);
       setLandlordBillingMsg(null);
 
@@ -318,7 +301,6 @@ export default function TenantPortalPage() {
           throw new Error('Unable to load tenant: missing account data.');
         }
 
-        // Tenant: prefer user_id match, fall back to email
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select(
@@ -344,14 +326,11 @@ export default function TenantPortalPage() {
           setRentStatus(null);
           setAutoPayEnabled(false);
           setError(
-            'We couldn’t find a tenant profile for this email yet. ' +
-              'This usually means your landlord hasn’t added you to their tenant list, or used a different email. ' +
-              'Please contact your landlord to confirm they added you with this exact email address.'
+            'We couldn’t find a tenant profile for this email yet. This usually means your landlord hasn’t added you to their tenant list, or used a different email. Please contact your landlord to confirm they added you with this exact email address.'
           );
           return;
         }
 
-        // --- Auto-link tenant.user_id on first login ---
         if (!t.user_id) {
           const { data: updated, error: updateError } = await supabase
             .from('tenants')
@@ -372,7 +351,6 @@ export default function TenantPortalPage() {
         setTenant(t);
         setAutoPayEnabled(!!t.auto_pay_enabled);
 
-        // ✅ FIX: Verify landlord access via server API (avoids RLS issues for tenants)
         if (t.owner_id) {
           try {
             const res = await fetch('/api/tenant-landlord-access', {
@@ -401,14 +379,12 @@ export default function TenantPortalPage() {
             );
           }
         } else {
-          // Missing owner_id = can't link to a landlord; block to prevent payments going to nowhere
           setLandlordBillingBlocked(true);
           setLandlordBillingMsg(
             'Online payments and maintenance are temporarily unavailable because this tenant account is not linked to a landlord yet. Please contact your landlord.'
           );
         }
 
-        // -------- Property: try by property_id first --------
         let prop: PropertyRow | null = null;
 
         if (t.property_id) {
@@ -428,7 +404,6 @@ export default function TenantPortalPage() {
           }
         }
 
-        // -------- Fallback: first property for same landlord owner_id --------
         if (!prop && t.owner_id) {
           const { data: propRows2, error: propError2 } = await supabase
             .from('properties')
@@ -449,10 +424,8 @@ export default function TenantPortalPage() {
 
         setProperty(prop);
 
-        // Effective rent (property preferred, fall back to tenant)
         const effectiveRent = prop?.monthly_rent ?? t.monthly_rent ?? null;
 
-        // Payments
         const { data: payRows, error: payError } = await supabase
           .from('payments')
           .select('id, tenant_id, property_id, amount, paid_on, method, note')
@@ -467,7 +440,6 @@ export default function TenantPortalPage() {
         const payData = (payRows || []) as PaymentRow[];
         setPayments(payData);
 
-        // ---------- Compute first due date (earliest of lease_start or next_due_date) ----------
         const leaseStartDate = parseSupabaseDate(t.lease_start);
         const nextDueDate = parseSupabaseDate(prop?.next_due_date || null);
 
@@ -488,7 +460,6 @@ export default function TenantPortalPage() {
         const rs = calculateRentStatus(effectiveRent, firstDueDateISO, payData);
         setRentStatus(rs);
 
-        // Documents (by property OR tenant)
         let docQuery = supabase
           .from('documents')
           .select('id, created_at, title, file_url, property_id, tenant_id')
@@ -508,7 +479,6 @@ export default function TenantPortalPage() {
         }
         setDocuments((docRows || []) as DocumentRow[]);
 
-        // Recent maintenance
         const { data: maintRows, error: maintError } = await supabase
           .from('maintenance_requests')
           .select(
@@ -523,7 +493,6 @@ export default function TenantPortalPage() {
         }
         setMaintenance((maintRows || []) as MaintenanceRow[]);
 
-        // ---------- Unread messages badge ----------
         if (t.user_id) {
           const { data: unreadRows, error: unreadError } = await supabase
             .from('messages')
@@ -554,8 +523,6 @@ export default function TenantPortalPage() {
     load();
   }, []);
 
-  // ---------- Actions ----------
-
   const handleBack = () => {
     router.back();
   };
@@ -568,7 +535,6 @@ export default function TenantPortalPage() {
   const handleToggleAutoPay = async () => {
     if (!tenant) return;
 
-    // Block if landlord account not active
     if (landlordBillingBlocked) {
       setError(
         landlordBillingMsg ||
@@ -594,7 +560,6 @@ export default function TenantPortalPage() {
       setAutoPayLoading(true);
 
       if (!autoPayEnabled) {
-        // Enable: start Stripe subscription Checkout
         const res = await fetch('/api/tenant-autopay', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -609,10 +574,8 @@ export default function TenantPortalPage() {
           );
         }
 
-        // Redirect to Stripe Checkout
         window.location.href = data.url as string;
       } else {
-        // Disable
         const confirmOff = window.confirm(
           'Turn off automatic rent payments for this unit? You will need to pay rent manually each period.'
         );
@@ -646,10 +609,9 @@ export default function TenantPortalPage() {
     }
   };
 
-  const handlePayWithCard = async () => {
+  const startCheckout = async (paymentMethodType: 'card' | 'us_bank_account') => {
     if (!tenant) return;
 
-    // Block if landlord account not active
     if (landlordBillingBlocked) {
       setError(
         landlordBillingMsg ||
@@ -668,7 +630,6 @@ export default function TenantPortalPage() {
       today.getDate()
     );
 
-    // Use the same "first due" logic to block early payments
     const leaseStartDate = parseSupabaseDate(tenant.lease_start);
     const nextDueDate = parseSupabaseDate(property?.next_due_date || null);
 
@@ -692,7 +653,6 @@ export default function TenantPortalPage() {
       return;
     }
 
-    // Charge outstanding if any, otherwise base rent
     const amount =
       rentStatus && rentStatus.outstanding > 0 ? rentStatus.outstanding : baseRent;
 
@@ -719,6 +679,7 @@ export default function TenantPortalPage() {
           }`,
           tenantId: tenant.id,
           propertyId: property?.id ?? null,
+          paymentMethodType,
         }),
       });
 
@@ -739,14 +700,14 @@ export default function TenantPortalPage() {
       console.error(err);
       setError(
         err?.message ||
-          'Something went wrong while starting your card payment. Please try again.'
+          `Something went wrong while starting your ${
+            paymentMethodType === 'card' ? 'card' : 'bank'
+          } payment. Please try again.`
       );
     } finally {
       setPaying(false);
     }
   };
-
-  // ---------- Render ----------
 
   if (loading) {
     return (
@@ -777,7 +738,6 @@ export default function TenantPortalPage() {
 
   const currentRent = property?.monthly_rent ?? tenant.monthly_rent ?? null;
 
-  // For status + early-pay text
   const dueDateObj = parseSupabaseDate(
     (rentStatus?.nextDueDate as string | null) || property?.next_due_date || null
   );
@@ -791,15 +751,15 @@ export default function TenantPortalPage() {
   const isRentOverdue = !!dueDateObj && dueDateObj.getTime() < todayMidnight.getTime();
 
   const earliestDueDate = parseSupabaseDate(tenant.lease_start) || dueDateObj;
-
   const isBeforeDue = !!earliestDueDate && todayMidnight < earliestDueDate;
-
   const earlyAllowed = !!tenant.allow_early_payment;
   const isTooEarlyToPay = isBeforeDue && !earlyAllowed;
 
   const amountToPayNow =
     !isTooEarlyToPay && rentStatus && rentStatus.outstanding > 0
       ? rentStatus.outstanding
+      : !isTooEarlyToPay
+      ? currentRent
       : null;
 
   const accountStatusLabel = isRentOverdue
@@ -833,7 +793,6 @@ export default function TenantPortalPage() {
           </div>
         )}
 
-        {/* Tenant action lock banner */}
         {tenantActionsBlocked && (
           <div className="rounded-2xl border border-amber-500/50 bg-amber-950/40 px-4 py-3 text-[12px] text-amber-100">
             <p className="font-semibold text-amber-200">
@@ -846,7 +805,6 @@ export default function TenantPortalPage() {
           </div>
         )}
 
-        {/* Header row */}
         <header className="flex items-center justify-between gap-4">
           <div className="space-y-1">
             <button
@@ -888,11 +846,8 @@ export default function TenantPortalPage() {
           </div>
         </header>
 
-        {/* Main grid */}
         <div className="grid gap-4 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)]">
-          {/* LEFT COLUMN */}
           <div className="space-y-4">
-            {/* Current rent / actions */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">Current rent</p>
               <div className="mt-1 flex items-baseline gap-2">
@@ -917,7 +872,6 @@ export default function TenantPortalPage() {
                 </span>
               </p>
 
-              {/* Totals based on rentStatus */}
               {currentRent != null && rentStatus && (
                 <>
                   <p className="mt-2 text-xs text-slate-400">
@@ -935,7 +889,6 @@ export default function TenantPortalPage() {
                 </>
               )}
 
-              {/* Auto-pay toggle */}
               <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-2.5 text-[11px]">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -979,7 +932,7 @@ export default function TenantPortalPage() {
               <div className="mt-4 flex flex-col gap-2">
                 <button
                   type="button"
-                  onClick={handlePayWithCard}
+                  onClick={() => startCheckout('us_bank_account')}
                   disabled={
                     paying ||
                     tenantActionsBlocked ||
@@ -995,29 +948,54 @@ export default function TenantPortalPage() {
                     ? 'Payments temporarily unavailable'
                     : isTooEarlyToPay
                     ? 'Online payment not available until due date'
-                    : !amountToPayNow || amountToPayNow <= 0
-                    ? 'You’re all caught up'
-                    : `Pay ${formatCurrency(amountToPayNow)} now`}
+                    : 'Pay with bank (ACH) — no fee'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => startCheckout('card')}
+                  disabled={
+                    paying ||
+                    tenantActionsBlocked ||
+                    isTooEarlyToPay ||
+                    !amountToPayNow ||
+                    amountToPayNow <= 0
+                  }
+                  className="w-full rounded-full bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-50 border border-slate-600 shadow-sm hover:bg-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {paying
+                    ? 'Starting payment…'
+                    : tenantActionsBlocked
+                    ? 'Payments temporarily unavailable'
+                    : isTooEarlyToPay
+                    ? 'Online payment not available until due date'
+                    : 'Pay with card (processing fee applies)'}
                 </button>
               </div>
 
-              {/* payout timing disclosure */}
-              <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-[11px] text-slate-300">
-                <p className="font-semibold text-slate-100">Payout timing</p>
-                <p className="mt-1 text-slate-400">
-                  Your payment is processed securely by Stripe. After Stripe confirms your payment,
-                  funds are sent to your landlord&apos;s bank by Stripe — this can take a few business
-                  days depending on the landlord&apos;s bank and Stripe settings.
+              {!tenantActionsBlocked && !isTooEarlyToPay && amountToPayNow && (
+                <p className="mt-3 text-xs text-slate-400">
+                  Amount due now:{' '}
+                  <span className="font-medium text-slate-200">
+                    {formatCurrency(amountToPayNow)}
+                  </span>
                 </p>
-              </div>
+              )}
+
+              {isTooEarlyToPay && (
+                <p className="mt-3 text-[11px] text-amber-300">
+                  Online rent payments are not available until your due date unless your landlord
+                  allows early payment.
+                </p>
+              )}
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Card / ACH payments are processed securely by Stripe. You&apos;ll get a confirmation
-                once your payment is completed.
+                Bank payments are free. Card payments include a processing fee. Payments are
+                processed securely by Stripe and you&apos;ll get a confirmation once your payment is
+                completed.
               </p>
             </section>
 
-            {/* Payment history */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
@@ -1055,15 +1033,13 @@ export default function TenantPortalPage() {
               )}
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Note: A successful payment here means Stripe confirmed the payment. Bank payouts to your
-                landlord can take additional time.
+                Note: A successful payment here means Stripe confirmed the payment. Bank payouts to
+                your landlord can take additional time.
               </p>
             </section>
           </div>
 
-          {/* RIGHT COLUMN */}
           <div className="space-y-4">
-            {/* Account Status / Lease info */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
               <p className="text-xs text-slate-500 uppercase tracking-wide">Account status</p>
               <h2 className="mt-1 text-sm font-semibold text-slate-50">
@@ -1076,165 +1052,123 @@ export default function TenantPortalPage() {
                 {accountStatusLabel}
               </div>
 
-              <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-[11px]">
-                <div>
-                  <dt className="text-slate-500">Lease start</dt>
-                  <dd className="text-slate-100">{formatDate(tenant.lease_start)}</dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Lease end</dt>
-                  <dd className="text-slate-100">{formatDate(tenant.lease_end)}</dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Tenant phone</dt>
-                  <dd className="text-slate-100">{tenant.phone || 'Not provided'}</dd>
-                </div>
-              </dl>
-
-              <p className="mt-3 text-[11px] text-slate-500">
-                For changes to your lease, rent amount, or due date, please reach out to your landlord or
-                property manager.
-              </p>
+              <div className="mt-4 space-y-2 text-xs text-slate-400">
+                <p>
+                  Lease start:{' '}
+                  <span className="text-slate-200">{formatDate(tenant.lease_start)}</span>
+                </p>
+                <p>
+                  Lease end:{' '}
+                  <span className="text-slate-200">{formatDate(tenant.lease_end)}</span>
+                </p>
+                <p>
+                  Monthly rent:{' '}
+                  <span className="text-slate-200">{formatCurrency(currentRent)}</span>
+                </p>
+              </div>
             </section>
 
-            {/* Lease & documents */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Lease & documents</p>
-              <p className="mt-1 text-sm font-medium text-slate-50">Files shared for your unit</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Documents</p>
+                  <p className="mt-1 text-sm font-medium text-slate-50">Your shared files</p>
+                </div>
+              </div>
 
               {documents.length === 0 ? (
-                <p className="mt-3 text-xs text-slate-500">
-                  Your landlord hasn&apos;t shared any documents for this unit yet. If you&apos;re expecting a copy
-                  of your lease or other paperwork, please contact them directly.
-                </p>
+                <p className="mt-3 text-xs text-slate-500">No documents have been shared yet.</p>
               ) : (
-                <div className="mt-3 space-y-2 text-xs">
+                <div className="mt-3 space-y-2">
                   {documents.map((doc) => (
-                    <div
+                    <a
                       key={doc.id}
-                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"
+                      href={doc.file_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 hover:border-emerald-500/40"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-slate-50 text-[13px]">{doc.title}</p>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
-                          Added {formatDateTime(doc.created_at)}
-                        </p>
-                      </div>
-                      <a
-                        href={doc.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ml-3 rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
-                      >
-                        Open
-                      </a>
-                    </div>
+                      <p className="text-sm font-medium text-slate-100">{doc.title}</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        Added {formatDateTime(doc.created_at)}
+                      </p>
+                    </a>
                   ))}
                 </div>
               )}
-
-              <p className="mt-3 text-[11px] text-slate-500">
-                Documents here are read-only. For questions about any lease terms, reach out to your landlord.
-              </p>
             </section>
 
-            {/* Maintenance overview */}
             <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">Maintenance</p>
-              <p className="mt-1 text-sm font-medium text-slate-50">Requests for your unit</p>
-
-              <p className="mt-2 text-[11px] text-slate-400">
-                Use a maintenance request to report issues with your unit—for example plumbing, heating, appliances,
-                or general repairs. Your requests are sent to your landlord and tracked for your records.
-              </p>
-              <p className="mt-1 text-[10px] text-amber-300 flex items-start gap-1">
-                <span className="text-amber-300 text-xs mt-[1px]">⚠️</span>
-                For true emergencies (fire, active flooding, gas smells, or anything life-threatening),
-                call your local emergency services first, then contact your landlord or property manager directly.
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">Maintenance</p>
+                  <p className="mt-1 text-sm font-medium text-slate-50">Recent requests</p>
+                </div>
+                <Link
+                  href="/tenant/maintenance"
+                  className="text-[11px] text-emerald-300 hover:text-emerald-200"
+                >
+                  View all
+                </Link>
+              </div>
 
               {maintenance.length === 0 ? (
-                <p className="mt-3 text-[11px] text-slate-500">
-                  You haven&apos;t submitted any maintenance requests yet.
+                <p className="mt-3 text-xs text-slate-500">
+                  No maintenance requests submitted yet.
                 </p>
               ) : (
-                <div className="mt-3 space-y-2 text-[11px]">
-                  {maintenance.map((m) => (
+                <div className="mt-3 space-y-2">
+                  {maintenance.map((item) => (
                     <div
-                      key={m.id}
-                      className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2"
+                      key={item.id}
+                      className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-3"
                     >
-                      <div className="flex items-start justify-between gap-3 min-w-0">
-                        <div className="flex-1 min-w-0">
-                          <p className="truncate text-slate-50 text-[13px]">{m.title}</p>
-                          <p className="mt-0.5 text-[11px] text-slate-400">
-                            {formatDateTime(m.created_at)}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-100">{item.title}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            {formatDateTime(item.created_at)}
                           </p>
-                          {m.priority && (
-                            <p className="mt-0.5 text-[10px] text-slate-500">
-                              Priority: {m.priority}
-                            </p>
-                          )}
-
-                          {m.resolution_note && (
-                            <p className="mt-1 text-[10px] text-slate-300 line-clamp-2 break-words">
-                              <span className="font-semibold text-slate-200">
-                                Landlord note:{' '}
-                              </span>
-                              {m.resolution_note}
-                            </p>
-                          )}
                         </div>
                         <span
-                          className={
-                            'shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ' +
-                            statusBadgeClasses(m.status)
-                          }
+                          className={`inline-flex rounded-full px-2 py-1 text-[10px] font-medium ${statusBadgeClasses(
+                            item.status
+                          )}`}
                         >
-                          {formatStatusLabel(m.status)}
+                          {formatStatusLabel(item.status)}
                         </span>
                       </div>
+
+                      {item.description && (
+                        <p className="mt-2 text-xs text-slate-300">{item.description}</p>
+                      )}
+
+                      {item.resolution_note && (
+                        <div className="mt-2 rounded-lg border border-slate-800 bg-slate-900/80 px-2.5 py-2">
+                          <p className="text-[10px] uppercase tracking-wide text-slate-500">
+                            Resolution note
+                          </p>
+                          <p className="mt-1 text-xs text-slate-300">
+                            {item.resolution_note}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
 
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                {tenantActionsBlocked ? (
-                  <>
-                    <button
-                      type="button"
-                      className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-200 opacity-70 cursor-not-allowed"
-                      disabled
-                      title="Temporarily unavailable"
-                    >
-                      Submit a maintenance request
-                    </button>
-                    <button
-                      type="button"
-                      className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-200 opacity-70 cursor-not-allowed"
-                      disabled
-                      title="Temporarily unavailable"
-                    >
-                      View all requests
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <Link
-                      href="/tenant/maintenance"
-                      className="flex-1 inline-flex items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20"
-                    >
-                      Submit a maintenance request
-                    </Link>
-                    <Link
-                      href="/tenant/maintenance"
-                      className="flex-1 inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800"
-                    >
-                      View all requests
-                    </Link>
-                  </>
-                )}
+              <div className="mt-3">
+                <Link
+                  href="/tenant/maintenance"
+                  className={`inline-flex rounded-md px-3 py-2 text-[11px] font-medium border ${
+                    tenantActionsBlocked
+                      ? 'bg-slate-900 text-slate-500 border-slate-800 pointer-events-none'
+                      : 'bg-slate-900 text-slate-100 border-slate-600 hover:bg-slate-800'
+                  }`}
+                >
+                  Submit maintenance request
+                </Link>
               </div>
             </section>
           </div>
