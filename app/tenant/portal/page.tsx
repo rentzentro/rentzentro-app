@@ -990,7 +990,7 @@ export default function TenantPortalPage() {
               )}
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Bank payments include a $5 processing fee. Card payments include a 3.5% + $0.50
+                Bank payments include a $5 processing fee. Card payments include a 3.5%
                 convenience fee. Payments are processed securely by Stripe and you&apos;ll get a
                 confirmation once your payment is completed.
               </p>
