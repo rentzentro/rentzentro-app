@@ -312,7 +312,7 @@ export default async function HomePage() {
                 <div className="mt-1 inline-flex items-center gap-2">
                   <span className="inline-flex items-center rounded-full border border-slate-700/80 bg-slate-950/60 px-2 py-0.5 text-[10px] text-slate-200">
                     <span className="mr-1 h-1.5 w-1.5 rounded-full bg-sky-400" />
-                    Powered by Stripe
+                    Powered by Stripee
                   </span>
                   <span className="text-[10px] text-emerald-100/80">
                     Secure card & ACH rent payments, including automatic rent payments (auto-pay).
