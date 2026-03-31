@@ -948,7 +948,7 @@ export default function TenantPortalPage() {
                     ? 'Payments temporarily unavailable'
                     : isTooEarlyToPay
                     ? 'Online payment not available until due date'
-                    : 'Pay with bank (ACH) — no fee'}
+                    : 'Pay with bank (ACH) — $5 fee'}
                 </button>
 
                 <button
@@ -969,7 +969,7 @@ export default function TenantPortalPage() {
                     ? 'Payments temporarily unavailable'
                     : isTooEarlyToPay
                     ? 'Online payment not available until due date'
-                    : 'Pay with card (processing fee applies)'}
+                    : 'Pay with card — 3.5% + $0.50 fee'}
                 </button>
               </div>
 
@@ -990,9 +990,9 @@ export default function TenantPortalPage() {
               )}
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Bank payments are free. Card payments include a processing fee. Payments are
-                processed securely by Stripe and you&apos;ll get a confirmation once your payment is
-                completed.
+                Bank payments include a $5 processing fee. Card payments include a 3.5% + $0.50
+                convenience fee. Payments are processed securely by Stripe and you&apos;ll get a
+                confirmation once your payment is completed.
               </p>
             </section>
 
