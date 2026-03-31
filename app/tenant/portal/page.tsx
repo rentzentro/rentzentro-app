@@ -969,7 +969,7 @@ export default function TenantPortalPage() {
                     ? 'Payments temporarily unavailable'
                     : isTooEarlyToPay
                     ? 'Online payment not available until due date'
-                    : 'Pay with card — 3.5% + $0.50 fee'}
+                    : 'Pay with card — 3.5% fee'}
                 </button>
               </div>
 
