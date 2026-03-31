@@ -19,7 +19,7 @@ const ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID as string | undefined;
 // ------------------------------
 const CARD_FEE_PERCENT = 0.035; // 3.5%
 const CARD_FEE_FLAT_CENTS = 50; // $0.50
-const MAX_FEE_CENTS = 1500; // $15 cap
+const MAX_FEE_CENTS = 999999; // no cap (prevents undercharging)
 
 const toCents = (dollars: number) => Math.max(0, Math.round(dollars * 100));
 
