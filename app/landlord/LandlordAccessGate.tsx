@@ -15,7 +15,6 @@ type LandlordAccessRow = {
 const parseSupabaseDate = (value: string | null | undefined): Date | null => {
   if (!value) return null;
 
-  // Pure date (YYYY-MM-DD) → avoid timezone shift
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const [y, m, d] = value.split('-').map(Number);
     if (!y || !m || !d) return null;
@@ -40,13 +39,13 @@ const isLandlordAccessAllowed = (row: LandlordAccessRow | null): boolean => {
 
   const trialEnd = parseSupabaseDate(row?.trial_end || null);
 
-  const promoActive =
+  const trialActive =
     !!row?.trial_active &&
     !!trialEnd &&
     !Number.isNaN(trialEnd.getTime()) &&
     trialEnd >= todayDateOnly;
 
-  return isPaidPlanActive || promoActive;
+  return isPaidPlanActive || trialActive;
 };
 
 export default function LandlordAccessGate({
@@ -61,7 +60,6 @@ export default function LandlordAccessGate({
   const [blocked, setBlocked] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Pages that MUST be reachable even when not subscribed / not logged in
   const alwaysAllow = useMemo(() => {
     return new Set<string>([
       '/landlord/login',
@@ -84,19 +82,14 @@ export default function LandlordAccessGate({
       const allowThisRoute = alwaysAllow.has(path);
 
       try {
-        // 1) Auth check
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
 
-        // If auth check itself fails, do NOT bounce people around.
         if (authError) {
           console.error('Auth error in AccessGate:', authError);
 
-          if (!allowThisRoute) {
-            // Only redirect if we're not already on login
-            if (path !== '/landlord/login') {
-              router.replace('/landlord/login');
-            }
+          if (!allowThisRoute && path !== '/landlord/login') {
+            router.replace('/landlord/login');
           }
 
           setLoading(false);
@@ -106,25 +99,19 @@ export default function LandlordAccessGate({
         const user = authData.user;
         const authUserId = user?.id || null;
 
-        // Not logged in → allow login/signup pages, otherwise send to login
         if (!authUserId) {
-          if (!allowThisRoute) {
-            if (path !== '/landlord/login') {
-              router.replace('/landlord/login');
-            }
+          if (!allowThisRoute && path !== '/landlord/login') {
+            router.replace('/landlord/login');
           }
           setLoading(false);
           return;
         }
 
-        // Logged in + on login page → DO NOT auto-redirect here.
-        // (Your login page can handle redirect after successful login)
         if (path === '/landlord/login' || path === '/landlord/signup') {
           setLoading(false);
           return;
         }
 
-        // 2) Subscription check (only for protected routes)
         const { data: landlordRow, error: landlordErr } = await supabase
           .from('landlords')
           .select('subscription_status, trial_active, trial_end')
@@ -134,11 +121,10 @@ export default function LandlordAccessGate({
         if (landlordErr) {
           console.error('Landlord access lookup error:', landlordErr);
 
-          // Safer to block if we cannot verify, but never loop redirects.
           if (!allowThisRoute) {
             setBlocked(true);
             setMsg(
-              'Your account status could not be verified right now. Please go to Account & billing to manage access.'
+              'We could not verify your account right now. Please go to Account & billing to restore access.'
             );
             if (path !== '/landlord/subscription') {
               router.replace('/landlord/subscription');
@@ -158,15 +144,14 @@ export default function LandlordAccessGate({
 
           if (status === 'past_due' || status === 'unpaid') {
             setMsg(
-              'Your subscription payment is past due. Please update billing to continue using RentZentro.'
+              'Your payment didn’t go through. Update your billing to restore access.'
             );
           } else {
             setMsg(
-              'Your RentZentro subscription is not active. Please subscribe or start a trial to continue.'
+              'Your free month has ended. Start your subscription to continue using RentZentro.'
             );
           }
 
-          // If we are on allowed pages (settings/subscription), let them in to fix it.
           if (!allowThisRoute) {
             setBlocked(true);
             if (path !== '/landlord/subscription') {
@@ -180,7 +165,6 @@ export default function LandlordAccessGate({
           return;
         }
 
-        // Access OK
         setBlocked(false);
         setMsg(null);
         setLoading(false);
@@ -193,8 +177,7 @@ export default function LandlordAccessGate({
         if (!allowNow) {
           setBlocked(true);
           setMsg(
-            err?.message ||
-              'Something went wrong verifying your subscription. Please go to Account & billing to manage access.'
+            'Something went wrong verifying your account. Please go to billing to restore access.'
           );
           if (pathNow !== '/landlord/subscription') {
             router.replace('/landlord/subscription');
@@ -216,7 +199,6 @@ export default function LandlordAccessGate({
     );
   }
 
-  // Fallback UI in case redirect fails
   if (blocked) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
@@ -229,7 +211,7 @@ export default function LandlordAccessGate({
           </h1>
           <p className="mt-2 text-sm text-amber-100/90">
             {msg ||
-              'Your RentZentro subscription is not active. Please update billing to continue.'}
+              'Your RentZentro access is no longer active. Please start your subscription to continue.'}
           </p>
 
           <div className="mt-5 space-y-2">
@@ -237,19 +219,18 @@ export default function LandlordAccessGate({
               href="/landlord/subscription"
               className="inline-flex w-full items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
             >
-              Go to subscription
+              Start subscription
             </Link>
             <Link
               href="/landlord/settings"
               className="inline-flex w-full items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-100 hover:bg-slate-800"
             >
-              Go to account & billing
+              Account & billing
             </Link>
           </div>
 
           <p className="mt-4 text-[11px] text-amber-100/70">
-            Once your subscription is active, refresh the page and you’ll have
-            access again.
+            Once your subscription is active, refresh and you’ll have full access again.
           </p>
         </div>
       </main>

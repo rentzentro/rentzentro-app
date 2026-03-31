@@ -30,6 +30,11 @@ const parseSupabaseDate = (value: string | null | undefined): Date | null => {
   return d;
 };
 
+const todayDateOnly = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
 export default function LandlordSettingsPage() {
   const router = useRouter();
 
@@ -115,15 +120,14 @@ export default function LandlordSettingsPage() {
       status === 'trialing' ||
       status === 'active_cancel_at_period_end';
 
-    const now = new Date();
     const trialEnd = parseSupabaseDate(landlord?.trial_end || null);
-    const promoActive =
+    const trialActive =
       !!landlord?.trial_active &&
       !!trialEnd &&
       !Number.isNaN(trialEnd.getTime()) &&
-      trialEnd >= now;
+      trialEnd >= todayDateOnly();
 
-    const allowed = isPaidPlanActive || promoActive;
+    const allowed = isPaidPlanActive || trialActive;
 
     // Common “blocked” statuses you may see: past_due, unpaid, canceled, incomplete, incomplete_expired
     const isPastDue =
@@ -137,7 +141,7 @@ export default function LandlordSettingsPage() {
 
     const message = allowed
       ? null
-      : promoActive
+      : trialActive
       ? null
       : isPastDue
       ? 'Your subscription payment is past due. To keep full access and allow tenants to pay online, please update your billing.'
@@ -146,7 +150,7 @@ export default function LandlordSettingsPage() {
     return {
       status,
       allowed,
-      promoActive,
+      trialActive,
       isPaidPlanActive,
       isPastDue,
       label,
@@ -296,7 +300,7 @@ export default function LandlordSettingsPage() {
           </div>
         )}
 
-        {/* NEW: Billing gate banner (settings stays accessible, but dashboard access is gated) */}
+        {/* Billing gate banner (settings stays accessible, but dashboard access is gated) */}
         {!billing.allowed && (
           <div className="rounded-2xl border border-amber-500/50 bg-amber-950/40 px-4 py-3 text-[12px] text-amber-100">
             <p className="font-semibold text-amber-200">
@@ -315,8 +319,8 @@ export default function LandlordSettingsPage() {
               </Link>
               <p className="text-[11px] text-amber-100/80 sm:flex-1">
                 You can still access Settings and Subscription to resolve this.
-                Dashboard access will be restored once billing is active (or a
-                valid trial is active).
+                Dashboard access will be restored once billing is active or your
+                free month is active.
               </p>
             </div>
           </div>
@@ -408,9 +412,9 @@ export default function LandlordSettingsPage() {
 
           <p className="text-xs text-slate-400">
             Manage your RentZentro landlord subscription, update your billing
-            details, or cancel your plan at any time. If you&apos;re on a free
-            access promotion, you won&apos;t be billed until you start a paid
-            subscription from the next screen.
+            details, or cancel your plan at any time. If you&apos;re in your free
+            month, you won&apos;t be billed until you start a paid subscription
+            from the next screen.
           </p>
 
           <div className="mt-3">

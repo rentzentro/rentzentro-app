@@ -7,6 +7,29 @@ import { supabase } from '../../supabaseClient';
 
 type ViewState = 'loading' | 'no-landlord' | 'redirecting' | 'error';
 
+const parseDateOnlySafe = (value: string | null | undefined): Date | null => {
+  if (!value) return null;
+
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (!y || !mo || !d) return null;
+    return new Date(y, mo - 1, d);
+  }
+
+  const dt = new Date(value);
+  if (isNaN(dt.getTime())) return null;
+
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+};
+
+const todayDateOnly = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+};
+
 export default function LandlordVerifyAccountPage() {
   const router = useRouter();
 
@@ -49,14 +72,13 @@ export default function LandlordVerifyAccountPage() {
         }
 
         if (!landlord) {
-          // No landlord row for this user
           setState('no-landlord');
           return;
         }
 
         const l: any = landlord;
 
-        // 3) Check subscription status (best-effort, safe)
+        // 3) Check subscription status
         const rawStatus: string = (
           l.stripe_subscription_status ||
           l.subscription_status ||
@@ -72,16 +94,24 @@ export default function LandlordVerifyAccountPage() {
           l.is_subscribed === true ||
           l.subscription_active === true;
 
-        // If not subscribed → send to subscription page
-        if (!isSubscribed) {
+        // 4) Check rolling trial
+        const trialEnd = parseDateOnlySafe(l.trial_end);
+        const isTrialActive =
+          l.trial_active === true &&
+          !!trialEnd &&
+          !Number.isNaN(trialEnd.getTime()) &&
+          trialEnd >= todayDateOnly();
+
+        // 5) Allow if subscribed OR active trial
+        if (!isSubscribed && !isTrialActive) {
           setState('redirecting');
           router.push('/landlord/subscription');
           return;
         }
 
-        // 4) All good → send to settings (or dashboard if you prefer)
+        // 6) All good → send to dashboard
         setState('redirecting');
-        router.push('/landlord/settings');
+        router.push('/landlord');
       } catch (err: any) {
         console.error('Verify landlord: unexpected error', err);
         setError(
@@ -94,8 +124,6 @@ export default function LandlordVerifyAccountPage() {
 
     run();
   }, [router]);
-
-  // ------------- RENDER STATES -------------
 
   if (state === 'loading' || state === 'redirecting') {
     return (
@@ -149,7 +177,6 @@ export default function LandlordVerifyAccountPage() {
     );
   }
 
-  // state === 'error'
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
       <div className="max-w-md w-full rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl text-center space-y-4">

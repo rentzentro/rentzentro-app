@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 
@@ -14,7 +14,6 @@ type LandlordRow = {
   subscription_status: string | null;
   subscription_current_period_end: string | null;
   user_id?: string | null;
-  // Promo / trial fields
   trial_active?: boolean | null;
   trial_end?: string | null; // expected YYYY-MM-DD
 };
@@ -62,11 +61,6 @@ const prettyStatus = (status: string | null) => {
   return status || 'Not subscribed';
 };
 
-// ---------- Promo config (UPDATED TO 1 MONTH) ----------
-const PROMO_END_DATE_YMD = '2026-03-31'; // free access through this date
-// promo applies for 35 days (35 days UTC)
-const PROMO_CUTOFF_ISO = '2026-03-31T23:59:59Z';
-
 // ---------- Component ----------
 export default function LandlordSubscriptionPage() {
   const router = useRouter();
@@ -112,9 +106,6 @@ export default function LandlordSubscriptionPage() {
 
       const user = authData.user;
       const email = user.email!;
-      const now = new Date();
-      const promoCutoff = new Date(PROMO_CUTOFF_ISO);
-      const isPromoPeriod = now <= promoCutoff;
 
       // 1) Try by user_id
       let { data: landlordRow, error: landlordError } = await supabase
@@ -148,7 +139,9 @@ export default function LandlordSubscriptionPage() {
         landlordRow = byEmail.data as LandlordRow | null;
       }
 
-      // 3) If still none, create landlord row (IMPORTANT: include promo fields here too)
+      // 3) If still none, create landlord row
+      // IMPORTANT: signup page now handles rolling trial logic.
+      // We do NOT hardcode any promo dates here.
       if (!landlordRow) {
         const { data: inserted, error: insertError } = await supabase
           .from('landlords')
@@ -160,9 +153,8 @@ export default function LandlordSubscriptionPage() {
             stripe_subscription_id: null,
             subscription_status: null,
             subscription_current_period_end: null,
-            // Promo fields:
-            trial_active: isPromoPeriod,
-            trial_end: isPromoPeriod ? PROMO_END_DATE_YMD : null,
+            trial_active: false,
+            trial_end: null,
           })
           .select('*')
           .single();
@@ -384,8 +376,7 @@ export default function LandlordSubscriptionPage() {
   const dbDateLabel = formatDate(landlord?.subscription_current_period_end || null);
   const effectiveDateLabel = stripeCancelDate || dbDateLabel;
 
-  // Promo / free-access logic
-  const promoEndDateObj = useMemo(() => parseSupabaseDate(PROMO_END_DATE_YMD), []);
+  // Rolling trial logic only
   const trialEndDate = landlord?.trial_end ? parseSupabaseDate(landlord.trial_end) : null;
 
   const isOnPromoTrial = (() => {
@@ -400,7 +391,7 @@ export default function LandlordSubscriptionPage() {
 
   const trialEndLabel = trialEndDate ? formatDate(landlord?.trial_end || null) : null;
 
-  // Only show the promo banner when they are NOT actively subscribed (paid) and promo is active
+  // Only show the trial banner when they are NOT actively subscribed (paid) and trial is active
   const showPromoBanner = !!landlord && isOnPromoTrial && !isActive;
 
   // ---------- UI ----------
@@ -473,17 +464,17 @@ export default function LandlordSubscriptionPage() {
           </div>
         )}
 
-        {/* Promo banner for free period */}
+        {/* Trial banner */}
         {showPromoBanner && (
           <div className="rounded-2xl border border-emerald-500/50 bg-emerald-950/40 px-4 py-3 text-xs text-emerald-100 space-y-1">
-            <p className="font-semibold text-emerald-200">You&apos;re on free RentZentro access.</p>
+            <p className="font-semibold text-emerald-200">You&apos;re on your free month.</p>
             <p>
               You can use RentZentro without a paid subscription until{' '}
               <span className="font-semibold text-emerald-200">
-                {trialEndLabel || formatDate(PROMO_END_DATE_YMD) || 'the end of your promo period'}
+                {trialEndLabel || 'the end of your free month'}
               </span>
-              . During this time, you won&apos;t be billed. When you&apos;re ready to continue after the promo, start your
-              $29.95/mo subscription from this page.
+              . During this time, you won&apos;t be billed. When you&apos;re ready to continue after your free month,
+              start your $29.95/mo subscription from this page.
             </p>
           </div>
         )}
@@ -511,8 +502,8 @@ export default function LandlordSubscriptionPage() {
 
               {showPromoBanner && (
                 <p className="mt-1 text-[11px] text-emerald-200">
-                  You&apos;re not being billed yet. Free access lasts until{' '}
-                  <span className="font-semibold">{trialEndLabel || formatDate(PROMO_END_DATE_YMD)}</span>.
+                  You&apos;re not being billed yet. Your free month lasts until{' '}
+                  <span className="font-semibold">{trialEndLabel || 'your trial end date'}</span>.
                 </p>
               )}
 
@@ -561,14 +552,14 @@ export default function LandlordSubscriptionPage() {
                   }
                 >
                   {prettyStatus(landlord.subscription_status)}
-                  {showPromoBanner && !isActive && <span className="ml-1 text-emerald-300">(on free access)</span>}
+                  {showPromoBanner && !isActive && <span className="ml-1 text-emerald-300">(on free month)</span>}
                 </span>
               </p>
 
               <p>
                 <span className="text-slate-500">
                   {showPromoBanner && !isActive
-                    ? 'Free access ends:'
+                    ? 'Free month ends:'
                     : isScheduledToCancel
                     ? 'Cancellation date:'
                     : isActive
@@ -579,7 +570,7 @@ export default function LandlordSubscriptionPage() {
                 </span>{' '}
                 <span className="text-slate-100">
                   {showPromoBanner && !isActive ? (
-                    trialEndLabel || formatDate(PROMO_END_DATE_YMD) || 'Not available'
+                    trialEndLabel || 'Not available'
                   ) : isScheduledToCancel ? (
                     effectiveDateLabel ? `Scheduled to cancel on ${effectiveDateLabel}` : loadingStripeDate ? 'Loading cancellation date…' : 'Not available'
                   ) : isActive ? (
@@ -674,7 +665,7 @@ export default function LandlordSubscriptionPage() {
           {showPromoBanner && (
             <div className="pt-2 border-t border-slate-800 mt-2 text-[11px] text-slate-400">
               <p>
-                During your free access period, you can set up payouts and use RentZentro with real tenants. You&apos;ll only
+                During your free month, you can set up payouts and use RentZentro with real tenants. You&apos;ll only
                 be billed if you choose to start the $29.95/mo subscription.
               </p>
             </div>

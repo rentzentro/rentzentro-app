@@ -722,7 +722,7 @@ export default async function HomePage() {
             </div>
 
             <p className="mt-3 text-[10px] text-slate-500">
-              Free access applies to new landlord accounts created during the promotional period. A payment method is required
+              Free access applies to new landlord accounts created for the first month. A payment method is required
               to continue service after the free period ends.
             </p>
           </div>
