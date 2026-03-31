@@ -251,7 +251,7 @@ export default async function HomePage() {
         <div className="mb-4 rounded-full border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-slate-900 px-4 py-2 text-center text-[11px] font-medium text-emerald-100 shadow-sm">
           🎉 New landlord promo:{' '}
           <span className="font-semibold text-emerald-300">
-            Free through March — no card required to start.
+            First month free — no card required to start.
           </span>{' '}
           $29.95/mo to continue after the free period.
         </div>
@@ -307,7 +307,7 @@ export default async function HomePage() {
                   Flat monthly price. Unlimited units, tenants, payments, maintenance requests, listings, and more.
                 </p>
                 <p className="mt-1 text-[11px] font-medium text-emerald-200">
-                  🎁 Free through March — no card required to start.
+                  🎁 First month free — no card required to start.
                 </p>
                 <div className="mt-1 inline-flex items-center gap-2">
                   <span className="inline-flex items-center rounded-full border border-slate-700/80 bg-slate-950/60 px-2 py-0.5 text-[10px] text-slate-200">
@@ -324,7 +324,7 @@ export default async function HomePage() {
               href="/landlord/signup"
               className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-slate-950 hover:bg-emerald-400"
             >
-              Start free through March
+              Start your free month
             </Link>
           </div>
         </div>
@@ -350,7 +350,7 @@ export default async function HomePage() {
                 href="/landlord/signup"
                 className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400"
               >
-                Start free through March
+                Start your free month
               </Link>
               <Link
                 href="/tenant/login"
@@ -690,18 +690,18 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* March promo explanation */}
+        {/* First month free promo explanation */}
         <section className="mb-8 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-5">
           <div className="max-w-2xl">
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-300">
-              Free through March
+              First month free
             </h2>
             <p className="text-sm font-semibold text-slate-50">
-              Get set up now — March is on us.
+              Get set up now — First month is on us.
             </p>
             <p className="mt-2 text-[11px] text-slate-300">
-              Create a new landlord account now and use RentZentro free through{' '}
-              <span className="font-semibold text-emerald-200">March 31st</span>. No credit card required to start.
+              Create a new landlord account now and use RentZentro free for{' '}
+              <span className="font-semibold text-emerald-200">the first month</span>. No credit card required to start.
               On April 1st, you can add your card to keep your account active at{' '}
               <span className="font-semibold text-emerald-200">$29.95/month</span> or simply walk away.
             </p>
@@ -713,7 +713,7 @@ export default async function HomePage() {
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                 <p className="mb-1 text-[11px] font-semibold text-slate-100">No card, no surprise billing</p>
-                <p className="text-slate-400">We won&apos;t charge you through March. You choose whether to continue in April.</p>
+                <p className="text-slate-400">We won&apos;t charge you for the first month. You choose whether to continue in April.</p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                 <p className="mb-1 text-[11px] font-semibold text-slate-100">Keep what you set up</p>

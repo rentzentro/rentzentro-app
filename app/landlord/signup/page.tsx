@@ -19,12 +19,6 @@ export default function LandlordSignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // --- PROMO CONFIG (single source of truth) ---
-  // Free access through end of day March 31, 2026 (UTC).
-  // IMPORTANT: trial_end should match what your access gates check against.
-  const PROMO_END_YMD = '2026-03-31';
-  const PROMO_END_ISO = '2026-03-31T23:59:59Z';
-
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -62,25 +56,20 @@ export default function LandlordSignupPage() {
         throw new Error('We could not complete signup. Please try again in a moment.');
       }
 
-      // --- PROMO LOGIC: Active until March 31, 2026 (end of day UTC) ---
-      // Anyone who signs up before promo end gets free access through PROMO_END_YMD.
+      // 🔥 NEW: 35-DAY ROLLING TRIAL
       const now = new Date();
-      const promoEndsAt = new Date(PROMO_END_ISO);
-      const isPromoPeriod = now <= promoEndsAt;
+      const trialEnd = new Date();
+      trialEnd.setDate(now.getDate() + 35);
 
-      const trialEndValue = isPromoPeriod ? PROMO_END_YMD : null;
+      const trialEndYMD = trialEnd.toISOString().split('T')[0];
 
-      // 2) Insert landlord row linked to this auth user
-      // NOTE: subscription_status is controlled by Stripe webhook logic.
-      // We set trial flags here for promo access.
+      // 2) Insert landlord row
       const { error: insertError } = await supabase.from('landlords').insert([
         {
           email,
           user_id: user.id,
-          trial_active: isPromoPeriod,
-          trial_end: trialEndValue,
-          // Keep legacy flag if your DB still has it, but access should be driven by
-          // subscription_status + trial_active/trial_end (as in your dashboard code).
+          trial_active: true,
+          trial_end: trialEndYMD,
           subscription_active: false,
         },
       ]);
@@ -92,16 +81,12 @@ export default function LandlordSignupPage() {
         );
       }
 
-      // 3) Redirect based on whether they are in the promo period
-      if (isPromoPeriod) {
-        setInfo(
-          'Account created! You have free access until March 31st. Redirecting you to your landlord dashboard…'
-        );
-        router.push('/landlord');
-      } else {
-        setInfo('Account created! Redirecting you to subscription…');
-        router.push('/landlord/subscription');
-      }
+      // 3) Redirect to dashboard (always — trial handles access)
+      setInfo(
+        'Account created! Your free trial is active. Redirecting you to your landlord dashboard…'
+      );
+
+      router.push('/landlord');
     } catch (err: any) {
       console.error(err);
       setError(err?.message || 'Unable to create your landlord account. Please try again.');
@@ -113,20 +98,23 @@ export default function LandlordSignupPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/80 p-6 shadow-sm">
-        {/* Back button */}
         <div className="mb-4">
           <Link href="/" className="text-[11px] text-slate-500 hover:text-emerald-400">
             ← Back to homepage
           </Link>
         </div>
 
-        <h1 className="text-lg font-semibold text-slate-50 mb-1">Create your landlord account</h1>
+        <h1 className="text-lg font-semibold text-slate-50 mb-1">
+          Create your landlord account
+        </h1>
+
         <p className="text-xs text-slate-400 mb-1">
-          Start your RentZentro landlord plan and connect payouts for rent collection.
+          Start collecting rent online and managing your properties in minutes.
         </p>
+
+        {/* 🔥 UPDATED COPY */}
         <p className="text-[11px] text-emerald-300 mb-4">
-          Promo: Sign up now and get free access until March 31st. No card required until you&apos;re ready to
-          subscribe.
+          First month free (35 days). No card required.
         </p>
 
         {error && (
@@ -134,6 +122,7 @@ export default function LandlordSignupPage() {
             {error}
           </div>
         )}
+
         {info && (
           <div className="mb-3 rounded-xl bg-emerald-950/30 border border-emerald-500/40 px-3 py-2 text-xs text-emerald-100">
             {info}
@@ -141,7 +130,6 @@ export default function LandlordSignupPage() {
         )}
 
         <form onSubmit={handleSignUp} className="space-y-3 text-sm">
-          {/* Email */}
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Email</label>
             <input
@@ -154,7 +142,6 @@ export default function LandlordSignupPage() {
             />
           </div>
 
-          {/* Password */}
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Password</label>
             <div className="relative">
@@ -174,14 +161,12 @@ export default function LandlordSignupPage() {
                 {showPassword ? 'Hide' : 'Show'}
               </button>
             </div>
-            <p className="mt-1 text-[10px] text-slate-500">
-              Use at least 8 characters. For extra security, include numbers and symbols.
-            </p>
           </div>
 
-          {/* Confirm password */}
           <div>
-            <label className="block text-[11px] text-slate-400 mb-1">Confirm password</label>
+            <label className="block text-[11px] text-slate-400 mb-1">
+              Confirm password
+            </label>
             <div className="relative">
               <input
                 type={showConfirm ? 'text' : 'password'}
@@ -201,7 +186,6 @@ export default function LandlordSignupPage() {
             </div>
           </div>
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
@@ -211,7 +195,6 @@ export default function LandlordSignupPage() {
           </button>
         </form>
 
-        {/* Login link */}
         <p className="mt-4 text-[11px] text-slate-400 text-center">
           Already have a landlord account?{' '}
           <Link
@@ -220,7 +203,6 @@ export default function LandlordSignupPage() {
           >
             Sign in here
           </Link>
-          .
         </p>
       </div>
     </div>

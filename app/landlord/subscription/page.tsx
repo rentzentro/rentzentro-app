@@ -62,9 +62,9 @@ const prettyStatus = (status: string | null) => {
   return status || 'Not subscribed';
 };
 
-// ---------- Promo config (UPDATED TO MARCH) ----------
+// ---------- Promo config (UPDATED TO 1 MONTH) ----------
 const PROMO_END_DATE_YMD = '2026-03-31'; // free access through this date
-// promo applies if signup happens before this moment (end of day March 31 UTC)
+// promo applies for 35 days (35 days UTC)
 const PROMO_CUTOFF_ISO = '2026-03-31T23:59:59Z';
 
 // ---------- Component ----------
