@@ -26,9 +26,9 @@ export default function TermsPage() {
         <section className="space-y-2 text-sm text-slate-200">
           <h2 className="font-semibold text-slate-50">1. Overview</h2>
           <p>
-            These Terms of Service ("Terms") govern your access to and use of
+            These Terms of Service (Terms) govern your access to and use of
             the RentZentro software-as-a-service platform, website, and related
-            services (collectively, the "Service").
+            services (collectively, the Service).
           </p>
           <p>
             By creating an account or using the Service, you agree to these
@@ -54,7 +54,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        {/* 🔥 4. FEES (THIS IS THE IMPORTANT FIX) */}
+        {/* 4. Fees */}
         <section className="space-y-2 text-sm text-slate-200">
           <h2 className="font-semibold text-slate-50">
             4. Fees, Billing, and Taxes
