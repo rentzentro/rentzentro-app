@@ -25,9 +25,9 @@ export default function PrivacyPage() {
         {/* Intro */}
         <section className="space-y-2 text-sm text-slate-200">
           <p>
-            This Privacy Policy explains how RentZentro ("RentZentro," "we,"
-            "our," or "us") collects, uses, and shares information when you use
-            our website, applications, and related services (the "Service").
+            This Privacy Policy explains how RentZentro (RentZentro, we,
+            our, or us) collects, uses, and shares information when you use
+            our website, applications, and related services (the Service).
           </p>
           <p>
             By using the Service, you agree to this Privacy Policy.
@@ -80,7 +80,7 @@ export default function PrivacyPage() {
           </ul>
         </section>
 
-        {/* 🔥 STRONGER PAYMENT SECTION */}
+        {/* 3. Payment Processing */}
         <section className="space-y-2 text-sm text-slate-200">
           <h2 className="font-semibold text-slate-50">
             3. Payment Processing
@@ -157,7 +157,10 @@ export default function PrivacyPage() {
             8. Children
           </h2>
 
-          <p>The Service is not intended for children under 13.</p>
+          <p>
+            The Service is not intended for users under 13, and we do not
+            knowingly collect data from children.
+          </p>
         </section>
 
         {/* 9. Changes */}
