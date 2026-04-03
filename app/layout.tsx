@@ -1,7 +1,9 @@
 // app/layout.tsx
 import './globals.css';
 import Link from 'next/link';
+import Script from 'next/script';
 import type { Metadata } from 'next';
+import MetaPixelTracker from './components/MetaPixelTracker';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.rentzentro.com'),
@@ -262,19 +264,58 @@ function SiteFooter() {
   );
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <head>
+        {/* ✅ Meta Pixel */}
+        <Script id="meta-pixel-base" strategy="afterInteractive">
+          {`
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;
+            n.push=n;
+            n.loaded=!0;
+            n.version='2.0';
+            n.queue=[];
+            t=b.createElement(e);
+            t.async=!0;
+            t.src=v;
+            s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}
+            (window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', '925532910104793');
+            fbq('track', 'PageView');
+          `}
+        </Script>
+
         {/* ✅ Explicit links (helps wrappers + avoids “missing manifest” issues) */}
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta
+          name="apple-mobile-web-app-status-bar-style"
+          content="black-translucent"
+        />
 
         <link rel="icon" href="/favicon.png" type="image/png" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className="min-h-screen bg-slate-950 text-slate-50">
+        <noscript>
+          <img
+            height="1"
+            width="1"
+            style={{ display: 'none' }}
+            src="https://www.facebook.com/tr?id=925532910104793&ev=PageView&noscript=1"
+            alt=""
+          />
+        </noscript>
+        <MetaPixelTracker />
         {children}
         <SiteFooter />
       </body>

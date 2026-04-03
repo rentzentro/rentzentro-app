@@ -86,7 +86,7 @@ export default function LandlordSignupPage() {
         'Account created! Your free trial is active. Redirecting you to your landlord dashboard…'
       );
 
-      router.push('/landlord');
+      router.push('/landlord?signup=1');
     } catch (err: any) {
       console.error(err);
       setError(err?.message || 'Unable to create your landlord account. Please try again.');
