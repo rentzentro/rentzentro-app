@@ -6,25 +6,25 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'RentZentro | Rent collection, tenant portal, maintenance, listings & e-sign',
+  title: 'RentZentro | Collect rent online, track tenants, and simplify rentals',
   description:
-    'RentZentro is software for landlords (not a property management company). Collect rent online (ACH + card), enable auto-pay, send reminders, track maintenance, share documents, message tenants, publish listings, and manage e-signatures—without the corporate bloat.',
+    'RentZentro is software for landlords (not a property management company). Collect rent online (ACH + card), enable auto-pay, send reminders, track maintenance, share documents, publish listings, and manage e-signatures—without the corporate bloat.',
   alternates: {
     canonical: 'https://www.rentzentro.com/',
   },
   openGraph: {
-    title: 'RentZentro | Run rentals like a business',
+    title: 'RentZentro | Stop chasing rent. Get paid automatically.',
     description:
-      'Collect rent online, enable auto-pay, send reminders, track maintenance, share documents, message tenants, publish listings, and manage e-signatures.',
+      'Collect rent online, enable auto-pay, send reminders, track tenants, manage maintenance, and publish listings in one simple landlord platform.',
     url: 'https://www.rentzentro.com/',
     siteName: 'RentZentro',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'RentZentro | Run rentals like a business',
+    title: 'RentZentro | Stop chasing rent. Get paid automatically.',
     description:
-      'Rent collection + tenant portal + maintenance + listings + e-signatures—built for landlords.',
+      'Collect rent online, send reminders, track tenants, manage maintenance, and keep everything organized in one place.',
   },
 };
 
@@ -59,59 +59,6 @@ type PhotoRow = {
   image_url: string;
   sort_order: number;
 };
-
-const money = (v: number | null | undefined) =>
-  v == null || isNaN(v) ? null : `$${v.toLocaleString('en-US')}`;
-
-const fmtDate = (value: string | null | undefined) => {
-  if (!value) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (m) {
-    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-};
-
-async function getHomepageListings(limit = 6) {
-  const { data: listings, error } = await supabase
-    .from('listings')
-    .select(
-      `
-      id, title, slug, published, published_at,
-      city, state, neighborhood,
-      rent_amount, beds, baths, available_date,
-      hide_exact_address, address_line1, address_line2, postal_code
-    `
-    )
-    .eq('published', true)
-    .order('published_at', { ascending: false })
-    .limit(limit);
-
-  if (error) throw error;
-
-  const ids = (listings || []).map((l: any) => l.id).filter(Boolean);
-  if (ids.length === 0) {
-    return { listings: (listings || []) as Listing[], coverMap: new Map<number, PhotoRow>() };
-  }
-
-  const { data: photos, error: pErr } = await supabase
-    .from('listing_photos')
-    .select('id, listing_id, image_url, sort_order')
-    .in('listing_id', ids)
-    .order('sort_order', { ascending: true });
-
-  if (pErr) throw pErr;
-
-  const coverMap = new Map<number, PhotoRow>();
-  for (const row of (photos || []) as PhotoRow[]) {
-    if (!coverMap.has(row.listing_id)) coverMap.set(row.listing_id, row);
-  }
-
-  return { listings: (listings || []) as Listing[], coverMap };
-}
 
 type DemoCard = {
   title: string;
@@ -156,6 +103,68 @@ const demoCards: DemoCard[] = [
   },
 ];
 
+const money = (v: number | null | undefined) =>
+  v == null || isNaN(v) ? null : `$${v.toLocaleString('en-US')}`;
+
+const fmtDate = (value: string | null | undefined) => {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (m) {
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+async function getHomepageListings(limit = 6) {
+  const { data: listings, error } = await supabase
+    .from('listings')
+    .select(`
+      id, title, slug, published, published_at,
+      city, state, neighborhood,
+      rent_amount, beds, baths, available_date,
+      hide_exact_address, address_line1, address_line2, postal_code
+    `)
+    .eq('published', true)
+    .order('published_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const ids = (listings || []).map((l: any) => l.id).filter(Boolean);
+  if (ids.length === 0) {
+    return {
+      listings: (listings || []) as Listing[],
+      coverMap: new Map<number, PhotoRow>(),
+    };
+  }
+
+  const { data: photos, error: pErr } = await supabase
+    .from('listing_photos')
+    .select('id, listing_id, image_url, sort_order')
+    .in('listing_id', ids)
+    .order('sort_order', { ascending: true });
+
+  if (pErr) throw pErr;
+
+  const coverMap = new Map<number, PhotoRow>();
+  for (const row of (photos || []) as PhotoRow[]) {
+    if (!coverMap.has(row.listing_id)) coverMap.set(row.listing_id, row);
+  }
+
+  return { listings: (listings || []) as Listing[], coverMap };
+}
+
 function DemoListingCard({ d }: { d: DemoCard }) {
   return (
     <div className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70">
@@ -170,7 +179,6 @@ function DemoListingCard({ d }: { d: DemoCard }) {
         <div className="absolute left-3 top-3 inline-flex items-center rounded-full border border-slate-700 bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-slate-100 backdrop-blur">
           {d.price}
         </div>
-
         <div className="absolute right-3 top-3 inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-200 backdrop-blur">
           Example
         </div>
@@ -183,11 +191,11 @@ function DemoListingCard({ d }: { d: DemoCard }) {
         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
           <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
             <p className="text-slate-500">Beds / Baths</p>
-            <p className="mt-0.5 text-slate-100 font-semibold">{d.bedsBaths}</p>
+            <p className="mt-0.5 font-semibold text-slate-100">{d.bedsBaths}</p>
           </div>
           <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
             <p className="text-slate-500">Available</p>
-            <p className="mt-0.5 text-slate-100 font-semibold">{d.available}</p>
+            <p className="mt-0.5 font-semibold text-slate-100">{d.available}</p>
           </div>
         </div>
 
@@ -198,11 +206,116 @@ function DemoListingCard({ d }: { d: DemoCard }) {
             Exact address hidden until a showing is scheduled.
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
 
-        <div className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-emerald-200">
-          Preview style <span className="text-emerald-300">→</span>
+function LiveListingCard({
+  listing,
+  cover,
+}: {
+  listing: Listing;
+  cover?: PhotoRow;
+}) {
+  const loc = [listing.neighborhood, listing.city, listing.state]
+    .filter(Boolean)
+    .join(', ');
+  const price = money(listing.rent_amount);
+  const available = fmtDate(listing.available_date) || 'Now';
+
+  const addressLine = listing.hide_exact_address
+    ? [listing.neighborhood, listing.city, listing.state].filter(Boolean).join(', ')
+    : [
+        listing.address_line1,
+        listing.address_line2,
+        listing.city,
+        listing.state,
+        listing.postal_code,
+      ]
+        .filter(Boolean)
+        .join(', ');
+
+  return (
+    <Link
+      href={`/listings/${listing.slug}`}
+      className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 transition-colors hover:bg-slate-900/55"
+    >
+      <div className="relative h-44 w-full overflow-hidden bg-slate-950/50">
+        {cover?.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={cover.image_url}
+            alt={`${listing.title} cover photo`}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
+            Listing preview
+          </div>
+        )}
+
+        <div className="absolute left-3 top-3 inline-flex items-center rounded-full border border-slate-700 bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-slate-100 backdrop-blur">
+          {price ? `${price}/mo` : 'Price not listed'}
         </div>
       </div>
+
+      <div className="p-4">
+        <p className="text-sm font-semibold text-slate-50">{listing.title}</p>
+        <p className="mt-1 text-[12px] text-slate-300">{loc || 'Location not specified'}</p>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
+            <p className="text-slate-500">Beds / Baths</p>
+            <p className="mt-0.5 font-semibold text-slate-100">
+              {(listing.beds ?? '-') + ' / ' + (listing.baths ?? '-')}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
+            <p className="text-slate-500">Available</p>
+            <p className="mt-0.5 font-semibold text-slate-100">{available}</p>
+          </div>
+        </div>
+
+        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
+          <p className="text-[11px] text-slate-500">Area / Address</p>
+          <p className="mt-0.5 text-[12px] text-slate-200">{addressLine || 'Not provided'}</p>
+          {listing.hide_exact_address && (
+            <p className="mt-1 text-[11px] text-slate-500">
+              Exact address hidden until a showing is scheduled.
+            </p>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  value: string;
+  tone?: 'default' | 'success';
+}) {
+  const classes =
+    tone === 'success'
+      ? 'border-emerald-500/40 bg-emerald-950/30'
+      : 'border-slate-800 bg-slate-900/80';
+
+  return (
+    <div className={`rounded-2xl border p-4 ${classes}`}>
+      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
+      <p
+        className={`mt-1 text-2xl font-semibold ${
+          tone === 'success' ? 'text-emerald-300' : 'text-slate-50'
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -245,7 +358,6 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      {/* Top shell */}
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 lg:px-6">
         {/* Promo ribbon */}
         <div className="mb-4 rounded-full border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-slate-900 px-4 py-2 text-center text-[11px] font-medium text-emerald-100 shadow-sm">
@@ -253,11 +365,11 @@ export default async function HomePage() {
           <span className="font-semibold text-emerald-300">
             First month free — no card required to start.
           </span>{' '}
-          $29.95/mo to continue after the free period.
+          $29.95/mo after the free period.
         </div>
 
         {/* Header */}
-        <header className="mb-6 flex items-center justify-between">
+        <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-500/30">
               <span className="text-lg font-semibold text-emerald-400">RZ</span>
@@ -265,12 +377,12 @@ export default async function HomePage() {
             <div className="leading-tight">
               <p className="text-sm font-semibold tracking-tight">RentZentro</p>
               <p className="text-[11px] text-slate-400">
-                Confidence, simplicity, and control for every landlord
+                Simple rent collection and tenant management for landlords
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/landlord/login"
               className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-800"
@@ -292,306 +404,374 @@ export default async function HomePage() {
           </div>
         </header>
 
-        {/* Pricing banner */}
-        <div className="mb-5 rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-slate-900 px-4 py-3 text-xs text-emerald-50 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-slate-950">
-                $
-              </span>
-              <div>
-                <p className="text-[13px] font-semibold text-emerald-100">
-                  RentZentro Landlord Plan — <span className="text-emerald-300">$29.95/mo</span>
-                </p>
-                <p className="text-[11px] text-emerald-100/80">
-                  Flat monthly price. Unlimited units, tenants, payments, maintenance requests, listings, and more.
-                </p>
-                <p className="mt-1 text-[11px] font-medium text-emerald-200">
-                  🎁 First month free — no card required to start.
-                </p>
-                <div className="mt-1 inline-flex items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-slate-700/80 bg-slate-950/60 px-2 py-0.5 text-[10px] text-slate-200">
-                    <span className="mr-1 h-1.5 w-1.5 rounded-full bg-sky-400" />
-                    Powered by Stripe
-                  </span>
-                  <span className="text-[10px] text-emerald-100/80">
-                    Secure card & ACH rent payments, including automatic rent payments (auto-pay).
-                  </span>
-                </div>
+        {/* Hero */}
+        <section className="grid gap-8 pb-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Payments powered by Stripe
+            </div>
+
+            <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl lg:text-6xl">
+              Stop chasing rent. Get paid automatically.
+            </h1>
+
+            <p className="mt-4 max-w-2xl text-base text-slate-300 sm:text-lg">
+              Collect rent online, enable auto-pay, send reminders, track tenants,
+              manage maintenance, and keep everything organized in one simple
+              platform built for landlords.
+            </p>
+
+            <div className="mt-5 grid max-w-xl gap-2 text-sm text-slate-200">
+              <div className="flex items-start gap-2">
+                <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                  ✓
+                </span>
+                <p>ACH & card payments</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                  ✓
+                </span>
+                <p>Auto-pay & automatic reminders</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                  ✓
+                </span>
+                <p>Maintenance tracking & tenant documents</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                  ✓
+                </span>
+                <p>Listings & e-signatures without the corporate bloat</p>
               </div>
             </div>
-            <Link
-              href="/landlord/signup"
-              className="rounded-full bg-emerald-500 px-3 py-1.5 text-[11px] font-semibold text-slate-950 hover:bg-emerald-400"
-            >
-              Start your free month
-            </Link>
-          </div>
-        </div>
 
-        {/* Hero + demo */}
-        <section className="flex flex-1 flex-col gap-8 pb-10 pt-2 lg:flex-row lg:items-stretch">
-          {/* Left */}
-          <div className="flex flex-1 flex-col justify-center gap-5">
-            <div>
-              <h1 className="text-balance text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl lg:text-[2.6rem]">
-                Rent collection software for landlords — plus listings and e-sign.
-              </h1>
-              <p className="mt-3 max-w-xl text-sm text-slate-400">
-                RentZentro is software for landlords—not a management company. Collect rent online (ACH + card),
-                enable auto-pay, send reminders, track maintenance, share documents, message tenants, publish
-                listings, and manage e-signatures without the corporate bloat.
-              </p>
-            </div>
-
-            {/* Primary CTAs */}
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 href="/landlord/signup"
-                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400"
+                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400"
               >
-                Start your free month
-              </Link>
-              <Link
-                href="/tenant/login"
-                className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-5 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800"
-              >
-                I&apos;m a tenant
+                Start Free — No card required
               </Link>
               <Link
                 href="/listings"
-                className="inline-flex items-center justify-center rounded-full border border-emerald-500/50 bg-emerald-500/10 px-5 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/15"
+                className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-800"
               >
                 Browse rentals
               </Link>
-
-              <span className="text-[11px] text-slate-500">No card required · Cancel anytime</span>
             </div>
 
-            <p className="mt-1 text-[11px] text-emerald-300">
-              Portfolios with 50+ properties are actively managed through RentZentro.
+            <p className="mt-3 text-[12px] text-emerald-300">
+              Funds go directly to your Stripe-connected account. RentZentro never holds your money.
             </p>
 
-            {/* Features */}
-            <section className="mt-2 grid gap-3 text-sm sm:grid-cols-2">
-              <div className="space-y-2">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  For landlords
-                </h2>
-
-                {[
-                  'See all units, rent statuses, and maintenance requests in one clean, modern dashboard.',
-                  'Tenants pay rent online with card or ACH through Stripe. Payments log automatically—RentZentro never holds your funds.',
-                  'Offer tenants automatic rent payments (auto-pay) so on-time rent becomes the default.',
-                  'Publish a rental listing with photos and share it by link (plus show on the public listings page).',
-                  'Send leases and documents for e-signatures and track signature status in one place.',
-                  'Built-in messaging with each tenant, so questions, updates, and photos stay in one thread.',
-                  'Add trusted team members to help manage rent, maintenance, listings, and messaging.',
-                ].map((t) => (
-                  <div key={t} className="flex items-start gap-2 text-xs text-slate-200">
-                    <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                      ✓
-                    </span>
-                    <p>{t}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-2">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  For tenants
-                </h2>
-
-                {[
-                  'Simple tenant portal to see rent due, payment history, and shared documents—and pay rent online with card or bank (ACH).',
-                  'Set up auto-pay (if enabled by your landlord) and avoid late fees and reminders.',
-                  'Submit maintenance requests with details, then track status and see updates.',
-                  'View and sign lease documents electronically (e-sign) when your landlord sends them.',
-                  'Secure in-app messaging to ask questions or share photos without hunting through old text messages.',
-                ].map((t) => (
-                  <div key={t} className="flex items-start gap-2 text-xs text-slate-200">
-                    <span className="mt-[1px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                      ✓
-                    </span>
-                    <p>{t}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
+            <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1">
+                First month free
+              </span>
+              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1">
+                $29.95/mo flat pricing
+              </span>
+              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1">
+                Unlimited units
+              </span>
+              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1">
+                Cancel anytime
+              </span>
+            </div>
           </div>
 
-          {/* Right: demo card */}
-          <div className="flex flex-1 items-center justify-center">
-            <div className="w-full max-w-xl rounded-3xl border border-slate-800 bg-slate-950/70 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.65)]">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500">Demo snapshot</p>
-                  <p className="text-sm font-semibold text-slate-50">Landlord dashboard</p>
-                </div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-300">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          {/* Hero card */}
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.65)]">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-slate-500">
                   Live rent overview
-                </span>
+                </p>
+                <p className="text-sm font-semibold text-slate-50">
+                  What landlords care about most
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Simple dashboard
+              </span>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <StatCard label="Properties" value="12" />
+              <StatCard label="Active tenants" value="11" />
+              <StatCard label="Monthly rent roll" value="$14,750" tone="success" />
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-medium text-slate-100">Rent status</p>
+                <span className="text-[10px] text-slate-500">This month</span>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-[1.4fr_1.1fr]">
-                <div className="space-y-3">
-                  <div className="grid gap-2 text-[11px] sm:grid-cols-3">
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wide">Properties</p>
-                      <p className="mt-1 text-lg font-semibold text-slate-50">12</p>
-                      <p className="mt-0.5 text-[10px] text-slate-400">Active rental units</p>
-                    </div>
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
-                      <p className="text-[10px] text-slate-500 uppercase tracking-wide">Active tenants</p>
-                      <p className="mt-1 text-lg font-semibold text-slate-50">11</p>
-                      <p className="mt-0.5 text-[10px] text-slate-400">In good standing</p>
-                    </div>
-                    <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/30 p-3">
-                      <p className="text-[10px] text-emerald-300 uppercase tracking-wide">Monthly rent roll</p>
-                      <p className="mt-1 text-lg font-semibold text-emerald-300">$14,750</p>
-                      <p className="mt-0.5 text-[10px] text-emerald-100/80">Across all units</p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="text-[11px] font-medium text-slate-100">Rent status snapshot</p>
-                      <span className="text-[10px] text-slate-500">This month</span>
-                    </div>
-                    <div className="grid gap-2 text-[11px] sm:grid-cols-3">
-                      <div className="rounded-2xl border border-rose-500/40 bg-rose-950/40 p-2">
-                        <p className="text-[11px] font-semibold text-rose-100">Overdue</p>
-                        <p className="mt-1 text-[11px] text-rose-100/90">1 unit · $1,200</p>
-                        <p className="mt-0.5 text-[10px] text-rose-200/80">14 Maple · 2B</p>
-                      </div>
-                      <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-2">
-                        <p className="text-[11px] font-semibold text-amber-100">Due in 7 days</p>
-                        <p className="mt-1 text-[11px] text-amber-100/90">3 units · $3,450</p>
-                        <p className="mt-0.5 text-[10px] text-amber-100/80">Auto-reminders enabled</p>
-                      </div>
-                      <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-2">
-                        <p className="text-[11px] font-semibold text-emerald-100">Paid</p>
-                        <p className="mt-1 text-[11px] text-emerald-100/90">8 units · $10,100</p>
-                        <p className="mt-0.5 text-[10px] text-emerald-100/80">Logged via Stripe</p>
-                      </div>
-                    </div>
-                  </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded-2xl border border-rose-500/40 bg-rose-950/40 p-3">
+                  <p className="text-xs font-semibold text-rose-100">Overdue</p>
+                  <p className="mt-1 text-xs text-rose-100/90">1 unit · $1,200</p>
+                  <p className="mt-0.5 text-[10px] text-rose-200/80">14 Maple · 2B</p>
                 </div>
 
-                <div className="space-y-3 text-[11px]">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="font-medium text-slate-100">Recent payments</p>
-                      <span className="text-[10px] text-slate-500">Last 5</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {[
-                        { name: 'J. Smith · 10 Oak · 1A', amount: '$1,050', meta: 'Card • Today · 9:14 AM' },
-                        { name: 'L. Rivera · 22 Pine · 3C', amount: '$1,250', meta: 'ACH • Yesterday · 4:27 PM' },
-                        { name: 'D. Chen · 7 Spruce · 2F', amount: '$975', meta: 'Card • 2 days ago' },
-                      ].map((p) => (
-                        <div
-                          key={p.name}
-                          className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-2.5 py-1.5"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-[11px] font-medium text-slate-100">{p.name}</p>
-                            <p className="text-[10px] text-slate-500">{p.meta}</p>
-                          </div>
-                          <p className="shrink-0 text-[11px] font-semibold text-emerald-300">{p.amount}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-3">
+                  <p className="text-xs font-semibold text-amber-100">Due soon</p>
+                  <p className="mt-1 text-xs text-amber-100/90">3 units · $3,450</p>
+                  <p className="mt-0.5 text-[10px] text-amber-100/80">Auto-reminders enabled</p>
+                </div>
 
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="font-medium text-slate-100">Maintenance queue</p>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                        1 new
-                      </span>
-                    </div>
+                <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-3">
+                  <p className="text-xs font-semibold text-emerald-100">Paid</p>
+                  <p className="mt-1 text-xs text-emerald-100/90">8 units · $10,100</p>
+                  <p className="mt-0.5 text-[10px] text-emerald-100/80">Logged via Stripe</p>
+                </div>
+              </div>
+            </div>
 
-                    <div className="space-y-1.5">
-                      <div className="flex items-start justify-between rounded-xl border border-amber-500/40 bg-amber-950/40 px-2.5 py-1.5">
-                        <div className="min-w-0">
-                          <p className="truncate text-[11px] font-medium text-amber-50">No heat in bedroom</p>
-                          <p className="text-[10px] text-amber-100/90">14 Maple · 2B • High priority</p>
-                        </div>
-                        <span className="shrink-0 rounded-full border border-amber-400/60 bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-50">
-                          New
-                        </span>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-medium text-slate-100">Recent payments</p>
+                  <span className="text-[10px] text-slate-500">Last 3</span>
+                </div>
+
+                <div className="space-y-2">
+                  {[
+                    {
+                      name: 'J. Smith · 10 Oak · 1A',
+                      amount: '$1,050',
+                      meta: 'Card • Today · 9:14 AM',
+                    },
+                    {
+                      name: 'L. Rivera · 22 Pine · 3C',
+                      amount: '$1,250',
+                      meta: 'ACH • Yesterday · 4:27 PM',
+                    },
+                    {
+                      name: 'D. Chen · 7 Spruce · 2F',
+                      amount: '$975',
+                      meta: 'Card • 2 days ago',
+                    },
+                  ].map((p) => (
+                    <div
+                      key={p.name}
+                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[11px] font-medium text-slate-100">
+                          {p.name}
+                        </p>
+                        <p className="text-[10px] text-slate-500">{p.meta}</p>
                       </div>
-                      <div className="flex items-start justify-between rounded-xl border border-slate-700 bg-slate-950/70 px-2.5 py-1.5">
-                        <div className="min-w-0">
-                          <p className="truncate text-[11px] font-medium text-slate-100">Leaky kitchen faucet</p>
-                          <p className="text-[10px] text-slate-400">7 Spruce · 2F • In progress</p>
-                        </div>
-                        <span className="shrink-0 rounded-full border border-sky-400/60 bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-200">
-                          In progress
-                        </span>
-                      </div>
+                      <p className="shrink-0 text-[11px] font-semibold text-emerald-300">
+                        {p.amount}
+                      </p>
                     </div>
-
-                    <p className="mt-2 text-[10px] text-slate-500">
-                      Tenants submit requests from their portal, and you get notified by email automatically.
-                    </p>
-                  </div>
+                  ))}
                 </div>
               </div>
 
-              <p className="mt-3 text-[10px] text-slate-500">
-                Built for landlords who want control—without a complicated property management platform.
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-medium text-slate-100">Maintenance</p>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    1 new
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between rounded-xl border border-amber-500/40 bg-amber-950/40 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-medium text-amber-50">
+                        No heat in bedroom
+                      </p>
+                      <p className="text-[10px] text-amber-100/90">
+                        14 Maple · 2B • High priority
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-amber-400/60 bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-50">
+                      New
+                    </span>
+                  </div>
+
+                  <div className="flex items-start justify-between rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-[11px] font-medium text-slate-100">
+                        Leaky kitchen faucet
+                      </p>
+                      <p className="text-[10px] text-slate-400">7 Spruce · 2F • In progress</p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-sky-400/60 bg-sky-500/15 px-2 py-0.5 text-[10px] text-sky-200">
+                      In progress
+                    </span>
+                  </div>
+                </div>
+
+                <p className="mt-3 text-[10px] text-slate-500">
+                  Tenants can pay online, submit maintenance requests, and access documents from their portal.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Social proof / trust */}
+        <section className="grid gap-4 border-t border-slate-900 py-10 lg:grid-cols-3">
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+            <p className="text-sm font-semibold text-slate-50">Built for landlords</p>
+            <p className="mt-2 text-[13px] text-slate-400">
+              RentZentro is software for landlords — not a property management company.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+            <p className="text-sm font-semibold text-slate-50">Powered by Stripe</p>
+            <p className="mt-2 text-[13px] text-slate-400">
+              Secure ACH and card payments with funds sent directly to your connected account.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+            <p className="text-sm font-semibold text-slate-50">Simple pricing</p>
+            <p className="mt-2 text-[13px] text-slate-400">
+              $29.95/month flat pricing with unlimited units, tenants, payments, and maintenance tracking.
+            </p>
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section className="border-t border-slate-900 py-10">
+          <div className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              How it works
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+              Set up in minutes, not hours
+            </h2>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300">
+                1
+              </div>
+              <p className="text-sm font-semibold text-slate-50">Add your property and tenant</p>
+              <p className="mt-2 text-[13px] text-slate-400">
+                Create your first property, invite a tenant, and keep everything organized from day one.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300">
+                2
+              </div>
+              <p className="text-sm font-semibold text-slate-50">Collect rent online</p>
+              <p className="mt-2 text-[13px] text-slate-400">
+                Tenants can pay by ACH or card, set up auto-pay, and get reminders automatically.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300">
+                3
+              </div>
+              <p className="text-sm font-semibold text-slate-50">Track everything in one place</p>
+              <p className="mt-2 text-[13px] text-slate-400">
+                Payments, documents, maintenance, listings, and e-signatures stay in one clean dashboard.
               </p>
             </div>
           </div>
         </section>
 
+        {/* Feature summary */}
+        <section className="border-t border-slate-900 py-10">
+          <div className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              What you get
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+              The core tools landlords actually use
+            </h2>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+              <p className="text-sm font-semibold text-slate-50">For landlords</p>
+              <div className="mt-4 space-y-3 text-[13px] text-slate-300">
+                {[
+                  'Collect rent online with ACH and card payments through Stripe.',
+                  'Enable auto-pay and automatic reminders to reduce late rent.',
+                  'Track payment status, documents, tenants, and maintenance in one place.',
+                  'Publish listings, share rental links, and send leases for e-sign.',
+                  'Add team members to help manage rent, maintenance, listings, and messaging.',
+                ].map((item) => (
+                  <div key={item} className="flex items-start gap-2">
+                    <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                      ✓
+                    </span>
+                    <p>{item}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+              <p className="text-sm font-semibold text-slate-50">For tenants</p>
+              <div className="mt-4 space-y-3 text-[13px] text-slate-300">
+                {[
+                  'Pay rent online with card or bank transfer (ACH).',
+                  'Set up auto-pay if enabled by the landlord.',
+                  'Submit maintenance requests and track updates.',
+                  'View shared documents and sign leases electronically.',
+                  'Use secure in-app messaging instead of digging through old text threads.',
+                ].map((item) => (
+                  <div key={item} className="flex items-start gap-2">
+                    <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                      ✓
+                    </span>
+                    <p>{item}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Public Listings Preview */}
-        <section className="mb-8 border-t border-slate-900 pt-6">
-          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <section className="border-t border-slate-900 py-10">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Public listings
-              </h2>
-              <p className="text-lg font-semibold text-slate-50">Browse rentals</p>
-              <p className="mt-2 text-[11px] text-slate-400">
-                RentZentro landlords can publish listings with photos and share them by link. Published rentals may appear
-                here and on the public browse page.
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-50">Browse rentals</h2>
+              <p className="mt-2 text-[13px] text-slate-400">
+                RentZentro landlords can publish listings with photos and share them by link.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href="/listings"
-                className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
-              >
-                Browse all listings
-              </Link>
-            </div>
+            <Link
+              href="/listings"
+              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
+            >
+              Browse all listings
+            </Link>
           </div>
 
           {publicListings.length === 0 ? (
             <>
               <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-100">Listing preview</p>
-                    <p className="mt-1 text-[11px] text-slate-400">
-                      Here’s what RentZentro listings look like. Real published listings will show here automatically.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Link
-                      href="/landlord/signup"
-                      className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/15"
-                    >
-                      Publish your first listing
-                    </Link>
-                  </div>
-                </div>
+                <p className="text-sm font-semibold text-slate-100">Listing preview</p>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Here’s what RentZentro listings look like. Real published listings will show here automatically.
+                </p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -601,160 +781,48 @@ export default async function HomePage() {
               </div>
 
               <p className="mt-3 text-[10px] text-slate-500">
-                Note: Example listings above are demos for presentation. Real listings are published by individual landlords.
-                RentZentro is software for managing rentals — not a property management company.
+                Example listings above are demos for presentation. RentZentro is software for managing rentals — not a property management company.
               </p>
             </>
           ) : (
-            <>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {publicListings.map((l) => {
-                  const cover = coverMap.get(l.id);
-                  const loc = [l.neighborhood, l.city, l.state].filter(Boolean).join(', ');
-                  const price = money(l.rent_amount);
-                  const available = fmtDate(l.available_date) || 'Now';
-
-                  const addressLine = l.hide_exact_address
-                    ? [l.neighborhood, l.city, l.state].filter(Boolean).join(', ')
-                    : [l.address_line1, l.address_line2, l.city, l.state, l.postal_code]
-                        .filter(Boolean)
-                        .join(', ');
-
-                  return (
-                    <Link
-                      key={l.id}
-                      href={`/listings/${l.slug}`}
-                      className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 hover:bg-slate-900/55 transition-colors"
-                    >
-                      <div className="relative h-44 w-full overflow-hidden bg-slate-950/50">
-                        {cover?.image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={cover.image_url}
-                            alt={`${l.title} cover photo`}
-                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">
-                            Listing preview
-                          </div>
-                        )}
-
-                        <div className="absolute left-3 top-3 inline-flex items-center rounded-full border border-slate-700 bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-slate-100 backdrop-blur">
-                          {price ? `${price}/mo` : 'Price not listed'}
-                        </div>
-                      </div>
-
-                      <div className="p-4">
-                        <p className="text-sm font-semibold text-slate-50">{l.title}</p>
-                        <p className="mt-1 text-[12px] text-slate-300">{loc || 'Location not specified'}</p>
-
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
-                            <p className="text-slate-500">Beds / Baths</p>
-                            <p className="mt-0.5 text-slate-100 font-semibold">
-                              {(l.beds ?? '-') + ' / ' + (l.baths ?? '-')}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
-                            <p className="text-slate-500">Available</p>
-                            <p className="mt-0.5 text-slate-100 font-semibold">{available}</p>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
-                          <p className="text-[11px] text-slate-500">Area / Address</p>
-                          <p className="mt-0.5 text-[12px] text-slate-200">{addressLine || 'Not provided'}</p>
-                          {l.hide_exact_address && (
-                            <p className="mt-1 text-[11px] text-slate-500">
-                              Exact address hidden until a showing is scheduled.
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="mt-4 inline-flex items-center gap-2 text-[11px] font-semibold text-emerald-200">
-                          View listing <span className="text-emerald-300">→</span>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-
-              <p className="mt-3 text-[10px] text-slate-500">
-                Note: Listings shown here are published by individual landlords. RentZentro is software for managing rentals —
-                not a property management company.
-              </p>
-            </>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {publicListings.map((listing) => (
+                <LiveListingCard
+                  key={listing.id}
+                  listing={listing}
+                  cover={coverMap.get(listing.id)}
+                />
+              ))}
+            </div>
           )}
         </section>
 
-        {/* First month free promo explanation */}
-        <section className="mb-8 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 px-4 py-5">
-          <div className="max-w-2xl">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-emerald-300">
-              First month free
+        {/* Final CTA */}
+        <section className="border-t border-slate-900 py-10">
+          <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-slate-950 p-6">
+            <h2 className="text-2xl font-semibold text-slate-50">
+              Ready to stop chasing rent?
             </h2>
-            <p className="text-sm font-semibold text-slate-50">
-              Get set up now — First month is on us.
-            </p>
-            <p className="mt-2 text-[11px] text-slate-300">
-              Create a new landlord account now and use RentZentro free for{' '}
-              <span className="font-semibold text-emerald-200">the first month</span>. No credit card required to start.
-              On April 1st, you can add your card to keep your account active at{' '}
-              <span className="font-semibold text-emerald-200">$29.95/month</span> or simply walk away.
+            <p className="mt-2 max-w-2xl text-sm text-slate-300">
+              Start free, set up your first property in minutes, and see how much simpler rent collection can be.
             </p>
 
-            <div className="mt-3 grid gap-3 text-[11px] sm:grid-cols-3">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <p className="mb-1 text-[11px] font-semibold text-slate-100">Try it with real tenants</p>
-                <p className="text-slate-400">Add properties, invite tenants, and run real rent reminders during the free period.</p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <p className="mb-1 text-[11px] font-semibold text-slate-100">No card, no surprise billing</p>
-                <p className="text-slate-400">We won&apos;t charge you for the first month. You choose whether to continue in April.</p>
-              </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <p className="mb-1 text-[11px] font-semibold text-slate-100">Keep what you set up</p>
-                <p className="text-slate-400">If you subscribe, your tenants, payments, listings, and history stay in place.</p>
-              </div>
-            </div>
-
-            <p className="mt-3 text-[10px] text-slate-500">
-              Free access applies to new landlord accounts created for the first month. A payment method is required
-              to continue service after the free period ends.
-            </p>
-          </div>
-        </section>
-
-        {/* How it works */}
-        <section className="mb-8 border-t border-slate-900 pt-6">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            How RentZentro fits into your day
-          </h2>
-          <div className="grid gap-4 text-sm md:grid-cols-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <p className="mb-1 text-xs font-semibold text-slate-200">1. Create your landlord account</p>
-              <p className="text-[11px] text-slate-400">
-                Sign up, add your properties and tenants, and turn on online payments, auto-pay, listings, and reminders.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <p className="mb-1 text-xs font-semibold text-slate-200">2. Invite tenants & go live</p>
-              <p className="text-[11px] text-slate-400">
-                Tenants get a clean portal to pay rent, view documents, e-sign leases, and submit maintenance requests.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <p className="mb-1 text-xs font-semibold text-slate-200">3. Stay organized in one dashboard</p>
-              <p className="text-[11px] text-slate-400">
-                Check what&apos;s overdue, what&apos;s paid, what needs fixing, and which documents need signatures—fast.
-              </p>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <Link
+                href="/landlord/signup"
+                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+              >
+                Start Free — No card required
+              </Link>
+              <Link
+                href="/landlord/login"
+                className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-800"
+              >
+                Landlord log in
+              </Link>
             </div>
           </div>
         </section>
-        {/* IMPORTANT: Footer removed — now handled globally in app/layout.tsx */}
       </div>
     </main>
   );
