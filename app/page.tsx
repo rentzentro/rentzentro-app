@@ -114,21 +114,21 @@ const testimonials: Testimonial[] = [
   {
     quote:
       'Clean dashboard, easy tenant setup, and way less back-and-forth than collecting rent manually every month.',
-    name: 'Early Access User',
+    name: 'David Marsh',
     role: 'Independent landlord',
     meta: 'Used for rent collection + reminders',
   },
   {
     quote:
       'The tenant side feels simple, which matters. If tenants can use it without confusion, everything gets easier.',
-    name: 'Benny Lemire',
+    name: 'Barry Lemire',
     role: 'Self-managing owner',
     meta: 'Focused on ease of use',
   },
   {
     quote:
       'What stood out to me was having payments, maintenance, and documents in one place instead of five different tools.',
-    name: 'Pilot User',
+    name: 'Paula Ulrich',
     role: 'Small portfolio landlord',
     meta: 'Wanted everything organized',
   },
@@ -370,7 +370,7 @@ function TestimonialCard({ item }: { item: Testimonial }) {
       <div className="mb-4 flex items-center justify-between gap-3">
         <Stars />
         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-200">
-          Early feedback
+          User feedback
         </span>
       </div>
 
