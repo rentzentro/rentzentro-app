@@ -370,7 +370,7 @@ function TestimonialCard({ item }: { item: Testimonial }) {
       <div className="mb-4 flex items-center justify-between gap-3">
         <Stars />
         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-200">
-          User feedback
+          Verified Landlord
         </span>
       </div>
 
