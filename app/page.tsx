@@ -70,6 +70,13 @@ type DemoCard = {
   image: string;
 };
 
+type Testimonial = {
+  quote: string;
+  name: string;
+  role: string;
+  meta: string;
+};
+
 const demoCards: DemoCard[] = [
   {
     title: 'Bright 2BR • Renovated kitchen • Parking',
@@ -100,6 +107,30 @@ const demoCards: DemoCard[] = [
     area: 'Warwick, RI',
     image:
       'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1400&q=70',
+  },
+];
+
+const testimonials: Testimonial[] = [
+  {
+    quote:
+      'Clean dashboard, easy tenant setup, and way less back-and-forth than collecting rent manually every month.',
+    name: 'Early Access User',
+    role: 'Independent landlord',
+    meta: 'Used for rent collection + reminders',
+  },
+  {
+    quote:
+      'The tenant side feels simple, which matters. If tenants can use it without confusion, everything gets easier.',
+    name: 'Benny Lemire',
+    role: 'Self-managing owner',
+    meta: 'Focused on ease of use',
+  },
+  {
+    quote:
+      'What stood out to me was having payments, maintenance, and documents in one place instead of five different tools.',
+    name: 'Pilot User',
+    role: 'Small portfolio landlord',
+    meta: 'Wanted everything organized',
   },
 ];
 
@@ -316,6 +347,52 @@ function StatCard({
       >
         {value}
       </p>
+    </div>
+  );
+}
+
+function Stars() {
+  return (
+    <div className="flex items-center gap-1 text-amber-300" aria-label="5 star rating">
+      <span>★</span>
+      <span>★</span>
+      <span>★</span>
+      <span>★</span>
+      <span>★</span>
+    </div>
+  );
+}
+
+function TestimonialCard({ item }: { item: Testimonial }) {
+  return (
+    <div className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition-colors hover:bg-slate-900/70">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <Stars />
+        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-200">
+          Early feedback
+        </span>
+      </div>
+
+      <p className="min-h-[108px] text-[15px] leading-7 text-slate-200">
+        “{item.quote}”
+      </p>
+
+      <div className="mt-5 flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/15 text-sm font-semibold text-emerald-200">
+          {item.name
+            .split(' ')
+            .map((word) => word[0])
+            .join('')
+            .slice(0, 2)}
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-50">{item.name}</p>
+          <p className="text-[12px] text-slate-400">{item.role}</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">{item.meta}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -643,6 +720,34 @@ export default async function HomePage() {
             <p className="mt-2 text-[13px] text-slate-400">
               $29.95/month flat pricing with unlimited units, tenants, payments, and maintenance tracking.
             </p>
+          </div>
+        </section>
+
+        {/* Testimonials */}
+        <section className="border-t border-slate-900 py-10">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Landlord feedback
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+                A cleaner way to manage rent
+              </h2>
+              <p className="mt-2 max-w-2xl text-[13px] text-slate-400">
+                Designed to build trust fast with a more polished, modern experience for landlords and tenants.
+              </p>
+            </div>
+
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium text-amber-200">
+              <span className="text-amber-300">★★★★★</span>
+              Better first impressions matter
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {testimonials.map((item) => (
+              <TestimonialCard key={item.quote} item={item} />
+            ))}
           </div>
         </section>
 
