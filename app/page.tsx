@@ -699,6 +699,49 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {/* Product video */}
+        <section className="border-t border-slate-900 py-10">
+          <div className="mb-6 text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Product walkthrough
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+              See how RentZentro works
+            </h2>
+            <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-300">
+              See how RentZentro helps you collect rent, track tenants, and stay organized — all in one place.
+            </p>
+          </div>
+
+          <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] sm:p-4">
+            <div className="aspect-video w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+              <iframe
+                src="https://www.loom.com/embed/79090a64a76b4d60ab01286b95b48d90"
+                frameBorder="0"
+                allowFullScreen
+                className="h-full w-full"
+                title="RentZentro walkthrough video"
+              />
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[12px] text-slate-400">
+                Quick walkthrough of the landlord dashboard, tenants, payments, and maintenance flow.
+              </p>
+              <Link
+                href="/landlord/signup"
+                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
+              >
+                Start Free — No card required
+              </Link>
+            </div>
+
+            <p className="mt-3 text-center text-[11px] text-slate-500">
+              No spreadsheets. No chasing tenants. No confusion.
+            </p>
+          </div>
+        </section>
+
         {/* Social proof / trust */}
         <section className="grid gap-4 border-t border-slate-900 py-10 lg:grid-cols-3">
           <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
