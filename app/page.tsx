@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = {
   title: 'RentZentro | Collect rent, track expenses, and manage rentals',
   description:
-    'RentZentro is software for landlords. Collect rent online (ACH + card), enable auto-pay, send reminders, track tenants, log expenses, view profit, manage maintenance, share documents, publish listings, and handle e-signatures in one simple platform.',
+    'RentZentro is software for landlords. Collect rent online (ACH + card), enable auto-pay, send reminders, track tenants, log expenses, view property profit, manage maintenance, share documents, publish listings, and handle e-signatures in one simple platform.',
   alternates: {
     canonical: 'https://www.rentzentro.com/',
   },
@@ -686,7 +686,7 @@ export default async function HomePage() {
               See how RentZentro works
             </h2>
             <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-300">
-              Quick walkthrough of the landlord dashboard, tenants, payments, expenses, and maintenance flow.
+              See the landlord dashboard, payments, expenses, and maintenance flow in under 2 minutes.
             </p>
           </div>
 
@@ -703,10 +703,10 @@ export default async function HomePage() {
 
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[12px] text-slate-400">
-                Watch the product demo without leaving RentZentro.
+                See the landlord dashboard, payments, expenses, and maintenance flow in under 2 minutes.
               </p>
-              <span className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950">
-                Demo embedded on page
+              <span className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-300">
+                2-minute demo
               </span>
             </div>
 
