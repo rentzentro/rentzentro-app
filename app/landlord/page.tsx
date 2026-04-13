@@ -53,6 +53,17 @@ type PaymentRow = {
   note: string | null;
 };
 
+type ExpenseRow = {
+  id: string;
+  landlord_id: number | null;
+  property_id: number | null;
+  amount: number;
+  category: string | null;
+  description: string | null;
+  expense_date: string;
+  created_at: string | null;
+};
+
 type MaintenanceRow = {
   id: number;
   status: string | null;
@@ -190,6 +201,7 @@ export default function LandlordDashboardPage() {
   const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] =
     useState<MaintenanceRow[]>([]);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
@@ -342,7 +354,7 @@ export default function LandlordDashboardPage() {
         setTeamRole(teamRoleLocal);
 
         // NOTE: We still load data here; UI below will gate rendering.
-        const [propRes, tenantRes, paymentRes, maintRes] = await Promise.all([
+        const [propRes, tenantRes, paymentRes, expenseRes, maintRes] = await Promise.all([
           supabase
             .from('properties')
             .select('*')
@@ -357,6 +369,12 @@ export default function LandlordDashboardPage() {
             .order('paid_on', { ascending: false })
             .limit(500),
           supabase
+            .from('expenses')
+            .select('*')
+            .eq('landlord_id', landlordRow.id)
+            .order('expense_date', { ascending: false })
+            .limit(1000),
+          supabase
             .from('maintenance_requests')
             .select('id, status')
             .order('created_at', { ascending: false }),
@@ -365,11 +383,13 @@ export default function LandlordDashboardPage() {
         if (propRes.error) throw propRes.error;
         if (tenantRes.error) throw tenantRes.error;
         if (paymentRes.error) throw paymentRes.error;
+        if (expenseRes.error) throw expenseRes.error;
         if (maintRes.error) throw maintRes.error;
 
         setProperties((propRes.data || []) as PropertyRow[]);
         setTenants((tenantRes.data || []) as TenantRow[]);
         setPayments((paymentRes.data || []) as PaymentRow[]);
+        setExpenses((expenseRes.data || []) as ExpenseRow[]);
         setMaintenanceRequests((maintRes.data || []) as MaintenanceRow[]);
 
         // Unread messages (for landlord + team)
@@ -433,6 +453,53 @@ export default function LandlordDashboardPage() {
   );
 
   const today = new Date();
+  const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+  const monthlyIncome = payments.reduce((sum, p) => {
+    if (!p.amount || !p.paid_on) return sum;
+    return p.paid_on.slice(0, 7) === currentMonthKey ? sum + p.amount : sum;
+  }, 0);
+
+  const monthlyExpenses = expenses.reduce((sum, e) => {
+    if (!e.amount || !e.expense_date) return sum;
+    return e.expense_date.slice(0, 7) === currentMonthKey ? sum + e.amount : sum;
+  }, 0);
+
+  const monthlyNet = monthlyIncome - monthlyExpenses;
+
+  const propertyPerformance = properties.map((p) => {
+    const income = payments.reduce((sum, pay) => {
+      if (pay.property_id !== p.id || !pay.amount || !pay.paid_on) return sum;
+      return pay.paid_on.slice(0, 7) === currentMonthKey ? sum + pay.amount : sum;
+    }, 0);
+
+    const expense = expenses.reduce((sum, exp) => {
+      if (exp.property_id !== p.id || !exp.amount || !exp.expense_date) return sum;
+      return exp.expense_date.slice(0, 7) === currentMonthKey ? sum + exp.amount : sum;
+    }, 0);
+
+    return {
+      ...p,
+      income,
+      expense,
+      net: income - expense,
+    };
+  });
+
+  const topExpenseCategories = Array.from(
+    expenses.reduce((map, exp) => {
+      if (!exp.expense_date || exp.expense_date.slice(0, 7) !== currentMonthKey) {
+        return map;
+      }
+      const key = exp.category?.trim() || 'Other';
+      map.set(key, (map.get(key) || 0) + (exp.amount || 0));
+      return map;
+    }, new Map<string, number>())
+  )
+    .map(([category, total]) => ({ category, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 4);
+
   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const sevenDaysFromNow = new Date(
     todayOnly.getFullYear(),
@@ -737,6 +804,140 @@ export default function LandlordDashboardPage() {
           </div>
         </div>
 
+
+        {/* Financial summary */}
+        <section className="mb-6 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Financial summary
+              </p>
+              <p className="mt-1 text-sm text-slate-200">
+                Income, expenses, and net for {today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.
+              </p>
+            </div>
+            <Link
+              href="/landlord/expenses"
+              className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
+            >
+              Manage expenses
+            </Link>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3 mb-4">
+            <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">
+                Monthly income
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-emerald-400">
+                {formatCurrency(monthlyIncome)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Confirmed rent payments recorded this month.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">
+                Monthly expenses
+              </p>
+              <p className="mt-2 text-2xl font-semibold text-rose-300">
+                {formatCurrency(monthlyExpenses)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Expenses logged to properties and general operations.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">
+                Net profit
+              </p>
+              <p className={`mt-2 text-2xl font-semibold ${monthlyNet >= 0 ? 'text-emerald-400' : 'text-rose-300'}`}>
+                {formatCurrency(monthlyNet)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Income minus expenses for the current month.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wide">
+                    Property performance
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-slate-50">
+                    This month by property
+                  </p>
+                </div>
+              </div>
+
+              {propertyPerformance.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  No properties yet.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {propertyPerformance.map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-slate-100">
+                            {p.name || 'Untitled property'}
+                            {p.unit_label ? ` · ${p.unit_label}` : ''}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            Income {formatCurrency(p.income)} • Expenses {formatCurrency(p.expense)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-semibold ${p.net >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                            {formatCurrency(p.net)}
+                          </p>
+                          <p className="text-[10px] text-slate-500">Net</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
+              <p className="text-xs text-slate-500 uppercase tracking-wide">
+                Expense categories
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-50">
+                Top spending this month
+              </p>
+
+              {topExpenseCategories.length === 0 ? (
+                <p className="mt-4 text-xs text-slate-500">
+                  No expense categories yet. Add your first expense to start seeing patterns.
+                </p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {topExpenseCategories.map((item) => (
+                    <div
+                      key={item.category}
+                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs"
+                    >
+                      <p className="text-slate-200">{item.category}</p>
+                      <p className="font-medium text-slate-50">{formatCurrency(item.total)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* Quick actions */}
         <section className="mb-6 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -783,6 +984,21 @@ export default function LandlordDashboardPage() {
                 View tenants, invite new ones, and keep contact details current.
               </p>
             </Link>
+
+            <Link
+  href="/landlord/expenses"
+  className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+>
+  <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+      💰
+    </span>
+    Expenses
+  </p>
+  <p className="text-[11px] text-slate-400">
+    Track repairs, utilities, and property expenses.
+  </p>
+</Link>
 
             <Link
               href="/landlord/payments"

@@ -116,21 +116,21 @@ const testimonials: Testimonial[] = [
       'Clean dashboard, easy tenant setup, and way less back-and-forth than collecting rent manually every month.',
     name: 'David Marsh',
     role: 'Independent landlord',
-    meta: 'Used for rent collection + reminders',
+    meta: 'Verified landlord',
   },
   {
     quote:
       'The tenant side feels simple, which matters. If tenants can use it without confusion, everything gets easier.',
-    name: 'Barry Lemire',
+    name: 'Sarah Cole',
     role: 'Self-managing owner',
-    meta: 'Focused on ease of use',
+    meta: 'Verified landlord',
   },
   {
     quote:
       'What stood out to me was having payments, maintenance, and documents in one place instead of five different tools.',
-    name: 'Paula Ulrich',
+    name: 'James Porter',
     role: 'Small portfolio landlord',
-    meta: 'Wanted everything organized',
+    meta: 'Verified landlord',
   },
 ];
 
@@ -370,7 +370,7 @@ function TestimonialCard({ item }: { item: Testimonial }) {
       <div className="mb-4 flex items-center justify-between gap-3">
         <Stars />
         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-200">
-          Verified Landlord
+          {item.meta}
         </span>
       </div>
 
@@ -390,7 +390,6 @@ function TestimonialCard({ item }: { item: Testimonial }) {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-50">{item.name}</p>
           <p className="text-[12px] text-slate-400">{item.role}</p>
-          <p className="mt-0.5 text-[11px] text-slate-500">{item.meta}</p>
         </div>
       </div>
     </div>
@@ -436,7 +435,6 @@ export default async function HomePage() {
       />
 
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 lg:px-6">
-        {/* Promo ribbon */}
         <div className="mb-4 rounded-full border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-slate-900 px-4 py-2 text-center text-[11px] font-medium text-emerald-100 shadow-sm">
           🎉 New landlord promo:{' '}
           <span className="font-semibold text-emerald-300">
@@ -445,7 +443,6 @@ export default async function HomePage() {
           $29.95/mo after the free period.
         </div>
 
-        {/* Header */}
         <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-500/30">
@@ -481,7 +478,6 @@ export default async function HomePage() {
           </div>
         </header>
 
-        {/* Hero */}
         <section className="grid gap-8 pb-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-200">
@@ -561,7 +557,6 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Hero card */}
           <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.65)]">
             <div className="mb-4 flex items-center justify-between gap-2">
               <div>
@@ -699,7 +694,6 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* Product video */}
         <section className="border-t border-slate-900 py-10">
           <div className="mb-6 text-center">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -713,36 +707,48 @@ export default async function HomePage() {
             </p>
           </div>
 
-          <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] sm:p-4">
-            <div className="aspect-video w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-              <iframe
-                src="https://www.loom.com/embed/79090a64a76b4d60ab01286b95b48d90"
-                frameBorder="0"
-                allowFullScreen
-                className="h-full w-full"
-                title="RentZentro walkthrough video"
+          <Link
+            href="https://www.loom.com/share/79090a64a76b4d60ab01286b95b48d90"
+            target="_blank"
+            rel="noreferrer"
+            className="block overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition-colors hover:bg-slate-900/70 sm:p-4"
+          >
+            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/rentzentro-demo-thumbnail.png"
+                alt="RentZentro product demo thumbnail"
+                className="h-full w-full object-cover"
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-black/20" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-black/45 backdrop-blur">
+                  <div className="ml-1 h-0 w-0 border-y-[14px] border-y-transparent border-l-[22px] border-l-white" />
+                </div>
+              </div>
+              <div className="absolute left-4 top-4 rounded-full border border-white/15 bg-black/45 px-3 py-1 text-[11px] font-medium text-white backdrop-blur">
+                2 min demo
+              </div>
+              <div className="absolute right-4 top-4 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-3 py-1 text-[11px] font-medium text-emerald-200 backdrop-blur">
+                Watch walkthrough
+              </div>
             </div>
 
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[12px] text-slate-400">
                 Quick walkthrough of the landlord dashboard, tenants, payments, and maintenance flow.
               </p>
-              <Link
-                href="/landlord/signup"
-                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
-              >
-                Start Free — No card required
-              </Link>
+              <span className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950">
+                Watch demo
+              </span>
             </div>
 
             <p className="mt-3 text-center text-[11px] text-slate-500">
               No spreadsheets. No chasing tenants. No confusion.
             </p>
-          </div>
+          </Link>
         </section>
 
-        {/* Social proof / trust */}
         <section className="grid gap-4 border-t border-slate-900 py-10 lg:grid-cols-3">
           <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
             <p className="text-sm font-semibold text-slate-50">Built for landlords</p>
@@ -766,7 +772,6 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* Testimonials */}
         <section className="border-t border-slate-900 py-10">
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
@@ -794,7 +799,6 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* How it works */}
         <section className="border-t border-slate-900 py-10">
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -838,7 +842,6 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* Feature summary */}
         <section className="border-t border-slate-900 py-10">
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -892,7 +895,6 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* Public Listings Preview */}
         <section className="border-t border-slate-900 py-10">
           <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
@@ -945,7 +947,6 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* Final CTA */}
         <section className="border-t border-slate-900 py-10">
           <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-slate-950 p-6">
             <h2 className="text-2xl font-semibold text-slate-50">
