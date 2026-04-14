@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = {
   title: 'RentZentro | Collect rent, track expenses, and manage rentals',
   description:
-    'RentZentro is software for landlords. Collect rent online (ACH + card), enable auto-pay, send reminders, track tenants, log expenses, view property profit, manage maintenance, share documents, publish listings, and handle e-signatures in one simple platform.',
+    'RentZentro is software for landlords. Collect rent online (ACH + card), enable auto-pay, send reminders, track tenants, log expenses, view profit, manage maintenance, share documents, publish listings, and handle e-signatures in one simple platform.',
   alternates: {
     canonical: 'https://www.rentzentro.com/',
   },
@@ -198,13 +198,13 @@ async function getHomepageListings(limit = 6) {
 
 function DemoListingCard({ d }: { d: DemoCard }) {
   return (
-    <div className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70">
+    <div className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30 hover:bg-slate-900/70">
       <div className="relative h-44 w-full overflow-hidden bg-slate-950/50">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={d.image}
           alt="Example rental listing preview"
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           loading="lazy"
         />
         <div className="absolute left-3 top-3 inline-flex items-center rounded-full border border-slate-700 bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-slate-100 backdrop-blur">
@@ -270,7 +270,7 @@ function LiveListingCard({
   return (
     <Link
       href={`/listings/${listing.slug}`}
-      className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 transition-colors hover:bg-slate-900/55"
+      className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30 hover:bg-slate-900/70"
     >
       <div className="relative h-44 w-full overflow-hidden bg-slate-950/50">
         {cover?.image_url ? (
@@ -278,7 +278,7 @@ function LiveListingCard({
           <img
             src={cover.image_url}
             alt={`${listing.title} cover photo`}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
             loading="lazy"
           />
         ) : (
@@ -338,7 +338,7 @@ function StatCard({
       : 'border-slate-800 bg-slate-900/80';
 
   return (
-    <div className={`rounded-2xl border p-4 ${classes}`}>
+    <div className={`rounded-2xl border p-4 transition duration-300 hover:-translate-y-1 ${classes}`}>
       <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
       <p
         className={`mt-1 text-2xl font-semibold ${
@@ -365,7 +365,7 @@ function Stars() {
 
 function TestimonialCard({ item }: { item: Testimonial }) {
   return (
-    <div className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition-colors hover:bg-slate-900/70">
+    <div className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30 hover:bg-slate-900/70">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
       <div className="mb-4 flex items-center justify-between gap-3">
         <Stars />
@@ -433,8 +433,39 @@ export default async function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes rzFadeUp {
+              from {
+                opacity: 0;
+                transform: translateY(20px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+
+            .rz-fade-up {
+              opacity: 0;
+              animation: rzFadeUp 0.7s ease-out forwards;
+            }
+
+            .rz-delay-1 { animation-delay: 0.08s; }
+            .rz-delay-2 { animation-delay: 0.16s; }
+            .rz-delay-3 { animation-delay: 0.24s; }
+            .rz-delay-4 { animation-delay: 0.32s; }
+            .rz-delay-5 { animation-delay: 0.4s; }
+            .rz-delay-6 { animation-delay: 0.48s; }
+            .rz-delay-7 { animation-delay: 0.56s; }
+            .rz-delay-8 { animation-delay: 0.64s; }
+          `,
+        }}
+      />
+
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 lg:px-6">
-        <div className="mb-4 rounded-full border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-slate-900 px-4 py-2 text-center text-[11px] font-medium text-emerald-100 shadow-sm">
+        <div className="rz-fade-up mb-4 rounded-full border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-slate-900 px-4 py-2 text-center text-[11px] font-medium text-emerald-100 shadow-sm">
           🎉 New landlord promo:{' '}
           <span className="font-semibold text-emerald-300">
             First month free — no card required to start.
@@ -442,9 +473,9 @@ export default async function HomePage() {
           $29.95/mo after the free period.
         </div>
 
-        <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
+        <header className="rz-fade-up rz-delay-1 mb-8 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-500/30">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-500/30 transition duration-300 hover:scale-105">
               <span className="text-lg font-semibold text-emerald-400">RZ</span>
             </div>
             <div className="leading-tight">
@@ -458,19 +489,19 @@ export default async function HomePage() {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/landlord/login"
-              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-800"
+              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-100 transition duration-200 hover:scale-105 hover:bg-slate-800 active:scale-95"
             >
               Landlord log in
             </Link>
             <Link
               href="/tenant/login"
-              className="rounded-full border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/60 hover:text-emerald-200"
+              className="rounded-full border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 transition duration-200 hover:scale-105 hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
             >
               Tenant log in
             </Link>
             <Link
               href="/team/login"
-              className="rounded-full border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-emerald-500/60 hover:text-emerald-200"
+              className="rounded-full border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-200 transition duration-200 hover:scale-105 hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
             >
               Team member log in
             </Link>
@@ -478,8 +509,8 @@ export default async function HomePage() {
         </header>
 
         <section className="grid gap-8 pb-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-200">
+          <div className="rz-fade-up rz-delay-2">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-200 transition duration-300 hover:border-emerald-500/50 hover:bg-emerald-500/15">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
               Payments powered by Stripe
             </div>
@@ -524,13 +555,13 @@ export default async function HomePage() {
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 href="/landlord/signup"
-                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400"
+                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-sm transition duration-200 hover:scale-[1.03] hover:bg-emerald-400 active:scale-95"
               >
                 Start Free — No card required
               </Link>
               <Link
                 href="/listings"
-                className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-800"
+                className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.03] hover:bg-slate-800 active:scale-95"
               >
                 Browse rentals
               </Link>
@@ -541,22 +572,22 @@ export default async function HomePage() {
             </p>
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1">
+              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
                 First month free
               </span>
-              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1">
+              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
                 $29.95/mo flat pricing
               </span>
-              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1">
+              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
                 Unlimited units
               </span>
-              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1">
+              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
                 Expenses + profit tracking
               </span>
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.65)]">
+          <div className="rz-fade-up rz-delay-3 rounded-3xl border border-slate-800 bg-slate-950/70 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20">
             <div className="mb-4 flex items-center justify-between gap-2">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-slate-500">
@@ -578,26 +609,26 @@ export default async function HomePage() {
               <StatCard label="Monthly rent roll" value="$14,750" tone="success" />
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 transition duration-300 hover:border-emerald-500/20">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-medium text-slate-100">Rent status</p>
                 <span className="text-[10px] text-slate-500">This month</span>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-3">
-                <div className="rounded-2xl border border-rose-500/40 bg-rose-950/40 p-3">
+                <div className="rounded-2xl border border-rose-500/40 bg-rose-950/40 p-3 transition duration-300 hover:-translate-y-0.5">
                   <p className="text-xs font-semibold text-rose-100">Overdue</p>
                   <p className="mt-1 text-xs text-rose-100/90">1 unit · $1,200</p>
                   <p className="mt-0.5 text-[10px] text-rose-200/80">14 Maple · 2B</p>
                 </div>
 
-                <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-3">
+                <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-3 transition duration-300 hover:-translate-y-0.5">
                   <p className="text-xs font-semibold text-amber-100">Due soon</p>
                   <p className="mt-1 text-xs text-amber-100/90">3 units · $3,450</p>
                   <p className="mt-0.5 text-[10px] text-amber-100/80">Auto-reminders enabled</p>
                 </div>
 
-                <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-3">
+                <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-3 transition duration-300 hover:-translate-y-0.5">
                   <p className="text-xs font-semibold text-emerald-100">Paid</p>
                   <p className="mt-1 text-xs text-emerald-100/90">8 units · $10,100</p>
                   <p className="mt-0.5 text-[10px] text-emerald-100/80">Logged via Stripe</p>
@@ -606,7 +637,7 @@ export default async function HomePage() {
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 transition duration-300 hover:border-emerald-500/20">
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-sm font-medium text-slate-100">Recent payments</p>
                   <span className="text-[10px] text-slate-500">Last 3</span>
@@ -632,7 +663,7 @@ export default async function HomePage() {
                   ].map((p) => (
                     <div
                       key={p.name}
-                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2"
+                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-[11px] font-medium text-slate-100">
@@ -648,22 +679,22 @@ export default async function HomePage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 transition duration-300 hover:border-emerald-500/20">
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-sm font-medium text-slate-100">Financial snapshot</p>
                   <span className="text-[10px] text-slate-500">This month</span>
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+                  <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 transition duration-300 hover:border-emerald-500/20">
                     <span className="text-[11px] text-slate-300">Income</span>
                     <span className="text-[11px] font-semibold text-emerald-300">$10,100</span>
                   </div>
-                  <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+                  <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 transition duration-300 hover:border-emerald-500/20">
                     <span className="text-[11px] text-slate-300">Expenses</span>
                     <span className="text-[11px] font-semibold text-rose-300">$2,240</span>
                   </div>
-                  <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/30 px-3 py-2">
+                  <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/30 px-3 py-2 transition duration-300 hover:-translate-y-0.5">
                     <span className="text-[11px] text-emerald-100">Net profit</span>
                     <span className="text-[11px] font-semibold text-emerald-200">$7,860</span>
                   </div>
@@ -677,7 +708,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="border-t border-slate-900 py-10">
+        <section className="rz-fade-up rz-delay-4 border-t border-slate-900 py-10">
           <div className="mb-6 text-center">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Product walkthrough
@@ -686,11 +717,11 @@ export default async function HomePage() {
               See how RentZentro works
             </h2>
             <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-300">
-              See the landlord dashboard, payments, expenses, and maintenance flow in under 2 minutes.
+              Quick walkthrough of the landlord dashboard, tenants, payments, expenses, and maintenance flow.
             </p>
           </div>
 
-          <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] sm:p-4">
+          <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 sm:p-4">
             <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-800 bg-black">
               <iframe
                 src="https://www.loom.com/embed/79090a64a76b4d60ab01286b95b48d90"
@@ -716,29 +747,29 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="grid gap-4 border-t border-slate-900 py-10 lg:grid-cols-4">
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+        <section className="rz-fade-up rz-delay-5 grid gap-4 border-t border-slate-900 py-10 lg:grid-cols-4">
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
             <p className="text-sm font-semibold text-slate-50">Built for landlords</p>
             <p className="mt-2 text-[13px] text-slate-400">
               RentZentro is software for landlords — not a property management company.
             </p>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
             <p className="text-sm font-semibold text-slate-50">Powered by Stripe</p>
             <p className="mt-2 text-[13px] text-slate-400">
               Secure ACH and card payments with funds sent directly to your connected account.
             </p>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
             <p className="text-sm font-semibold text-slate-50">Simple pricing</p>
             <p className="mt-2 text-[13px] text-slate-400">
               $29.95/month flat pricing with unlimited units, tenants, payments, maintenance, and expenses.
             </p>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
             <p className="text-sm font-semibold text-slate-50">Financial clarity</p>
             <p className="mt-2 text-[13px] text-slate-400">
               Log expenses, view property totals, and keep a simple picture of income, expenses, and net.
@@ -746,7 +777,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="border-t border-slate-900 py-10">
+        <section className="rz-fade-up rz-delay-6 border-t border-slate-900 py-10">
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -773,7 +804,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="border-t border-slate-900 py-10">
+        <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-10">
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               How it works
@@ -784,8 +815,8 @@ export default async function HomePage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300">
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300 transition duration-300 group-hover:scale-105">
                 1
               </div>
               <p className="text-sm font-semibold text-slate-50">Add your property and tenant</p>
@@ -794,7 +825,7 @@ export default async function HomePage() {
               </p>
             </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
               <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300">
                 2
               </div>
@@ -804,7 +835,7 @@ export default async function HomePage() {
               </p>
             </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
               <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300">
                 3
               </div>
@@ -816,7 +847,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="border-t border-slate-900 py-10">
+        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               What you get
@@ -827,7 +858,7 @@ export default async function HomePage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
               <p className="text-sm font-semibold text-slate-50">For landlords</p>
               <div className="mt-4 space-y-3 text-[13px] text-slate-300">
                 {[
@@ -849,7 +880,7 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5">
+            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
               <p className="text-sm font-semibold text-slate-50">For tenants</p>
               <div className="mt-4 space-y-3 text-[13px] text-slate-300">
                 {[
@@ -871,7 +902,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="border-t border-slate-900 py-10">
+        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
           <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -885,7 +916,7 @@ export default async function HomePage() {
 
             <Link
               href="/listings"
-              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400"
+              className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 transition duration-200 hover:scale-105 hover:bg-emerald-400 active:scale-95"
             >
               Browse all listings
             </Link>
@@ -893,7 +924,7 @@ export default async function HomePage() {
 
           {publicListings.length === 0 ? (
             <>
-              <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-5">
+              <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70">
                 <p className="text-sm font-semibold text-slate-100">Listing preview</p>
                 <p className="mt-1 text-[11px] text-slate-400">
                   Here’s what RentZentro listings look like. Real published listings will show here automatically.
@@ -923,8 +954,8 @@ export default async function HomePage() {
           )}
         </section>
 
-        <section className="border-t border-slate-900 py-10">
-          <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-slate-950 p-6">
+        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
+          <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-slate-950 p-6 transition duration-300 hover:border-emerald-500/40 hover:shadow-[0_18px_45px_rgba(0,0,0,0.4)]">
             <h2 className="text-2xl font-semibold text-slate-50">
               Ready to stop chasing rent?
             </h2>
@@ -935,13 +966,13 @@ export default async function HomePage() {
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <Link
                 href="/landlord/signup"
-                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
+                className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition duration-200 hover:scale-[1.03] hover:bg-emerald-400 active:scale-95"
               >
                 Start Free — No card required
               </Link>
               <Link
                 href="/landlord/login"
-                className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-800"
+                className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.03] hover:bg-slate-800 active:scale-95"
               >
                 Landlord log in
               </Link>
