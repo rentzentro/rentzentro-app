@@ -8,23 +8,23 @@ export const dynamic = 'force-dynamic';
 export const metadata = {
   title: 'RentZentro | Collect rent, track expenses, and manage rentals',
   description:
-    'RentZentro is software for landlords. Collect rent online (ACH + card), enable auto-pay, send reminders, track tenants, log expenses, view profit, manage maintenance, share documents, publish listings, and handle e-signatures in one simple platform.',
+    'RentZentro is software for landlords. Collect rent online, enable auto-pay, send reminders, track expenses by property, view profit, manage maintenance, share documents, publish listings, and handle e-signatures in one simple platform.',
   alternates: {
     canonical: 'https://www.rentzentro.com/',
   },
   openGraph: {
-    title: 'RentZentro | Stop chasing rent. Track rent, expenses, and profit.',
+    title: 'RentZentro | Know your real rental profit — not just rent collected.',
     description:
-      'Collect rent online, track expenses, view property profit, manage tenants, maintenance, listings, and documents in one clean landlord platform.',
+      'Collect rent online, track expenses by property, and see real rental performance in one clean landlord platform.',
     url: 'https://www.rentzentro.com/',
     siteName: 'RentZentro',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'RentZentro | Stop chasing rent. Track rent, expenses, and profit.',
+    title: 'RentZentro | Know your real rental profit — not just rent collected.',
     description:
-      'Collect rent online, track expenses, manage tenants, maintenance, listings, and documents in one place.',
+      'Collect rent online, track expenses by property, and manage rentals in one place.',
   },
 };
 
@@ -351,6 +351,41 @@ function StatCard({
   );
 }
 
+function TrustCard({
+  title,
+  text,
+}: {
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
+      <p className="text-sm font-semibold text-slate-50">{title}</p>
+      <p className="mt-2 text-[13px] text-slate-400">{text}</p>
+    </div>
+  );
+}
+
+function StepCard({
+  number,
+  title,
+  text,
+}: {
+  number: string;
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
+      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300">
+        {number}
+      </div>
+      <p className="text-sm font-semibold text-slate-50">{title}</p>
+      <p className="mt-2 text-[13px] text-slate-400">{text}</p>
+    </div>
+  );
+}
+
 function Stars() {
   return (
     <div className="flex items-center gap-1 text-amber-300" aria-label="5 star rating">
@@ -417,7 +452,7 @@ export default async function HomePage() {
     operatingSystem: 'Web',
     url: 'https://www.rentzentro.com/',
     description:
-      'RentZentro is software for landlords. Collect rent online, track expenses, view property profit, manage tenants, maintenance, documents, listings, and e-signatures in one place.',
+      'RentZentro is software for landlords. Collect rent online, track expenses by property, view property profit, manage tenants, maintenance, documents, listings, and e-signatures in one place.',
     offers: {
       '@type': 'Offer',
       price: '29.95',
@@ -466,9 +501,9 @@ export default async function HomePage() {
 
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 lg:px-6">
         <div className="rz-fade-up mb-4 rounded-full border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-slate-900 px-4 py-2 text-center text-[11px] font-medium text-emerald-100 shadow-sm">
-          🎉 New landlord promo:{' '}
+          🎉 Risk free access:{' '}
           <span className="font-semibold text-emerald-300">
-            First month free — no card required to start.
+            Start free — no card required.
           </span>{' '}
           $29.95/mo after the free period.
         </div>
@@ -481,7 +516,7 @@ export default async function HomePage() {
             <div className="leading-tight">
               <p className="text-sm font-semibold tracking-tight">RentZentro</p>
               <p className="text-[11px] text-slate-400">
-                Simple rent collection and landlord management software
+                Software for landlords — not a property management company
               </p>
             </div>
           </div>
@@ -508,7 +543,7 @@ export default async function HomePage() {
           </div>
         </header>
 
-        <section className="grid gap-8 pb-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+        <section className="grid gap-8 pb-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="rz-fade-up rz-delay-2">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-200 transition duration-300 hover:border-emerald-500/50 hover:bg-emerald-500/15">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -516,13 +551,12 @@ export default async function HomePage() {
             </div>
 
             <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl lg:text-6xl">
-              Stop chasing rent. Track rent, expenses, and profit in one place.
+              Know Your Real Rental Profit — Not Just Rent Collected
             </h1>
 
             <p className="mt-4 max-w-2xl text-base text-slate-300 sm:text-lg">
-              Collect rent online, enable auto-pay, send reminders, track tenants,
-              log expenses, view property profit, manage maintenance, and keep
-              everything organized in one simple platform built for landlords.
+              Collect rent, track expenses by property, and see exactly what each
+              rental is making — all in one simple dashboard built for landlords.
             </p>
 
             <div className="mt-5 grid max-w-xl gap-2 text-sm text-slate-200">
@@ -530,25 +564,25 @@ export default async function HomePage() {
                 <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
                   ✓
                 </span>
-                <p>ACH & card payments</p>
+                <p>Collect rent online with ACH or card payments</p>
               </div>
               <div className="flex items-start gap-2">
                 <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
                   ✓
                 </span>
-                <p>Auto-pay & automatic reminders</p>
+                <p>Send automatic reminders and reduce late rent</p>
               </div>
               <div className="flex items-start gap-2">
                 <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
                   ✓
                 </span>
-                <p>Track expenses and see property performance</p>
+                <p>Track expenses and see performance by property</p>
               </div>
               <div className="flex items-start gap-2">
                 <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
                   ✓
                 </span>
-                <p>Maintenance, documents, listings, and e-signatures in one dashboard</p>
+                <p>Manage tenants, maintenance, documents, listings, and e-signatures</p>
               </div>
             </div>
 
@@ -557,7 +591,7 @@ export default async function HomePage() {
                 href="/landlord/signup"
                 className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-sm transition duration-200 hover:scale-[1.03] hover:bg-emerald-400 active:scale-95"
               >
-                Start Free — No card required
+                Create Free Account (Takes 60 Seconds)
               </Link>
               <Link
                 href="/listings"
@@ -568,7 +602,7 @@ export default async function HomePage() {
             </div>
 
             <p className="mt-3 text-[12px] text-emerald-300">
-              Funds go directly to your Stripe-connected account. RentZentro never holds your money.
+              No credit card required • Setup in minutes • Funds go directly to your Stripe-connected account
             </p>
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
@@ -591,15 +625,15 @@ export default async function HomePage() {
             <div className="mb-4 flex items-center justify-between gap-2">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                  Live rent overview
+                  Live portfolio view
                 </p>
                 <p className="text-sm font-semibold text-slate-50">
-                  What landlords care about most
+                  What business-minded landlords want to see
                 </p>
               </div>
               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                Simple dashboard
+                Clean dashboard
               </span>
             </div>
 
@@ -611,27 +645,27 @@ export default async function HomePage() {
 
             <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 transition duration-300 hover:border-emerald-500/20">
               <div className="mb-3 flex items-center justify-between">
-                <p className="text-sm font-medium text-slate-100">Rent status</p>
+                <p className="text-sm font-medium text-slate-100">Financial snapshot</p>
                 <span className="text-[10px] text-slate-500">This month</span>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-3">
-                <div className="rounded-2xl border border-rose-500/40 bg-rose-950/40 p-3 transition duration-300 hover:-translate-y-0.5">
-                  <p className="text-xs font-semibold text-rose-100">Overdue</p>
-                  <p className="mt-1 text-xs text-rose-100/90">1 unit · $1,200</p>
-                  <p className="mt-0.5 text-[10px] text-rose-200/80">14 Maple · 2B</p>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 transition duration-300 hover:-translate-y-0.5">
+                  <p className="text-xs font-semibold text-slate-100">Income</p>
+                  <p className="mt-1 text-xs text-slate-200">$10,100 collected</p>
+                  <p className="mt-0.5 text-[10px] text-slate-500">Tracked live in dashboard</p>
                 </div>
 
-                <div className="rounded-2xl border border-amber-500/40 bg-amber-950/40 p-3 transition duration-300 hover:-translate-y-0.5">
-                  <p className="text-xs font-semibold text-amber-100">Due soon</p>
-                  <p className="mt-1 text-xs text-amber-100/90">3 units · $3,450</p>
-                  <p className="mt-0.5 text-[10px] text-amber-100/80">Auto-reminders enabled</p>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 transition duration-300 hover:-translate-y-0.5">
+                  <p className="text-xs font-semibold text-slate-100">Expenses</p>
+                  <p className="mt-1 text-xs text-slate-200">$2,240 logged</p>
+                  <p className="mt-0.5 text-[10px] text-slate-500">By property and category</p>
                 </div>
 
                 <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-3 transition duration-300 hover:-translate-y-0.5">
-                  <p className="text-xs font-semibold text-emerald-100">Paid</p>
-                  <p className="mt-1 text-xs text-emerald-100/90">8 units · $10,100</p>
-                  <p className="mt-0.5 text-[10px] text-emerald-100/80">Logged via Stripe</p>
+                  <p className="text-xs font-semibold text-emerald-100">Net profit</p>
+                  <p className="mt-1 text-xs text-emerald-100/90">$7,860</p>
+                  <p className="mt-0.5 text-[10px] text-emerald-100/80">Real performance view</p>
                 </div>
               </div>
             </div>
@@ -681,44 +715,67 @@ export default async function HomePage() {
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 transition duration-300 hover:border-emerald-500/20">
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-100">Financial snapshot</p>
+                  <p className="text-sm font-medium text-slate-100">Rent status</p>
                   <span className="text-[10px] text-slate-500">This month</span>
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 transition duration-300 hover:border-emerald-500/20">
-                    <span className="text-[11px] text-slate-300">Income</span>
-                    <span className="text-[11px] font-semibold text-emerald-300">$10,100</span>
+                  <div className="flex items-center justify-between rounded-xl border border-rose-500/30 bg-rose-950/30 px-3 py-2 transition duration-300 hover:-translate-y-0.5">
+                    <span className="text-[11px] text-rose-100">Overdue</span>
+                    <span className="text-[11px] font-semibold text-rose-200">1 unit</span>
                   </div>
-                  <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 transition duration-300 hover:border-emerald-500/20">
-                    <span className="text-[11px] text-slate-300">Expenses</span>
-                    <span className="text-[11px] font-semibold text-rose-300">$2,240</span>
+                  <div className="flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-950/30 px-3 py-2 transition duration-300 hover:-translate-y-0.5">
+                    <span className="text-[11px] text-amber-100">Due soon</span>
+                    <span className="text-[11px] font-semibold text-amber-200">3 units</span>
                   </div>
                   <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/30 px-3 py-2 transition duration-300 hover:-translate-y-0.5">
-                    <span className="text-[11px] text-emerald-100">Net profit</span>
-                    <span className="text-[11px] font-semibold text-emerald-200">$7,860</span>
+                    <span className="text-[11px] text-emerald-100">Paid</span>
+                    <span className="text-[11px] font-semibold text-emerald-200">8 units</span>
                   </div>
                 </div>
 
                 <p className="mt-3 text-[10px] text-slate-500">
-                  See rent collected, expenses logged, and simple property performance in one dashboard.
+                  See collected rent, logged expenses, and payment status without bouncing between tools.
                 </p>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="rz-fade-up rz-delay-4 border-t border-slate-900 py-10">
-          <div className="mb-6 text-center">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Product walkthrough
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-              See how RentZentro works
-            </h2>
-            <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-300">
-              Quick walkthrough of the landlord dashboard, tenants, payments, expenses, and maintenance flow.
-            </p>
+        <section className="rz-fade-up rz-delay-4 border-t border-slate-900 py-8">
+          <div className="grid gap-4 lg:grid-cols-4">
+            <TrustCard
+              title="Secure payments"
+              text="ACH and card payments are processed through Stripe with bank-level security."
+            />
+            <TrustCard
+              title="No platform holds funds"
+              text="Rent goes directly to your connected account. RentZentro never stores your money."
+            />
+            <TrustCard
+              title="Built for real landlords"
+              text="Simple enough for smaller portfolios, powerful enough to manage actual rental income."
+            />
+            <TrustCard
+              title="Risk free access"
+              text="No credit card required • Setup in minutes • Funds go directly to your Stripe-connected account."
+            />
+          </div>
+        </section>
+
+        <section className="rz-fade-up rz-delay-5 border-t border-slate-900 py-10">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Product walkthrough
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+                See how RentZentro works in under 2 minutes
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm text-slate-300">
+                Watch the landlord dashboard, payments, expense tracking, and maintenance flow without leaving the site.
+              </p>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 sm:p-4">
@@ -742,124 +799,28 @@ export default async function HomePage() {
             </div>
 
             <p className="mt-3 text-center text-[11px] text-slate-500">
-              No spreadsheets. No chasing tenants. No jumping between tools.
-            </p>
-          </div>
-        </section>
-
-        <section className="rz-fade-up rz-delay-5 grid gap-4 border-t border-slate-900 py-10 lg:grid-cols-4">
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
-            <p className="text-sm font-semibold text-slate-50">Built for landlords</p>
-            <p className="mt-2 text-[13px] text-slate-400">
-              RentZentro is software for landlords — not a property management company.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
-            <p className="text-sm font-semibold text-slate-50">Powered by Stripe</p>
-            <p className="mt-2 text-[13px] text-slate-400">
-              Secure ACH and card payments with funds sent directly to your connected account.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
-            <p className="text-sm font-semibold text-slate-50">Simple pricing</p>
-            <p className="mt-2 text-[13px] text-slate-400">
-              $29.95/month flat pricing with unlimited units, tenants, payments, maintenance, and expenses.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
-            <p className="text-sm font-semibold text-slate-50">Financial clarity</p>
-            <p className="mt-2 text-[13px] text-slate-400">
-              Log expenses, view property totals, and keep a simple picture of income, expenses, and net.
+              No spreadsheets. No chasing tenants. No jumping between apps.
             </p>
           </div>
         </section>
 
         <section className="rz-fade-up rz-delay-6 border-t border-slate-900 py-10">
-          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Landlord feedback
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-                A cleaner way to manage rent
-              </h2>
-              <p className="mt-2 max-w-2xl text-[13px] text-slate-400">
-                Designed to build trust fast with a more polished, modern experience for landlords and tenants.
-              </p>
-            </div>
-
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium text-amber-200">
-              <span className="text-amber-300">★★★★★</span>
-              Better first impressions matter
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            {testimonials.map((item) => (
-              <TestimonialCard key={item.quote} item={item} />
-            ))}
-          </div>
-        </section>
-
-        <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-10">
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              How it works
+              Why landlords switch
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-              Set up in minutes, not hours
+              One system instead of scattered tools
             </h2>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300 transition duration-300 group-hover:scale-105">
-                1
-              </div>
-              <p className="text-sm font-semibold text-slate-50">Add your property and tenant</p>
-              <p className="mt-2 text-[13px] text-slate-400">
-                Create your first property, invite a tenant, and keep everything organized from day one.
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300">
-                2
-              </div>
-              <p className="text-sm font-semibold text-slate-50">Collect rent and log expenses</p>
-              <p className="mt-2 text-[13px] text-slate-400">
-                Tenants can pay by ACH or card, while landlords can keep expenses tied to each property.
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300">
-                3
-              </div>
-              <p className="text-sm font-semibold text-slate-50">Track everything in one place</p>
-              <p className="mt-2 text-[13px] text-slate-400">
-                Payments, expenses, tenants, documents, maintenance, listings, and e-signatures stay in one clean dashboard.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
-          <div className="mb-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              What you get
+            <p className="mt-2 max-w-3xl text-[14px] text-slate-400">
+              Most landlords piece together spreadsheets, payment apps, notes, and texts just to keep up.
+              RentZentro brings rent collection, expenses, tenants, maintenance, and documents into one clean platform.
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-              The core tools landlords actually use
-            </h2>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
-              <p className="text-sm font-semibold text-slate-50">For landlords</p>
+              <p className="text-sm font-semibold text-slate-50">Everything you need — nothing bloated</p>
               <div className="mt-4 space-y-3 text-[13px] text-slate-300">
                 {[
                   'Collect rent online with ACH and card payments through Stripe.',
@@ -880,25 +841,87 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
-              <p className="text-sm font-semibold text-slate-50">For tenants</p>
-              <div className="mt-4 space-y-3 text-[13px] text-slate-300">
-                {[
-                  'Pay rent online with card or bank transfer (ACH).',
-                  'Set up auto-pay if enabled by the landlord.',
-                  'Submit maintenance requests and track updates.',
-                  'View shared documents and sign leases electronically.',
-                  'Use secure in-app messaging instead of digging through old text threads.',
-                ].map((item) => (
-                  <div key={item} className="flex items-start gap-2">
-                    <span className="mt-[2px] inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
-                      ✓
-                    </span>
-                    <p>{item}</p>
-                  </div>
-                ))}
+            <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-950 to-slate-950 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30">
+              <p className="text-sm font-semibold text-slate-50">The biggest difference</p>
+              <h3 className="mt-2 text-2xl font-semibold text-emerald-300">
+                See what each property is actually making
+              </h3>
+              <p className="mt-3 text-[14px] text-slate-300">
+                It’s easy to know what rent is coming in. The hard part is knowing what’s left after expenses.
+                RentZentro shows income and expenses together so you can understand real performance by property.
+              </p>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-500">Income</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-50">Tracked</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-slate-500">Expenses</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-50">Logged by property</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/30 p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-emerald-200/80">Net</p>
+                  <p className="mt-1 text-lg font-semibold text-emerald-200">Visible instantly</p>
+                </div>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-10">
+          <div className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              How it works
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+              Get started in minutes, not hours
+            </h2>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <StepCard
+              number="1"
+              title="Add your property and tenants"
+              text="Create your first property, invite a tenant, and keep everything organized from day one."
+            />
+            <StepCard
+              number="2"
+              title="Collect rent and log expenses"
+              text="Tenants can pay by ACH or card while landlords track expenses by property in the same system."
+            />
+            <StepCard
+              number="3"
+              title="See real performance"
+              text="Know what was collected, what was spent, and what each property is actually making every month."
+            />
+          </div>
+        </section>
+
+        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Landlord feedback
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+                Built to feel simple, not bloated
+              </h2>
+              <p className="mt-2 max-w-2xl text-[13px] text-slate-400">
+                A cleaner, modern experience for landlords who want real visibility without enterprise-level complexity.
+              </p>
+            </div>
+
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium text-amber-200">
+              <span className="text-amber-300">★★★★★</span>
+              Better first impressions matter
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {testimonials.map((item) => (
+              <TestimonialCard key={item.quote} item={item} />
+            ))}
           </div>
         </section>
 
@@ -957,10 +980,10 @@ export default async function HomePage() {
         <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
           <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-slate-950 p-6 transition duration-300 hover:border-emerald-500/40 hover:shadow-[0_18px_45px_rgba(0,0,0,0.4)]">
             <h2 className="text-2xl font-semibold text-slate-50">
-              Ready to stop chasing rent?
+              Start managing your rentals the right way
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
-              Start free, set up your first property in minutes, and manage rent, expenses, and property performance from one place.
+              Create your free account, set up your first property in minutes, and start tracking rent, expenses, and real performance from one place.
             </p>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -968,7 +991,7 @@ export default async function HomePage() {
                 href="/landlord/signup"
                 className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition duration-200 hover:scale-[1.03] hover:bg-emerald-400 active:scale-95"
               >
-                Start Free — No card required
+                Create Free Account (Takes 60 Seconds)
               </Link>
               <Link
                 href="/landlord/login"
@@ -977,6 +1000,10 @@ export default async function HomePage() {
                 Landlord log in
               </Link>
             </div>
+
+            <p className="mt-3 text-[12px] text-slate-400">
+              No credit card required • Secure payments via Stripe • Built for landlords across the U.S.
+            </p>
           </div>
         </section>
       </div>
