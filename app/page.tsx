@@ -13,7 +13,7 @@ export const metadata = {
     canonical: 'https://www.rentzentro.com/',
   },
   openGraph: {
-    title: 'RentZentro | Collect rent, track expenses, and see real rental profit',
+    title: 'RentZentro | Collect rent online and see your real profit',
     description:
       'Collect rent online, track expenses by property, and manage rentals in one clean platform built for landlords.',
     url: 'https://www.rentzentro.com/',
@@ -22,7 +22,7 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'RentZentro | Collect rent, track expenses, and see real rental profit',
+    title: 'RentZentro | Collect rent online and see your real profit',
     description:
       'Collect rent online, track expenses by property, and manage rentals in one place.',
   },
@@ -506,7 +506,7 @@ export default async function HomePage() {
         </div>
 
         <header className="rz-fade-up rz-delay-1 mb-8 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-500/30 transition duration-300 hover:scale-105">
               <span className="text-lg font-semibold text-emerald-400">RZ</span>
             </div>
@@ -520,40 +520,54 @@ export default async function HomePage() {
 
           <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <Link
-              href="/landlord/login"
+              href="/login"
               className="rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-center text-xs font-medium text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-slate-800 active:scale-95"
             >
-              Landlord log in
-            </Link>
-            <Link
-              href="/tenant/login"
-              className="rounded-full border border-slate-800 bg-slate-950 px-3 py-2 text-center text-xs font-medium text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
-            >
-              Tenant log in
-            </Link>
-            <Link
-              href="/team/login"
-              className="rounded-full border border-slate-800 bg-slate-950 px-3 py-2 text-center text-xs font-medium text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
-            >
-              Team member log in
+              Log in
             </Link>
           </div>
         </header>
 
         <section className="grid gap-8 pb-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-          <div className="rz-fade-up rz-delay-2">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-200 transition duration-300 hover:border-emerald-500/50 hover:bg-emerald-500/15">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Payments powered by Stripe
-            </div>
-
+          <div className="rz-fade-up rz-delay-2 order-1">
             <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl lg:text-6xl">
-              Collect Rent Online and See Your Real Rental Profit
+              Collect Rent Online
+              <br className="hidden sm:block" /> and See Your Real Profit
             </h1>
 
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
               RentZentro gives landlords one simple place to collect rent, track expenses, manage
               tenants, and understand what each property is actually making.
+            </p>
+
+            <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
+              <Link
+                href="/landlord/signup"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-sm transition duration-200 hover:scale-[1.02] hover:bg-emerald-400 active:scale-95"
+              >
+                Create Free Account
+              </Link>
+              <Link
+                href="/listings"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-slate-800 active:scale-95"
+              >
+                Browse rentals
+              </Link>
+              <Link
+                href="#demo"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-800 bg-slate-950 px-6 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
+              >
+                Watch 2-Minute Demo
+              </Link>
+            </div>
+
+            <p className="mt-3 text-[12px] leading-5 text-emerald-300">
+              Join landlords across the U.S. already using RentZentro
+            </p>
+
+            <p className="mt-2 text-[12px] leading-5 text-slate-400">
+              No card required • Setup in minutes • Funds go directly to your Stripe-connected
+              account
             </p>
 
             <div className="mt-5 grid max-w-xl gap-2.5 text-sm text-slate-200">
@@ -577,32 +591,6 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
-              <Link
-                href="/landlord/signup"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-sm transition duration-200 hover:scale-[1.02] hover:bg-emerald-400 active:scale-95"
-              >
-                Create Free Account
-              </Link>
-              <Link
-                href="#demo"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-slate-800 active:scale-95"
-              >
-                Watch 2-Minute Demo
-              </Link>
-              <Link
-                href="/listings"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-800 bg-slate-950 px-6 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
-              >
-                Browse rentals
-              </Link>
-            </div>
-
-            <p className="mt-3 text-[12px] leading-5 text-emerald-300">
-              No card required • Setup in minutes • Funds go directly to your Stripe-connected
-              account
-            </p>
-
             <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
               <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
                 35-day free trial
@@ -619,7 +607,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <div className="rz-fade-up rz-delay-3 rounded-3xl border border-slate-800 bg-slate-950/70 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 sm:p-5">
+          <div className="rz-fade-up rz-delay-3 order-2 rounded-3xl border border-slate-800 bg-slate-950/70 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 sm:p-5">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-slate-500">
@@ -774,8 +762,8 @@ export default async function HomePage() {
                 See how RentZentro works in under 2 minutes
               </h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-                Watch the real landlord flow for payments, expense tracking, and day-to-day rental
-                management without leaving the site.
+                Real walkthrough of the landlord dashboard, payments, expenses, and maintenance
+                flow.
               </p>
             </div>
           </div>
@@ -793,17 +781,12 @@ export default async function HomePage() {
 
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[12px] leading-5 text-slate-400">
-                Real product walkthrough of the landlord dashboard, payments, expenses, and
-                maintenance flow.
+                Watch the actual product flow before creating your account.
               </p>
               <span className="inline-flex w-fit items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-300">
                 2-minute demo
               </span>
             </div>
-
-            <p className="mt-3 text-center text-[11px] text-slate-500">
-              No spreadsheets. No chasing tenants. No jumping between apps.
-            </p>
           </div>
         </section>
 
@@ -1008,16 +991,16 @@ export default async function HomePage() {
                 Create Free Account
               </Link>
               <Link
-                href="/landlord/login"
+                href="/listings"
                 className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-slate-800 active:scale-95"
               >
-                Landlord log in
+                Browse rentals
               </Link>
               <Link
-                href="/listings"
+                href="/login"
                 className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-800 bg-slate-950 px-6 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
               >
-                Browse rentals
+                Log in
               </Link>
             </div>
 
