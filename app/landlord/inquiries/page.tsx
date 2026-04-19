@@ -26,6 +26,15 @@ type ListingRow = {
   published: boolean | null;
 };
 
+type PropertyRow = {
+  id: number;
+  owner_id: string | null;
+  name: string | null;
+  unit_label: string | null;
+  monthly_rent: number | null;
+  status: string | null;
+};
+
 type InquiryRow = {
   id: number;
   listing_id: number | null;
@@ -45,6 +54,7 @@ const STATUS_OPTIONS = [
   'new',
   'contacted',
   'showing_scheduled',
+  'converted',
   'closed',
   'archived',
 ] as const;
@@ -56,6 +66,7 @@ const statusLabel = (value: string | null | undefined) => {
 
   if (s === 'showing_scheduled') return 'Showing scheduled';
   if (s === 'contacted') return 'Contacted';
+  if (s === 'converted') return 'Converted';
   if (s === 'closed') return 'Closed';
   if (s === 'archived') return 'Archived';
   return 'New';
@@ -70,8 +81,11 @@ const statusClasses = (value: string | null | undefined) => {
   if (s === 'showing_scheduled') {
     return 'border-amber-500/40 bg-amber-500/10 text-amber-100';
   }
-  if (s === 'closed') {
+  if (s === 'converted') {
     return 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100';
+  }
+  if (s === 'closed') {
+    return 'border-violet-500/40 bg-violet-500/10 text-violet-100';
   }
   if (s === 'archived') {
     return 'border-slate-700 bg-slate-900 text-slate-300';
@@ -94,6 +108,18 @@ const niceDateTime = (value: string | null | undefined) => {
   });
 };
 
+const toDateInputValue = (iso: string | null | undefined): string => {
+  if (!iso) return '';
+  return iso.slice(0, 10);
+};
+
+const propertyLabel = (property: PropertyRow | null | undefined) => {
+  if (!property) return 'Select a property';
+  return `${property.name || 'Unnamed property'}${
+    property.unit_label ? ` · ${property.unit_label}` : ''
+  }`;
+};
+
 export default function LandlordInquiriesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -102,11 +128,13 @@ export default function LandlordInquiriesPage() {
 
   const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
   const [isTeamMember, setIsTeamMember] = useState(false);
 
   const [listings, setListings] = useState<ListingRow[]>([]);
+  const [properties, setProperties] = useState<PropertyRow[]>([]);
   const [inquiries, setInquiries] = useState<InquiryRow[]>([]);
 
   const [search, setSearch] = useState('');
@@ -117,11 +145,25 @@ export default function LandlordInquiriesPage() {
 
   const [busyId, setBusyId] = useState<number | null>(null);
 
+  const [convertInquiry, setConvertInquiry] = useState<InquiryRow | null>(null);
+  const [convertPropertyId, setConvertPropertyId] = useState<number | ''>('');
+  const [convertLeaseStart, setConvertLeaseStart] = useState('');
+  const [convertLeaseEnd, setConvertLeaseEnd] = useState('');
+  const [convertAllowEarlyPayment, setConvertAllowEarlyPayment] = useState(false);
+  const [convertSendingInvite, setConvertSendingInvite] = useState(true);
+  const [converting, setConverting] = useState(false);
+
   const listingMap = useMemo(() => {
     const m = new Map<number, ListingRow>();
     for (const row of listings) m.set(row.id, row);
     return m;
   }, [listings]);
+
+  const propertyMap = useMemo(() => {
+    const m = new Map<number, PropertyRow>();
+    for (const row of properties) m.set(row.id, row);
+    return m;
+  }, [properties]);
 
   const load = async () => {
     setLoadStatus('loading');
@@ -201,30 +243,42 @@ export default function LandlordInquiriesPage() {
       setLandlord(resolvedLandlord);
       setIsTeamMember(teamFlag);
 
-      const { data: listingRows, error: listingsError } = await supabase
-        .from('listings')
-        .select('id, title, slug, published')
-        .eq('owner_id', resolvedLandlord.user_id)
-        .order('created_at', { ascending: false });
+      const [listingRowsRes, propertyRowsRes, inquiryRowsRes] = await Promise.all([
+        supabase
+          .from('listings')
+          .select('id, title, slug, published')
+          .eq('owner_id', resolvedLandlord.user_id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('properties')
+          .select('id, owner_id, name, unit_label, monthly_rent, status')
+          .eq('owner_id', resolvedLandlord.user_id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('listing_inquiries')
+          .select('id, listing_id, owner_id, name, email, phone, message, status, created_at')
+          .eq('owner_id', resolvedLandlord.user_id)
+          .order('created_at', { ascending: false }),
+      ]);
 
-      if (listingsError) {
-        console.error('Error loading listings:', listingsError);
+      if (listingRowsRes.error) {
+        console.error('Error loading listings:', listingRowsRes.error);
         throw new Error('Unable to load listings.');
       }
 
-      const { data: inquiryRows, error: inquiriesError } = await supabase
-        .from('listing_inquiries')
-        .select('id, listing_id, owner_id, name, email, phone, message, status, created_at')
-        .eq('owner_id', resolvedLandlord.user_id)
-        .order('created_at', { ascending: false });
+      if (propertyRowsRes.error) {
+        console.error('Error loading properties:', propertyRowsRes.error);
+        throw new Error('Unable to load properties.');
+      }
 
-      if (inquiriesError) {
-        console.error('Error loading listing inquiries:', inquiriesError);
+      if (inquiryRowsRes.error) {
+        console.error('Error loading listing inquiries:', inquiryRowsRes.error);
         throw new Error('Unable to load listing inquiries.');
       }
 
-      setListings((listingRows || []) as ListingRow[]);
-      setInquiries((inquiryRows || []) as InquiryRow[]);
+      setListings((listingRowsRes.data || []) as ListingRow[]);
+      setProperties((propertyRowsRes.data || []) as PropertyRow[]);
+      setInquiries((inquiryRowsRes.data || []) as InquiryRow[]);
       setLoadStatus('ready');
     } catch (err: any) {
       console.error(err);
@@ -276,11 +330,11 @@ export default function LandlordInquiriesPage() {
     const showing = inquiries.filter(
       (x) => String(x.status || '').toLowerCase() === 'showing_scheduled'
     ).length;
-    const closed = inquiries.filter(
-      (x) => String(x.status || '').toLowerCase() === 'closed'
+    const converted = inquiries.filter(
+      (x) => String(x.status || '').toLowerCase() === 'converted'
     ).length;
 
-    return { total, newCount, contacted, showing, closed };
+    return { total, newCount, contacted, showing, converted };
   }, [inquiries]);
 
   const updateInquiryStatus = async (id: number, nextStatus: string) => {
@@ -288,6 +342,7 @@ export default function LandlordInquiriesPage() {
 
     setBusyId(id);
     setError(null);
+    setSuccess(null);
 
     try {
       const { error } = await supabase
@@ -312,6 +367,156 @@ export default function LandlordInquiriesPage() {
       setError(e?.message || 'Failed to update inquiry status.');
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const openConvertModal = (row: InquiryRow) => {
+    setConvertInquiry(row);
+    setConvertPropertyId('');
+    setConvertLeaseStart('');
+    setConvertLeaseEnd('');
+    setConvertAllowEarlyPayment(false);
+    setConvertSendingInvite(true);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const closeConvertModal = () => {
+    if (converting) return;
+    setConvertInquiry(null);
+    setConvertPropertyId('');
+    setConvertLeaseStart('');
+    setConvertLeaseEnd('');
+    setConvertAllowEarlyPayment(false);
+    setConvertSendingInvite(true);
+  };
+
+  const handleConvertInquiry = async () => {
+    if (!convertInquiry || !landlord?.user_id) return;
+
+    setConverting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      if (!convertInquiry.email?.trim()) {
+        throw new Error('This inquiry does not have an email address.');
+      }
+
+      if (!convertPropertyId) {
+        throw new Error('Please select a property for this tenant.');
+      }
+
+      if (!convertLeaseStart) {
+        throw new Error(
+          'Lease start / first rent due date is required. For month-to-month, use the first month rent is due.'
+        );
+      }
+
+      const selectedProperty = propertyMap.get(Number(convertPropertyId));
+      if (!selectedProperty) {
+        throw new Error('Selected property not found.');
+      }
+
+      const existingTenantCheck = await supabase
+        .from('tenants')
+        .select('id')
+        .eq('owner_id', landlord.user_id)
+        .eq('email', convertInquiry.email.trim())
+        .maybeSingle();
+
+      if (existingTenantCheck.error) {
+        console.error('Error checking existing tenant:', existingTenantCheck.error);
+        throw new Error('Unable to verify whether this lead is already a tenant.');
+      }
+
+      if (existingTenantCheck.data) {
+        throw new Error(
+          'A tenant with this email already exists for this landlord. You can send them a portal invite from the tenants page instead.'
+        );
+      }
+
+      const { data: createdTenant, error: insertError } = await supabase
+        .from('tenants')
+        .insert({
+          owner_id: landlord.user_id,
+          name: convertInquiry.name?.trim() || null,
+          email: convertInquiry.email.trim(),
+          phone: convertInquiry.phone?.trim() || null,
+          property_id: Number(convertPropertyId),
+          status: 'Current',
+          monthly_rent: null,
+          lease_start: convertLeaseStart,
+          lease_end: convertLeaseEnd || null,
+          allow_early_payment: convertAllowEarlyPayment,
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        console.error('Error converting inquiry to tenant:', insertError);
+        throw new Error(insertError.message || 'Failed to create tenant from inquiry.');
+      }
+
+      if (convertSendingInvite) {
+        const inviteRes = await fetch('/api/tenant-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantEmail: convertInquiry.email.trim(),
+            tenantName: convertInquiry.name,
+            propertyName: selectedProperty.name,
+            unitLabel: selectedProperty.unit_label,
+            landlordName: landlord.name || landlord.email,
+          }),
+        });
+
+        const inviteJson = await inviteRes.json().catch(() => ({}));
+
+        if (!inviteRes.ok || inviteJson?.error) {
+          throw new Error(
+            inviteJson?.error ||
+              'Tenant was created, but the portal invite email could not be sent.'
+          );
+        }
+      }
+
+      const { error: inquiryUpdateError } = await supabase
+        .from('listing_inquiries')
+        .update({ status: 'converted' })
+        .eq('id', convertInquiry.id);
+
+      if (inquiryUpdateError) {
+        console.error('Error updating inquiry to converted:', inquiryUpdateError);
+        throw new Error(
+          'Tenant was created, but the inquiry status could not be updated.'
+        );
+      }
+
+      setInquiries((prev) =>
+        prev.map((row) =>
+          row.id === convertInquiry.id
+            ? {
+                ...row,
+                status: 'converted',
+              }
+            : row
+        )
+      );
+
+      setSuccess(
+        convertSendingInvite
+          ? 'Inquiry converted to tenant and portal invite sent.'
+          : 'Inquiry converted to tenant successfully.'
+      );
+
+      closeConvertModal();
+      router.refresh();
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || 'Failed to convert inquiry to tenant.');
+    } finally {
+      setConverting(false);
     }
   };
 
@@ -365,7 +570,7 @@ export default function LandlordInquiriesPage() {
 
             <h1 className="mt-1 text-lg font-semibold text-slate-50">Listing inquiries</h1>
             <p className="text-[11px] text-slate-400">
-              Review leads from your public listing pages and follow up directly by email or phone.
+              Review leads from your public listing pages, follow up, or convert them into tenants.
             </p>
           </div>
 
@@ -378,6 +583,13 @@ export default function LandlordInquiriesPage() {
                 </span>
               </div>
             )}
+
+            <Link
+              href="/landlord/tenants"
+              className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/20"
+            >
+              View tenants
+            </Link>
 
             <Link
               href="/landlord/listings"
@@ -399,6 +611,12 @@ export default function LandlordInquiriesPage() {
         {error && (
           <div className="rounded-xl border border-rose-500/70 bg-rose-500/10 px-4 py-2 text-sm text-rose-100">
             {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="rounded-xl border border-emerald-500/70 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100">
+            {success}
           </div>
         )}
 
@@ -424,8 +642,8 @@ export default function LandlordInquiriesPage() {
           </div>
 
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4">
-            <p className="text-xs uppercase tracking-wide text-emerald-200/80">Closed</p>
-            <p className="mt-2 text-2xl font-semibold text-emerald-100">{stats.closed}</p>
+            <p className="text-xs uppercase tracking-wide text-emerald-200/80">Converted</p>
+            <p className="mt-2 text-2xl font-semibold text-emerald-100">{stats.converted}</p>
           </div>
         </section>
 
@@ -478,6 +696,7 @@ export default function LandlordInquiriesPage() {
                 <option value="new">New</option>
                 <option value="contacted">Contacted</option>
                 <option value="showing_scheduled">Showing scheduled</option>
+                <option value="converted">Converted</option>
                 <option value="closed">Closed</option>
                 <option value="archived">Archived</option>
               </select>
@@ -492,7 +711,7 @@ export default function LandlordInquiriesPage() {
               Reply directly by email or phone
             </span>
             <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1">
-              Inquiry statuses are editable here
+              Convert qualified leads into tenants here
             </span>
           </div>
         </section>
@@ -610,6 +829,21 @@ export default function LandlordInquiriesPage() {
                               No phone provided
                             </div>
                           )}
+
+                          <button
+                            type="button"
+                            disabled={
+                              rowStatus === 'converted' ||
+                              !row.email ||
+                              properties.length === 0
+                            }
+                            onClick={() => openConvertModal(row)}
+                            className="inline-flex min-h-[40px] items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {rowStatus === 'converted'
+                              ? 'Already converted'
+                              : 'Convert to tenant'}
+                          </button>
                         </div>
 
                         <div className="mt-4 border-t border-slate-800 pt-4">
@@ -651,7 +885,7 @@ export default function LandlordInquiriesPage() {
                               type="button"
                               disabled={isBusy}
                               onClick={() => updateInquiryStatus(row.id, 'closed')}
-                              className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold text-emerald-100 hover:bg-emerald-500/15 disabled:opacity-60"
+                              className="rounded-full border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-[11px] font-semibold text-violet-100 hover:bg-violet-500/15 disabled:opacity-60"
                             >
                               Closed
                             </button>
@@ -668,8 +902,8 @@ export default function LandlordInquiriesPage() {
                         </div>
 
                         <p className="mt-4 text-[10px] leading-5 text-slate-500">
-                          This is a one-way inquiry inbox. Reply directly by email or phone using
-                          the lead’s contact info.
+                          This is a one-way inquiry inbox. Reply directly by email or phone,
+                          or convert qualified leads into tenants.
                         </p>
                       </div>
                     </div>
@@ -680,6 +914,135 @@ export default function LandlordInquiriesPage() {
           )}
         </section>
       </div>
+
+      {convertInquiry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                  Convert inquiry
+                </p>
+                <h2 className="mt-1 text-lg font-semibold text-slate-50">
+                  Convert lead into tenant
+                </h2>
+                <p className="mt-1 text-[12px] text-slate-400">
+                  This will create a tenant using the lead’s contact info and optionally send a portal invite.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeConvertModal}
+                className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] text-slate-200 hover:bg-slate-800"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+              <p className="text-sm font-semibold text-slate-100">
+                {convertInquiry.name || 'Unnamed lead'}
+              </p>
+              <p className="mt-1 text-[12px] text-slate-300">
+                {convertInquiry.email || 'No email'}
+                {convertInquiry.phone ? ` • ${convertInquiry.phone}` : ''}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Inquiry received {niceDateTime(convertInquiry.created_at)}
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="text-[11px] uppercase tracking-wide text-slate-500">
+                  Property *
+                </label>
+                <select
+                  value={convertPropertyId === '' ? '' : String(convertPropertyId)}
+                  onChange={(e) =>
+                    setConvertPropertyId(e.target.value ? Number(e.target.value) : '')
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500/60"
+                >
+                  <option value="">Select a property…</option>
+                  {properties.map((property) => (
+                    <option key={property.id} value={property.id}>
+                      {propertyLabel(property)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] uppercase tracking-wide text-slate-500">
+                  Lease start / first due date *
+                </label>
+                <input
+                  type="date"
+                  value={convertLeaseStart}
+                  onChange={(e) => setConvertLeaseStart(toDateInputValue(e.target.value))}
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500/60"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] uppercase tracking-wide text-slate-500">
+                  Lease end
+                </label>
+                <input
+                  type="date"
+                  value={convertLeaseEnd}
+                  onChange={(e) => setConvertLeaseEnd(toDateInputValue(e.target.value))}
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-emerald-500/60"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+              <label className="flex items-center gap-2 text-[12px] text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={convertAllowEarlyPayment}
+                  onChange={(e) => setConvertAllowEarlyPayment(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-700 bg-slate-900"
+                />
+                <span>Allow early rent payment for this tenant</span>
+              </label>
+
+              <label className="flex items-center gap-2 text-[12px] text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={convertSendingInvite}
+                  onChange={(e) => setConvertSendingInvite(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-700 bg-slate-900"
+                />
+                <span>Send tenant portal invite email after conversion</span>
+              </label>
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeConvertModal}
+                disabled={converting}
+                className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConvertInquiry}
+                disabled={converting}
+                className="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+              >
+                {converting ? 'Converting…' : 'Convert to tenant'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
