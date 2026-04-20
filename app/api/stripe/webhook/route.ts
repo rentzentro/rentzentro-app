@@ -5,9 +5,12 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
 // Stripe client
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: '2024-06-20' as any,
-});
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, {
+      apiVersion: '2024-06-20' as any,
+    })
+  : null;
 
 // Supabase admin (RLS bypass)
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
@@ -22,6 +25,13 @@ function log(...args: any[]) {
 }
 
 export async function POST(req: Request) {
+  if (!stripe) {
+    return NextResponse.json(
+      { error: 'Missing STRIPE_SECRET_KEY env var.' },
+      { status: 500 }
+    );
+  }
+
   if (!ENDPOINT_SECRET) {
     console.error('Missing webhook secret');
     return NextResponse.json(

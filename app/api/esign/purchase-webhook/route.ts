@@ -7,7 +7,8 @@ import { supabaseAdmin } from '../../../supabaseAdminClient';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 const WEBHOOK_SECRET =
   process.env.STRIPE_ESIGN_WEBHOOK_SECRET ||
@@ -15,6 +16,13 @@ const WEBHOOK_SECRET =
   '';
 
 export async function POST(req: Request) {
+  if (!stripe) {
+    return NextResponse.json(
+      { error: 'Missing STRIPE_SECRET_KEY env var.' },
+      { status: 500 }
+    );
+  }
+
   if (!WEBHOOK_SECRET) {
     console.error(
       '[esign/purchase-webhook] Missing STRIPE_ESIGN_WEBHOOK_SECRET / STRIPE_WEBHOOK_SECRET.'

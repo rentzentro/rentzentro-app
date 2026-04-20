@@ -5,17 +5,30 @@ import { createClient } from '@supabase/supabase-js';
 
 export const runtime = 'nodejs';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: '2024-06-20' as any,
-});
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.SUPABASE_SERVICE_ROLE_KEY as string
-);
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, { apiVersion: '2024-06-20' as any })
+  : null;
+const supabaseAdmin =
+  supabaseUrl && serviceRoleKey
+    ? createClient(supabaseUrl, serviceRoleKey)
+    : null;
 
 export async function POST(req: Request) {
   try {
+    if (!stripe || !supabaseAdmin) {
+      return NextResponse.json(
+        {
+          error:
+            'Missing STRIPE_SECRET_KEY, NEXT_PUBLIC_SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY env vars.',
+        },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const { landlordId } = body as { landlordId?: number };
 

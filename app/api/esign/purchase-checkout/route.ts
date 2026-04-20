@@ -2,7 +2,8 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ||
   process.env.NEXT_PUBLIC_SITE_URL ||
@@ -16,6 +17,13 @@ const FALLBACK_PRICE_CENTS = 295; // $2.95
 
 export async function POST(req: Request) {
   try {
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Missing STRIPE_SECRET_KEY env var.' },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
 
     const { quantity, landlordUserId } = body as {

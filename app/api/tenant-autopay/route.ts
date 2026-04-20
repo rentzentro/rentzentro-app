@@ -3,25 +3,32 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY as string;
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ||
   process.env.NEXT_PUBLIC_SITE_URL ||
   'http://localhost:3000';
 
-if (!STRIPE_SECRET_KEY || !SUPABASE_URL || !SERVICE_ROLE_KEY) {
-  throw new Error(
-    'Missing STRIPE_SECRET_KEY / NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars'
-  );
-}
-
-const stripe = new Stripe(STRIPE_SECRET_KEY);
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+const supabaseAdmin =
+  SUPABASE_URL && SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+    : null;
 
 export async function POST(req: Request) {
   try {
+    if (!stripe || !supabaseAdmin) {
+      return NextResponse.json(
+        {
+          error:
+            'Missing STRIPE_SECRET_KEY, NEXT_PUBLIC_SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY env vars.',
+        },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const { action, tenantId } = body as {
       action?: 'enable' | 'disable';

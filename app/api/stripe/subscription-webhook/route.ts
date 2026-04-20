@@ -6,7 +6,8 @@ import { createClient } from '@supabase/supabase-js';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL as string,
@@ -19,6 +20,8 @@ async function updateLandlordFromSubscription(
   subscription: Stripe.Subscription,
   contextLabel: string
 ) {
+  if (!stripe) return;
+
   const rawStatus = subscription.status;
   // If Stripe says "cancel at period end", store a special status
   const effectiveStatus = subscription.cancel_at_period_end
@@ -122,6 +125,13 @@ async function updateLandlordFromSubscription(
 }
 
 export async function POST(req: Request) {
+  if (!stripe) {
+    return NextResponse.json(
+      { error: 'Missing STRIPE_SECRET_KEY env var.' },
+      { status: 500 }
+    );
+  }
+
   const endpointSecret = process.env.STRIPE_SUBSCRIPTION_WEBHOOK_SECRET;
 
   if (!endpointSecret) {
