@@ -8,6 +8,7 @@ export const runtime = 'nodejs';
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const stripe = stripeSecretKey
   ? new Stripe(stripeSecretKey, { apiVersion: '2024-06-20' as any })
@@ -16,14 +17,18 @@ const supabaseAdmin =
   supabaseUrl && serviceRoleKey
     ? createClient(supabaseUrl, serviceRoleKey)
     : null;
+const supabaseAuth =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
 export async function POST(req: Request) {
   try {
-    if (!stripe || !supabaseAdmin) {
+    if (!stripe || !supabaseAdmin || !supabaseAuth) {
       return NextResponse.json(
         {
           error:
-            'Missing STRIPE_SECRET_KEY, NEXT_PUBLIC_SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY env vars.',
+            'Missing STRIPE_SECRET_KEY, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY env vars.',
         },
         { status: 500 }
       );
@@ -32,18 +37,34 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { landlordId } = body as { landlordId?: number };
 
-    if (!landlordId) {
+    if (landlordId != null && typeof landlordId !== 'number') {
       return NextResponse.json(
-        { error: 'Missing landlordId.' },
+        { error: 'Invalid landlordId.' },
         { status: 400 }
       );
     }
 
+    const authHeader = req.headers.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ')
+      ? authHeader.slice('Bearer '.length).trim()
+      : '';
+
+    if (!token) {
+      return NextResponse.json({ error: 'Missing bearer token.' }, { status: 401 });
+    }
+
+    const { data: authData, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !authData.user) {
+      return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
+    }
+
+    const authedUserId = authData.user.id;
+
     // 1) Load landlord row
     const { data: landlord, error: landlordError } = await supabaseAdmin
       .from('landlords')
-      .select('id, stripe_customer_id, stripe_subscription_id')
-      .eq('id', landlordId)
+      .select('id, user_id, stripe_customer_id, stripe_subscription_id')
+      .eq('user_id', authedUserId)
       .maybeSingle();
 
     if (landlordError) {
@@ -56,8 +77,15 @@ export async function POST(req: Request) {
 
     if (!landlord) {
       return NextResponse.json(
-        { error: 'Landlord not found.' },
+        { error: 'Landlord account not found for authenticated user.' },
         { status: 404 }
+      );
+    }
+
+    if (landlordId != null && landlord.id !== landlordId) {
+      return NextResponse.json(
+        { error: 'Forbidden: landlordId does not match authenticated account.' },
+        { status: 403 }
       );
     }
 
