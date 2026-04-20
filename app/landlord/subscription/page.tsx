@@ -83,6 +83,20 @@ export default function LandlordSubscriptionPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [requestingDeletion, setRequestingDeletion] = useState(false);
 
+  const getAuthHeaders = async () => {
+    const { data, error } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+
+    if (error || !token) {
+      throw new Error('Your session expired. Please sign in again.');
+    }
+
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    } as const;
+  };
+
   // Load / create landlord from auth user
   useEffect(() => {
     const billing = searchParams.get('billing');
@@ -191,9 +205,10 @@ export default function LandlordSubscriptionPage() {
 
       setLoadingStripeDate(true);
       try {
+        const headers = await getAuthHeaders();
         const res = await fetch('/api/subscription/status', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ landlordId: landlord.id }),
         });
 
@@ -220,9 +235,10 @@ export default function LandlordSubscriptionPage() {
     setInfo(null);
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch('/api/subscription/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ landlordId: landlord.id }),
       });
 
@@ -255,9 +271,10 @@ export default function LandlordSubscriptionPage() {
     setInfo(null);
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch('/api/subscription/portal', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ landlordId: landlord.id }),
       });
 
@@ -287,9 +304,10 @@ export default function LandlordSubscriptionPage() {
     setInfo(null);
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch('/api/subscription/cancel', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ landlordId: landlord.id }),
       });
 

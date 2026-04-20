@@ -7,6 +7,7 @@ const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 const SUBSCRIPTION_PRICE_ID = process.env.STRIPE_SUBSCRIPTION_PRICE_ID as string;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ||
   process.env.NEXT_PUBLIC_SITE_URL ||
@@ -22,6 +23,10 @@ const supabaseAdmin =
   SUPABASE_URL && SERVICE_ROLE_KEY
     ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
     : null;
+const supabaseAuth =
+  SUPABASE_URL && SUPABASE_ANON_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
 
 export async function POST(req: Request) {
   try {
@@ -32,9 +37,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!supabaseAdmin) {
+    if (!supabaseAdmin || !supabaseAuth) {
       return NextResponse.json(
-        { error: 'Supabase admin credentials not configured on server.' },
+        { error: 'Supabase credentials not configured on server.' },
         { status: 500 }
       );
     }
@@ -42,11 +47,24 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { landlordId } = body as { landlordId?: number };
 
-    if (!landlordId || typeof landlordId !== 'number') {
-      return NextResponse.json(
-        { error: 'Missing or invalid landlordId in request body.' },
-        { status: 400 }
-      );
+    const authHeader = req.headers.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ')
+      ? authHeader.slice('Bearer '.length).trim()
+      : '';
+
+    if (!token) {
+      return NextResponse.json({ error: 'Missing bearer token.' }, { status: 401 });
+    }
+
+    const { data: authData, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !authData.user) {
+      return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
+    }
+
+    const authedUserId = authData.user.id;
+
+    if (landlordId != null && typeof landlordId !== 'number') {
+      return NextResponse.json({ error: 'Invalid landlordId in request body.' }, { status: 400 });
     }
 
     if (!SUBSCRIPTION_PRICE_ID) {
@@ -59,8 +77,8 @@ export async function POST(req: Request) {
     // 1) Load landlord row
     const { data: landlord, error: landlordError } = await supabaseAdmin
       .from('landlords')
-      .select('id, email, stripe_customer_id')
-      .eq('id', landlordId)
+      .select('id, user_id, email, stripe_customer_id')
+      .eq('user_id', authedUserId)
       .maybeSingle();
 
     if (landlordError) {
@@ -73,8 +91,15 @@ export async function POST(req: Request) {
 
     if (!landlord) {
       return NextResponse.json(
-        { error: 'Landlord not found.' },
+        { error: 'Landlord account not found for authenticated user.' },
         { status: 404 }
+      );
+    }
+
+    if (landlordId != null && landlord.id !== landlordId) {
+      return NextResponse.json(
+        { error: 'Forbidden: landlordId does not match authenticated account.' },
+        { status: 403 }
       );
     }
 

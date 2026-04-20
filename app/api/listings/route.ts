@@ -4,19 +4,53 @@ import { createClient } from '@supabase/supabase-js';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
+
+const supabaseAuth =
+  supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+const supabaseAdmin =
+  supabaseUrl && supabaseServiceRoleKey
+    ? createClient(supabaseUrl, supabaseServiceRoleKey)
+    : null;
+
+const ALLOWED_INQUIRY_STATUSES = new Set([
+  'new',
+  'contacted',
+  'showing_scheduled',
+  'converted',
+  'closed',
+  'archived',
+]);
 
 export async function POST(req: Request) {
   try {
+    if (!supabaseAuth || !supabaseAdmin) {
+      return NextResponse.json(
+        {
+          error:
+            'Missing NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY env vars.',
+        },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const { action } = body;
 
-    // Ensure authenticated for landlord actions
-    const { data: authData, error: authError } = await supabase.auth.getUser();
+    const authHeader = req.headers.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ')
+      ? authHeader.slice('Bearer '.length).trim()
+      : '';
+
+    if (!token) {
+      return NextResponse.json({ error: 'Missing bearer token.' }, { status: 401 });
+    }
+
+    const { data: authData, error: authError } = await supabaseAuth.auth.getUser(token);
     if (authError) throw authError;
+
     const user = authData.user;
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
@@ -30,9 +64,14 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Missing title/slug.' }, { status: 400 });
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('listings')
-        .insert(payload)
+        .insert({
+          ...payload,
+          owner_id: user.id,
+          published: false,
+          published_at: null,
+        })
         .select('*')
         .maybeSingle();
 
@@ -49,17 +88,24 @@ export async function POST(req: Request) {
 
       const publish = action === 'publish';
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('listings')
         .update({
           published: publish,
           published_at: publish ? new Date().toISOString() : null,
         })
         .eq('id', listingId)
+        .eq('owner_id', user.id)
         .select('*')
         .maybeSingle();
 
       if (error) throw error;
+      if (!data) {
+        return NextResponse.json(
+          { error: 'Listing not found or not owned by authenticated user.' },
+          { status: 404 }
+        );
+      }
 
       return NextResponse.json({ ok: true, listing: data });
     }
@@ -70,15 +116,25 @@ export async function POST(req: Request) {
       if (!inquiryId || !status) {
         return NextResponse.json({ error: 'Missing inquiryId/status.' }, { status: 400 });
       }
+      if (!ALLOWED_INQUIRY_STATUSES.has(status)) {
+        return NextResponse.json({ error: 'Invalid inquiry status.' }, { status: 400 });
+      }
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from('listing_inquiries')
         .update({ status })
         .eq('id', inquiryId)
+        .eq('owner_id', user.id)
         .select('*')
         .maybeSingle();
 
       if (error) throw error;
+      if (!data) {
+        return NextResponse.json(
+          { error: 'Inquiry not found or not owned by authenticated user.' },
+          { status: 404 }
+        );
+      }
 
       return NextResponse.json({ ok: true, inquiry: data });
     }
