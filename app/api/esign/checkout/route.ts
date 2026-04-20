@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '../../../supabaseAdminClient';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 // Price ID for “$2.95 per signature” (or whatever you configured)
 const STRIPE_ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID;
@@ -14,6 +15,13 @@ const APP_URL =
 
 export async function POST(req: Request) {
   try {
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Missing STRIPE_SECRET_KEY env var.' },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
 
     const { landlordUserId, quantity } = body as {
