@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
+import signupValidation from './signupValidation.cjs';
 
 export default function LandlordSignupPage() {
   const router = useRouter();
@@ -24,18 +25,11 @@ export default function LandlordSignupPage() {
     setError(null);
     setInfo(null);
 
-    if (!email || !password || !confirmPassword) {
-      setError('Please fill in all fields.');
-      return;
-    }
+    const { validateLandlordSignupInput, getTrialEndYMD } = signupValidation;
+    const validation = validateLandlordSignupInput({ email, password, confirmPassword });
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match. Please double-check.');
-      return;
-    }
-
-    if (password.length < 8) {
-      setError('Password should be at least 8 characters long.');
+    if (!validation.ok) {
+      setError(validation.message);
       return;
     }
 
@@ -44,7 +38,7 @@ export default function LandlordSignupPage() {
     try {
       // 1) Create Supabase auth user
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
+        email: validation.normalizedEmail,
         password,
       });
 
@@ -57,16 +51,12 @@ export default function LandlordSignupPage() {
       }
 
       // 🔥 NEW: 35-DAY ROLLING TRIAL
-      const now = new Date();
-      const trialEnd = new Date();
-      trialEnd.setDate(now.getDate() + 35);
-
-      const trialEndYMD = trialEnd.toISOString().split('T')[0];
+      const trialEndYMD = getTrialEndYMD();
 
       // 2) Insert landlord row
       const { error: insertError } = await supabase.from('landlords').insert([
         {
-          email,
+          email: validation.normalizedEmail,
           user_id: user.id,
           trial_active: true,
           trial_end: trialEndYMD,
