@@ -60,6 +60,13 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type StatusFilter = (typeof STATUS_OPTIONS)[number];
+type InquiryStatus =
+  | 'new'
+  | 'contacted'
+  | 'showing_scheduled'
+  | 'converted'
+  | 'closed'
+  | 'archived';
 
 const statusLabel = (value: string | null | undefined) => {
   const s = String(value || 'new').toLowerCase();
@@ -92,6 +99,76 @@ const statusClasses = (value: string | null | undefined) => {
   }
 
   return 'border-rose-500/40 bg-rose-500/10 text-rose-100';
+};
+
+const normalizeStatus = (value: string | null | undefined): InquiryStatus => {
+  const s = String(value || 'new').toLowerCase();
+  if (s === 'contacted') return 'contacted';
+  if (s === 'showing_scheduled') return 'showing_scheduled';
+  if (s === 'converted') return 'converted';
+  if (s === 'closed') return 'closed';
+  if (s === 'archived') return 'archived';
+  return 'new';
+};
+
+const suggestedPlay = (status: InquiryStatus) => {
+  if (status === 'new') {
+    return {
+      stage: 'Step 1 · Fast response',
+      title: 'Make first contact',
+      detail: 'Email or call now, then mark as Contacted.',
+      nextStatus: 'contacted' as InquiryStatus,
+      nextLabel: 'Mark contacted',
+    };
+  }
+
+  if (status === 'contacted') {
+    return {
+      stage: 'Step 2 · Qualify',
+      title: 'Book a showing',
+      detail: 'If they are qualified, lock in a showing date.',
+      nextStatus: 'showing_scheduled' as InquiryStatus,
+      nextLabel: 'Mark showing set',
+    };
+  }
+
+  if (status === 'showing_scheduled') {
+    return {
+      stage: 'Step 3 · Close',
+      title: 'Convert or close',
+      detail: 'Send application + convert approved leads into tenants.',
+      nextStatus: null,
+      nextLabel: '',
+    };
+  }
+
+  if (status === 'converted') {
+    return {
+      stage: 'Won',
+      title: 'Converted to tenant',
+      detail: 'Great job — this lead is now in your tenant pipeline.',
+      nextStatus: null,
+      nextLabel: '',
+    };
+  }
+
+  if (status === 'closed') {
+    return {
+      stage: 'Closed',
+      title: 'Opportunity closed',
+      detail: 'Re-open only if the lead becomes active again.',
+      nextStatus: null,
+      nextLabel: '',
+    };
+  }
+
+  return {
+    stage: 'Archived',
+    title: 'Stored for later',
+    detail: 'Keep archived leads for reporting and historical context.',
+    nextStatus: null,
+    nextLabel: '',
+  };
 };
 
 const niceDateTime = (value: string | null | undefined) => {
@@ -336,6 +413,11 @@ export default function LandlordInquiriesPage() {
 
     return { total, newCount, contacted, showing, converted };
   }, [inquiries]);
+
+  const conversionRate = useMemo(() => {
+    if (!stats.total) return 0;
+    return Math.round((stats.converted / stats.total) * 100);
+  }, [stats]);
 
   const updateInquiryStatus = async (id: number, nextStatus: string) => {
     if (busyId) return;
@@ -653,6 +735,29 @@ export default function LandlordInquiriesPage() {
           </div>
         </section>
 
+        <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300">
+                Guided conversion engine
+              </p>
+              <h2 className="mt-1 text-base font-semibold text-slate-50">
+                Move every lead through a clear 3-step playbook
+              </h2>
+              <p className="mt-1 text-[12px] text-slate-300">
+                Step 1: contact fast → Step 2: schedule showing → Step 3: convert qualified
+                leads.
+              </p>
+            </div>
+            <div className="rounded-xl border border-emerald-500/30 bg-slate-950/70 px-3 py-2 text-right">
+              <p className="text-[11px] uppercase tracking-wide text-emerald-200/90">
+                Conversion rate
+              </p>
+              <p className="text-xl font-semibold text-emerald-100">{conversionRate}%</p>
+            </div>
+          </div>
+        </section>
+
         <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
           <div className="grid gap-3 lg:grid-cols-[1.4fr_0.9fr_0.7fr]">
             <div>
@@ -734,7 +839,9 @@ export default function LandlordInquiriesPage() {
             filteredInquiries.map((row) => {
               const listing = row.listing_id ? listingMap.get(row.listing_id) : null;
               const rowStatus = String(row.status || 'new').toLowerCase();
+              const normalizedRowStatus = normalizeStatus(rowStatus);
               const isBusy = busyId === row.id;
+              const play = suggestedPlay(normalizedRowStatus);
 
               const mailto = `mailto:${encodeURIComponent(
                 row.email || ''
@@ -908,9 +1015,20 @@ export default function LandlordInquiriesPage() {
                         </div>
 
                         <p className="mt-4 text-[10px] leading-5 text-slate-500">
-                          This is a one-way inquiry inbox. Reply directly by email or phone,
-                          or convert qualified leads into tenants.
+                          <span className="font-semibold text-slate-400">{play.stage}:</span>{' '}
+                          {play.title}. {play.detail}
                         </p>
+
+                        {play.nextStatus && (
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => updateInquiryStatus(row.id, play.nextStatus)}
+                            className="mt-2 w-full rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-60"
+                          >
+                            {isBusy ? 'Saving…' : play.nextLabel}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
