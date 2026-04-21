@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from '../../lib/supabaseEnv';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
+const supabaseUrl = getSupabaseUrl() as string;
+const supabaseAnonKey = getSupabaseAnonKey() as string;
+const supabaseServiceRoleKey = getSupabaseServiceRoleKey() as string;
 
 const supabaseAuth =
   supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            'Missing NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY env vars.',
+            'Missing Supabase env vars. Set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL), NEXT_PUBLIC_SUPABASE_ANON_KEY (or SUPABASE_ANON_KEY), and SUPABASE_SERVICE_ROLE_KEY.',
         },
         { status: 500 }
       );

@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseServiceRoleKey, getSupabaseUrl } from '../../../lib/supabaseEnv';
 
 export const runtime = 'nodejs';
 
 // --- Env vars ---
 const stripeSecret = process.env.STRIPE_SECRET_KEY;
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = getSupabaseUrl();
+const supabaseServiceKey = getSupabaseServiceRoleKey();
 
 // Log missing envs loudly in the server console
 if (!stripeSecret) console.error('❌ STRIPE_SECRET_KEY is missing');
-if (!supabaseUrl) console.error('❌ NEXT_PUBLIC_SUPABASE_URL is missing');
+if (!supabaseUrl) console.error('❌ NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL is missing');
 if (!supabaseServiceKey) console.error('❌ SUPABASE_SERVICE_ROLE_KEY is missing');
 
 // StackBlitz uses this preview API version type
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'Supabase admin client not configured. Check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.',
+            'Supabase admin client not configured. Check NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY.',
         },
         { status: 500 }
       );
