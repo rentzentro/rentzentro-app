@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import { resend, isResendConfigured } from '../../lib/resend';
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ||
   process.env.NEXT_PUBLIC_SITE_URL ||
   'https://www.rentzentro.com';
-
-const resend = new Resend(RESEND_API_KEY);
 
 export async function POST(req: Request) {
   try {
@@ -21,7 +18,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!RESEND_API_KEY) {
+    if (!isResendConfigured()) {
       console.error('Missing RESEND_API_KEY env var');
       return NextResponse.json(
         { error: 'Email service not configured.' },

@@ -1,15 +1,45 @@
 // app/supabaseClient.ts
 import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+type BrowserSupabaseClient = SupabaseClient<any, 'public', any>;
 
-if (!supabaseUrl) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL is required (check .env)');
+let cachedClient: BrowserSupabaseClient | null = null;
+
+function getMissingSupabaseEnvReason(): string | null {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return 'NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required (check .env).';
+  }
+
+  return null;
 }
 
-if (!supabaseAnonKey) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is required (check .env)');
+export function isSupabaseBrowserConfigured(): boolean {
+  return getMissingSupabaseEnvReason() === null;
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export function getSupabaseBrowserClient(): BrowserSupabaseClient {
+  if (cachedClient) return cachedClient;
+
+  const missingReason = getMissingSupabaseEnvReason();
+  if (missingReason) {
+    throw new Error(`Supabase browser client is not configured: ${missingReason}`);
+  }
+
+  cachedClient = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL as string,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
+  );
+  return cachedClient;
+}
+
+export const supabase = new Proxy({} as BrowserSupabaseClient, {
+  get(_target, prop, receiver) {
+    const client = getSupabaseBrowserClient();
+    const value = Reflect.get(client as unknown as object, prop, receiver);
+    return typeof value === 'function' ? value.bind(client) : value;
+  },
+}) as BrowserSupabaseClient;

@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '../../../supabaseAdminClient';
 
 // Stripe client
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -13,11 +13,7 @@ const stripe = stripeSecretKey
   : null;
 
 // Supabase admin (RLS bypass)
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 const ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET as string;
-
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 // Logging helper
 function log(...args: any[]) {

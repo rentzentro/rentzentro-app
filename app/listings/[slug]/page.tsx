@@ -2,19 +2,13 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
 import type { Metadata } from 'next';
 import PhotoGallery from './PhotoGallery';
 import ListingInquiryForm from './ListingInquiryForm';
+import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from '../../supabaseClient';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
-  { auth: { persistSession: false } }
-);
 
 type Listing = {
   id: number;
@@ -143,6 +137,9 @@ export async function generateMetadata({
 }: {
   params: { slug: string };
 }): Promise<Metadata> {
+  if (!isSupabaseBrowserConfigured()) return {};
+  const supabase = getSupabaseBrowserClient();
+
   const slug = (params?.slug || '').trim();
   if (!slug) return {};
 
@@ -184,6 +181,9 @@ export default async function ListingDetailsPage({
 }: {
   params: { slug: string };
 }) {
+  if (!isSupabaseBrowserConfigured()) notFound();
+  const supabase = getSupabaseBrowserClient();
+
   const slug = (params?.slug || '').trim();
   if (!slug) notFound();
 

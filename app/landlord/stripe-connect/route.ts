@@ -1,38 +1,31 @@
 // app/landlord/stripe-connect/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
-
-// ---------- Supabase (admin) ----------
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error(
-    'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars.'
-  );
-}
-
-// This client bypasses RLS and is ONLY used on the server
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+import { isSupabaseAdminConfigured, supabaseAdmin } from '../../supabaseAdminClient';
 
 // ---------- Stripe ----------
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-
-if (!stripeSecretKey) {
-  throw new Error(
-    'Missing STRIPE_SECRET_KEY env var. Set it in your environment before starting the app.'
-  );
-}
-
-// No apiVersion here – Stripe uses your account’s default
-const stripe = new Stripe(stripeSecretKey);
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || null;
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 // Base domain for redirect after onboarding
 const DOMAIN = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 export async function POST(req: Request) {
   try {
+    if (!isSupabaseAdminConfigured()) {
+      return NextResponse.json(
+        { error: 'Server database configuration is missing.' },
+        { status: 500 }
+      );
+    }
+
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Stripe is not configured.' },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const { landlordId } = body as { landlordId?: number };
 

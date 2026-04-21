@@ -1,6 +1,6 @@
 // app/page.tsx
 import Link from 'next/link';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from './supabaseClient';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,12 +27,6 @@ export const metadata = {
       'Collect rent online, track expenses by property, and manage rentals in one place.',
   },
 };
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
-  { auth: { persistSession: false } }
-);
 
 type Listing = {
   id: number;
@@ -165,6 +159,11 @@ const fmtDate = (value: string | null | undefined) => {
 };
 
 async function getHomepageListings(limit = 6) {
+  if (!isSupabaseBrowserConfigured()) {
+    return { listings: [] as Listing[], coverMap: new Map<number, PhotoRow>() };
+  }
+
+  const supabase = getSupabaseBrowserClient();
   const { data: listings, error } = await supabase
     .from('listings')
     .select(`

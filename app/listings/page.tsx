@@ -1,16 +1,10 @@
 // app/listings/page.tsx
 
 import Link from 'next/link';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from '../supabaseClient';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
-  { auth: { persistSession: false } }
-);
 
 const money = (n: number | null) =>
   n == null ? null : n.toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -82,27 +76,33 @@ const demoListings: DemoListing[] = [
 ];
 
 export default async function PublicListingsPage() {
-  const { data: listings } = await supabase
-    .from('listings')
-    .select(
-      `
-      id,
-      title,
-      slug,
-      city,
-      state,
-      neighborhood,
-      rent_amount,
-      beds,
-      baths,
-      listing_photos (
-        image_url,
-        sort_order
-      )
-    `
-    )
-    .eq('published', true)
-    .order('published_at', { ascending: false });
+  const supabase = isSupabaseBrowserConfigured() ? getSupabaseBrowserClient() : null;
+
+  const listings = supabase
+    ? (
+        await supabase
+          .from('listings')
+          .select(
+            `
+            id,
+            title,
+            slug,
+            city,
+            state,
+            neighborhood,
+            rent_amount,
+            beds,
+            baths,
+            listing_photos (
+              image_url,
+              sort_order
+            )
+          `
+          )
+          .eq('published', true)
+          .order('published_at', { ascending: false })
+      ).data
+    : null;
 
   const hasListings = listings && listings.length > 0;
 
