@@ -602,6 +602,12 @@ export default async function HomePage() {
                 <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
                   ✓
                 </span>
+                <p>Use the location-based maintenance directory to find electricians, plumbers, and more</p>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                  ✓
+                </span>
                 <p>Order tenant screening through our TransUnion-powered partner flow</p>
               </div>
             </div>
@@ -916,6 +922,28 @@ export default async function HomePage() {
         </section>
 
         <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-10">
+          <div className="mb-6 rounded-3xl border border-sky-500/30 bg-gradient-to-r from-sky-500/10 via-slate-950 to-slate-950 p-5 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-sky-200/90">
+              New on RentZentro
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+              Location-based maintenance directory for trusted pros
+            </h2>
+            <p className="mt-3 max-w-3xl text-[14px] leading-6 text-slate-300">
+              Need a plumber, electrician, HVAC tech, or general contractor? Landlords can browse
+              maintenance pros by location, save preferred vendors, and keep maintenance work
+              organized in one place.
+            </p>
+            <div className="mt-4">
+              <Link
+                href="/landlord/maintenance-directory"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-sky-400/40 bg-sky-500/10 px-5 py-2.5 text-sm font-semibold text-sky-100 transition duration-200 hover:scale-[1.02] hover:border-sky-300/60 hover:bg-sky-500/20 active:scale-95"
+              >
+                Explore maintenance directory
+              </Link>
+            </div>
+          </div>
+
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               How it works
