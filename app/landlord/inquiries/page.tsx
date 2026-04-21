@@ -458,6 +458,8 @@ export default function LandlordInquiriesPage() {
         throw new Error(insertError.message || 'Failed to create tenant from inquiry.');
       }
 
+      let inviteWarning: string | null = null;
+
       if (convertSendingInvite) {
         const inviteRes = await fetch('/api/tenant-invite', {
           method: 'POST',
@@ -474,10 +476,10 @@ export default function LandlordInquiriesPage() {
         const inviteJson = await inviteRes.json().catch(() => ({}));
 
         if (!inviteRes.ok || inviteJson?.error) {
-          throw new Error(
+          inviteWarning =
             inviteJson?.error ||
-              'Tenant was created, but the portal invite email could not be sent.'
-          );
+            'Tenant was created, but the portal invite email could not be sent.';
+          console.error('Failed to send tenant invite after conversion:', inviteWarning);
         }
       }
 
@@ -504,11 +506,15 @@ export default function LandlordInquiriesPage() {
         )
       );
 
-      setSuccess(
-        convertSendingInvite
-          ? 'Inquiry converted to tenant and portal invite sent.'
-          : 'Inquiry converted to tenant successfully.'
-      );
+      if (inviteWarning) {
+        setSuccess(`Inquiry converted to tenant. ${inviteWarning}`);
+      } else {
+        setSuccess(
+          convertSendingInvite
+            ? 'Inquiry converted to tenant and portal invite sent.'
+            : 'Inquiry converted to tenant successfully.'
+        );
+      }
 
       closeConvertModal();
       router.refresh();
