@@ -606,9 +606,37 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="mt-5 inline-flex w-fit items-center gap-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-400/40 bg-slate-950/70 text-[9px] font-bold leading-tight text-emerald-300">
-                TU
+            <div className="mt-5 inline-flex w-fit items-center gap-3 rounded-2xl border border-sky-400/50 bg-sky-500/15 px-3 py-2 text-[11px] text-sky-100">
+              <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-sky-200/50 bg-[#00A6CE]">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 64 64"
+                  className="h-7 w-7"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="32"
+                    cy="32"
+                    r="24"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="5"
+                    strokeLinecap="round"
+                    strokeDasharray="118 35"
+                    transform="rotate(30 32 32)"
+                  />
+                  <text
+                    x="18"
+                    y="42"
+                    fill="white"
+                    fontSize="28"
+                    fontFamily="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
+                    fontStyle="italic"
+                    fontWeight="700"
+                  >
+                    tu
+                  </text>
+                </svg>
               </span>
               <p className="leading-5">Tenant screening uses a trusted TransUnion-backed screening provider.</p>
             </div>
