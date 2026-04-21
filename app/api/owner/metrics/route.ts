@@ -45,6 +45,16 @@ const safeTime = (value: string | null | undefined): number | null => {
   return Number.isNaN(t) ? null : t;
 };
 
+const inferSignupTimeFromTrialEnd = (
+  trialEnd: string | null | undefined
+): number | null => {
+  const trialEndTime = safeTime(trialEnd);
+  if (trialEndTime == null) return null;
+
+  const THIRTY_FIVE_DAYS_MS = 35 * 24 * 60 * 60 * 1000;
+  return trialEndTime - THIRTY_FIVE_DAYS_MS;
+};
+
 const median = (values: number[]): number | null => {
   if (!values.length) return null;
 
@@ -56,15 +66,46 @@ const median = (values: number[]): number | null => {
   return (sorted[mid - 1] + sorted[mid]) / 2;
 };
 
+const loadLandlords = async (): Promise<LandlordRow[]> => {
+  const withCreatedAt = await supabaseAdmin
+    .from('landlords')
+    .select(
+      'id, user_id, created_at, subscription_status, trial_active, trial_end, stripe_connect_onboarded'
+    );
+
+  if (!withCreatedAt.error) {
+    return (withCreatedAt.data || []) as LandlordRow[];
+  }
+
+  const createdAtMissing =
+    typeof withCreatedAt.error.message === 'string' &&
+    withCreatedAt.error.message.toLowerCase().includes('created_at');
+
+  if (!createdAtMissing) {
+    throw withCreatedAt.error;
+  }
+
+  const withoutCreatedAt = await supabaseAdmin
+    .from('landlords')
+    .select(
+      'id, user_id, subscription_status, trial_active, trial_end, stripe_connect_onboarded'
+    );
+
+  if (withoutCreatedAt.error) {
+    throw withoutCreatedAt.error;
+  }
+
+  return ((withoutCreatedAt.data || []) as LandlordRow[]).map((row) => ({
+    ...row,
+    created_at: null,
+  }));
+};
+
 export async function GET() {
   try {
-    const [landlordsRes, propertiesRes, tenantsRes, paymentsRes] =
+    const [landlords, propertiesRes, tenantsRes, paymentsRes] =
       await Promise.all([
-        supabaseAdmin
-          .from('landlords')
-          .select(
-            'id, user_id, created_at, subscription_status, trial_active, trial_end, stripe_connect_onboarded'
-          ),
+        loadLandlords(),
         supabaseAdmin
           .from('properties')
           .select('id, owner_id, created_at, monthly_rent'),
@@ -72,12 +113,10 @@ export async function GET() {
         supabaseAdmin.from('payments').select('id, amount, paid_on'),
       ]);
 
-    if (landlordsRes.error) throw landlordsRes.error;
     if (propertiesRes.error) throw propertiesRes.error;
     if (tenantsRes.error) throw tenantsRes.error;
     if (paymentsRes.error) throw paymentsRes.error;
 
-    const landlords = (landlordsRes.data || []) as LandlordRow[];
     const properties = (propertiesRes.data || []) as PropertyRow[];
     const tenants = (tenantsRes.data || []) as TenantRow[];
     const payments = (paymentsRes.data || []) as PaymentRow[];
@@ -130,8 +169,6 @@ export async function GET() {
       const amt = typeof p.amount === 'number' ? p.amount : 0;
       return sum + amt;
     }, 0);
-
-    // --- Activation funnel instrumentation (derived from production data) ---
 
     const firstPropertyTimeByOwner = new Map<string, number>();
     for (const property of properties) {
@@ -191,7 +228,9 @@ export async function GET() {
         funnelFirstTenant += 1;
       }
 
-      const landlordCreatedAt = safeTime(landlord.created_at);
+      const landlordCreatedAt =
+        safeTime(landlord.created_at) ??
+        inferSignupTimeFromTrialEnd(landlord.trial_end);
       if (landlordCreatedAt == null) continue;
 
       if (firstPropertyTime != null && firstPropertyTime >= landlordCreatedAt) {
