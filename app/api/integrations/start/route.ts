@@ -26,7 +26,7 @@ function buildOAuthUrl(provider: IntegrationProvider, landlordId?: number) {
     const clientId = process.env.QUICKBOOKS_CLIENT_ID;
     if (!clientId) return null;
     const redirectUri = encodeURIComponent(
-      process.env.QUICKBOOKS_REDIRECT_URI || `${callbackBase}?provider=quickbooks`
+      process.env.QUICKBOOKS_REDIRECT_URI || `${APP_URL}/api/integrations/quickbooks/callback`
     );
 
     return `https://appcenter.intuit.com/connect/oauth2?client_id=${encodeURIComponent(
