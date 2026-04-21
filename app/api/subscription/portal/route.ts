@@ -2,12 +2,13 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from '../../../lib/supabaseEnv';
 import { createSubscriptionPortal } from './portalFlow';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+const SUPABASE_URL = getSupabaseUrl() as string;
+const SERVICE_ROLE_KEY = getSupabaseServiceRoleKey() as string;
+const SUPABASE_ANON_KEY = getSupabaseAnonKey() as string;
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ||
   process.env.NEXT_PUBLIC_SITE_URL ||

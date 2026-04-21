@@ -1,6 +1,7 @@
 // app/api/account/delete-request/route.ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from '../../../lib/supabaseEnv';
 import { submitDeleteRequest } from './deleteRequestFlow';
 
 export const runtime = 'nodejs';
@@ -10,9 +11,9 @@ type Body = {
   landlordId?: number;
   reason?: string | null;
 };
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+const SUPABASE_URL = getSupabaseUrl() as string;
+const SERVICE_ROLE_KEY = getSupabaseServiceRoleKey() as string;
+const SUPABASE_ANON_KEY = getSupabaseAnonKey() as string;
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@rentzentro.com';
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'support@rentzentro.com';
