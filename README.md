@@ -1,82 +1,52 @@
 # RentZentro
 
-RentZentro is software for landlords.
+RentZentro is a landlord-focused rental operations app built with Next.js, Supabase, and Stripe.
 
-It helps landlords collect rent online, manage tenants, track expenses, handle maintenance, share documents, publish listings, capture inquiries, and manage e-signatures in one clean platform.
+Today, the product centers on helping independent landlords run the full rental cycle:
 
-## What RentZentro does
+**List → capture inquiries → onboard tenants → collect rent → manage day-to-day operations**
 
-- Collect rent online with card and ACH payments
-- Track properties, units, and tenants
-- View recent payments and rent status
-- Log expenses by property
-- See monthly income, expenses, and net profit
-- Manage maintenance requests
-- Upload and share documents
-- Send e-signature documents
-- Publish public rental listings
-- Capture listing inquiries from prospects
-- Support landlord team access
+## What RentZentro currently offers
 
-## Positioning
+### For landlords
+- Landlord account signup/login with trial + subscription billing support
+- Stripe subscription checkout + billing portal access
+- Stripe Connect onboarding for rent payout routing
+- Property and tenant records management
+- Tenant invite flow by email
+- Rent payment tracking and recent payment activity
+- Expense tracking with monthly income/expense/net visibility
+- Maintenance request management
+- In-app messaging with email notifications
+- Document storage/sharing
+- Public listings management (draft, publish/unpublish, share link)
+- Prospect inquiry capture from public listing pages
+- Team member access/invite support for landlord accounts
+- E-sign workflow support with purchasable signature credits
 
-RentZentro is built for landlords who want a cleaner, simpler way to run rentals without bouncing between spreadsheets, payment apps, texts, email, and listing sites.
+### For tenants
+- Tenant signup/login and portal access
+- Online rent payment checkout (card + ACH)
+- Auto-pay toggle support
+- Rent status visibility and payment history
+- Document access
+- Maintenance request submission + status tracking
+- Messaging with landlord/team
 
-Core flow:
+## Current architecture (high level)
 
-**List → Capture leads → Lease → Get paid**
+- **Web app:** Next.js App Router + React + TypeScript
+- **Data/auth:** Supabase
+- **Payments & billing:** Stripe (tenant checkout, landlord subscriptions, Connect)
+- **Transactional email:** Resend
+- **Styling:** Tailwind CSS
 
-## Main product areas
-
-### Landlord dashboard
-Landlords can view:
-- properties
-- tenants
-- payments
-- expenses
-- maintenance
-- messages
-- listings
-- documents
-- account and billing
-
-### Tenant portal
-Tenants can:
-- view rent status
-- pay rent online
-- access documents
-- submit maintenance requests
-- use portal messaging
-
-### Listings
-Landlords can:
-- create draft listings
-- upload and reorder photos
-- publish listing pages
-- share public listing links
-- receive prospect inquiries
-
-### Financial visibility
-RentZentro helps landlords track:
-- monthly income
-- monthly expenses
-- net profit
-- property-by-property performance
-
-## Tech stack
-
-- Next.js
-- TypeScript
-- React
-- Supabase
-- Stripe
-- Resend
-- Tailwind CSS
-
-## Project scripts
+## Scripts
 
 ```bash
 npm run dev
 npm run build
 npm run start
 npm run lint
+npm test
+```
