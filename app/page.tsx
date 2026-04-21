@@ -124,7 +124,7 @@ const testimonials: Testimonial[] = [
   {
     quote:
       'The tenant side feels simple, which matters. If tenants can use it without confusion, everything gets easier.',
-    name: 'Sarah Cole',
+    name: 'Steven Cole',
     role: 'Self-managing owner',
     meta: 'Landlord feedback',
     image:
