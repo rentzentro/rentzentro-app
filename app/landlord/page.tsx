@@ -1138,6 +1138,21 @@ export default function LandlordDashboardPage() {
             </Link>
 
             <Link
+              href="/landlord/accounting"
+              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+            >
+              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+                  📚
+                </span>
+                Accounting workflows
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Generate accounting-grade invoice and payment journal payloads.
+              </p>
+            </Link>
+
+            <Link
               href="/landlord/listings"
               className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
             >
