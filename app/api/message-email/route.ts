@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { isSupabaseAdminConfigured, supabaseAdmin } from '../../supabaseAdminClient';
+import {
+  isSupabaseAdminConfigured,
+  supabaseAdmin,
+} from '../../supabaseAdminClient';
 import { resend } from '../../lib/resend';
 import { getDirection, buildRecipients, buildMessageEmail } from './messageEmailFlow';
 

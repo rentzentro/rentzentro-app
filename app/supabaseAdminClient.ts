@@ -1,6 +1,5 @@
 // supabaseAdminClient.ts
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { getSupabaseServiceRoleKey, getSupabaseUrl } from './lib/supabaseEnv';
 
 // IMPORTANT:
 // - This file is for SERVER-SIDE USE ONLY (API routes, webhooks, etc).
@@ -8,33 +7,27 @@ import { getSupabaseServiceRoleKey, getSupabaseUrl } from './lib/supabaseEnv';
 
 let cachedClient: SupabaseClient | null = null;
 
-function getMissingSupabaseAdminEnvReason(): string | null {
-  const supabaseUrl = getSupabaseUrl();
-  const serviceRoleKey = getSupabaseServiceRoleKey();
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return 'Missing Supabase admin env vars. Set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY.';
-  }
-
-  return null;
+export function isSupabaseAdminConfigured(): boolean {
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
 }
 
 function getSupabaseAdminClient(): SupabaseClient {
   if (cachedClient) return cachedClient;
 
-  const missingReason = getMissingSupabaseAdminEnvReason();
-  if (missingReason) {
-    throw new Error(missingReason);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error(
+      'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars.'
+    );
   }
 
-  const supabaseUrl = getSupabaseUrl() as string;
-  const serviceRoleKey = getSupabaseServiceRoleKey() as string;
   cachedClient = createClient(supabaseUrl, serviceRoleKey);
   return cachedClient;
-}
-
-export function isSupabaseAdminConfigured(): boolean {
-  return getMissingSupabaseAdminEnvReason() === null;
 }
 
 // Keep existing import style (`import { supabaseAdmin } ...`) while deferring

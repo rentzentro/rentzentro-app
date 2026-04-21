@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       })
       .eq('email', email)
       .is('user_id', null)
-      .select('id');
+      .select('id, owner_id');
 
     if (error) {
       console.error('link-tenant-user update error:', error);
@@ -51,15 +51,27 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log(
-      'link-tenant-user: linked tenant id',
-      data[0].id,
-      'to user',
-      userId
-    );
+    const linkedTenant = data[0];
+
+    // Best-effort backfill for historical messages that may have tenant_user_id null.
+    // This lets tenant users see landlord/team messages immediately after linking.
+    try {
+      await supabaseAdmin
+        .from('messages')
+        .update({ tenant_user_id: userId })
+        .eq('tenant_id', linkedTenant.id)
+        .is('tenant_user_id', null);
+    } catch (backfillError) {
+      console.error(
+        'link-tenant-user: message tenant_user_id backfill error:',
+        backfillError
+      );
+    }
+
+    console.log('link-tenant-user: linked tenant id', linkedTenant.id, 'to user', userId);
 
     return NextResponse.json(
-      { ok: true, linked: true, tenantId: data[0].id },
+      { ok: true, linked: true, tenantId: linkedTenant.id },
       { status: 200 }
     );
   } catch (error: any) {
