@@ -125,7 +125,36 @@ export default function TenantMessagesPage() {
 
           if (tenantByEmail) {
             tenantTyped = tenantByEmail as TenantRow;
-            // We do NOT try to update user_id here anymore because RLS usually blocks tenants from updating themselves.
+
+            // Best-effort: link this auth user to the tenant row via server route
+            // so landlord/team messages can target tenant_user_id reliably.
+            if (!tenantTyped.user_id) {
+              try {
+                const linkRes = await fetch('/api/link-tenant-user', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    email: tenantTyped.email,
+                    userId: user.id,
+                    tenantName: tenantTyped.name || undefined,
+                  }),
+                });
+
+                if (!linkRes.ok) {
+                  console.warn(
+                    'Failed to link tenant user_id in /api/link-tenant-user:',
+                    await linkRes.text()
+                  );
+                } else {
+                  tenantTyped = { ...tenantTyped, user_id: user.id };
+                }
+              } catch (linkErr) {
+                console.warn(
+                  'Error calling /api/link-tenant-user from tenant/messages:',
+                  linkErr
+                );
+              }
+            }
           }
         }
 
