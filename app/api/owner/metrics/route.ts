@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 type LandlordRow = {
   id: number;
   user_id: string | null;
-  created_at?: string | null;
+  created_at: string | null;
   subscription_status: string | null;
   trial_active?: boolean | null;
   trial_end?: string | null;
@@ -75,6 +75,14 @@ const loadLandlords = async (): Promise<LandlordRow[]> => {
 
   if (!withCreatedAt.error) {
     return (withCreatedAt.data || []) as LandlordRow[];
+  }
+
+  const createdAtMissing =
+    typeof withCreatedAt.error.message === 'string' &&
+    withCreatedAt.error.message.toLowerCase().includes('created_at');
+
+  if (!createdAtMissing) {
+    throw withCreatedAt.error;
   }
 
   const withoutCreatedAt = await supabaseAdmin
