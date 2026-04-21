@@ -135,6 +135,19 @@ const testimonials: Testimonial[] = [
   },
 ];
 
+const coreLandlordFeatures = [
+  'Collect rent online with ACH and card payments through Stripe.',
+  'Send reminders and reduce late rent without manual follow-up.',
+  'Track payment status, tenants, maintenance, and documents in one place.',
+  'Log expenses by property and keep a simple monthly financial picture.',
+  'View income, expenses, and net profit together.',
+  'Invite tenants by email and keep records organized by property.',
+  'Publish listings, share links publicly, and capture prospect inquiries.',
+  'Send leases and related documents for e-sign.',
+  'Invite team members to help manage rentals.',
+  'Use accounting workflows for invoice and payment journal exports.',
+].map((label) => ({ label }));
+
 
 const money = (v: number | null | undefined) =>
   v == null || isNaN(v) ? null : `$${v.toLocaleString('en-US')}`;
@@ -837,20 +850,12 @@ export default async function HomePage() {
                 What you can do inside RentZentro
               </p>
               <div className="mt-4 space-y-3 text-[13px] text-slate-300">
-                {[
-                  'Collect rent online with ACH and card payments through Stripe.',
-                  'Send reminders and reduce late rent without manual follow-up.',
-                  'Track payment status, tenants, maintenance, and documents in one place.',
-                  'Log expenses by property and keep a simple monthly financial picture.',
-                  'View income, expenses, and net profit together.',
-                  'Publish listings and share rental links publicly.',
-                  'Send leases and related documents for e-sign.',
-                ].map((item) => (
-                  <div key={item} className="flex items-start gap-2">
+                {coreLandlordFeatures.map((item) => (
+                  <div key={item.label} className="flex items-start gap-2">
                     <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
                       ✓
                     </span>
-                    <p>{item}</p>
+                    <p>{item.label}</p>
                   </div>
                 ))}
               </div>
