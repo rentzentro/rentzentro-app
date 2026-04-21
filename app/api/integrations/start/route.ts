@@ -24,7 +24,8 @@ function buildOAuthUrl(provider: IntegrationProvider, landlordId?: number) {
 
   if (provider === 'quickbooks') {
     const clientId = process.env.QUICKBOOKS_CLIENT_ID;
-    if (!clientId) return null;
+    const clientSecret = process.env.QUICKBOOKS_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return null;
     const redirectUri = encodeURIComponent(
       process.env.QUICKBOOKS_REDIRECT_URI || `${APP_URL}/api/integrations/quickbooks/callback`
     );
@@ -112,6 +113,25 @@ export async function POST(req: Request) {
   const oauthUrl = buildOAuthUrl(provider, landlordId);
   if (oauthUrl) {
     return NextResponse.json({ url: oauthUrl, mode: 'oauth' });
+  }
+
+  if (provider === 'quickbooks') {
+    return NextResponse.json(
+      {
+        error:
+          'QuickBooks is not fully configured yet. Missing QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET or redirect URI setup.',
+      },
+      { status: 503 }
+    );
+  }
+
+  if (provider !== 'screening') {
+    return NextResponse.json(
+      {
+        error: 'This integration is not live yet in self-serve mode. Please contact support to activate.',
+      },
+      { status: 503 }
+    );
   }
 
   return NextResponse.json({ url: supportActivationUrl, mode: 'activation' });
