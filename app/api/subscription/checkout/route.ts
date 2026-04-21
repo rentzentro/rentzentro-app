@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { createSubscriptionCheckout } from './checkoutFlow';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
@@ -29,149 +30,18 @@ const supabaseAuth =
     : null;
 
 export async function POST(req: Request) {
-  try {
-    if (!stripe) {
-      return NextResponse.json(
-        { error: 'Stripe secret key not configured on server.' },
-        { status: 500 }
-      );
-    }
+  const body = await req.json().catch(() => ({}));
+  const { landlordId } = body as { landlordId?: number };
 
-    if (!supabaseAdmin || !supabaseAuth) {
-      return NextResponse.json(
-        { error: 'Supabase credentials not configured on server.' },
-        { status: 500 }
-      );
-    }
+  const result = await createSubscriptionCheckout({
+    stripe,
+    supabaseAdmin,
+    supabaseAuth,
+    subscriptionPriceId: SUBSCRIPTION_PRICE_ID,
+    appUrl: APP_URL,
+    authHeader: req.headers.get('authorization') || '',
+    landlordId,
+  });
 
-    const body = await req.json().catch(() => ({}));
-    const { landlordId } = body as { landlordId?: number };
-
-    const authHeader = req.headers.get('authorization') || '';
-    const token = authHeader.startsWith('Bearer ')
-      ? authHeader.slice('Bearer '.length).trim()
-      : '';
-
-    if (!token) {
-      return NextResponse.json({ error: 'Missing bearer token.' }, { status: 401 });
-    }
-
-    const { data: authData, error: authError } = await supabaseAuth.auth.getUser(token);
-    if (authError || !authData.user) {
-      return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
-    }
-
-    const authedUserId = authData.user.id;
-
-    if (landlordId != null && typeof landlordId !== 'number') {
-      return NextResponse.json({ error: 'Invalid landlordId in request body.' }, { status: 400 });
-    }
-
-    if (!SUBSCRIPTION_PRICE_ID) {
-      return NextResponse.json(
-        { error: 'Subscription price not configured on server.' },
-        { status: 500 }
-      );
-    }
-
-    // 1) Load landlord row
-    const { data: landlord, error: landlordError } = await supabaseAdmin
-      .from('landlords')
-      .select('id, user_id, email, stripe_customer_id')
-      .eq('user_id', authedUserId)
-      .maybeSingle();
-
-    if (landlordError) {
-      console.error('Error loading landlord in checkout route:', landlordError);
-      return NextResponse.json(
-        { error: 'Unable to load landlord account.' },
-        { status: 500 }
-      );
-    }
-
-    if (!landlord) {
-      return NextResponse.json(
-        { error: 'Landlord account not found for authenticated user.' },
-        { status: 404 }
-      );
-    }
-
-    if (landlordId != null && landlord.id !== landlordId) {
-      return NextResponse.json(
-        { error: 'Forbidden: landlordId does not match authenticated account.' },
-        { status: 403 }
-      );
-    }
-
-    // 2) Ensure Stripe customer
-    let customerId = (landlord.stripe_customer_id as string | null) || null;
-
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: landlord.email,
-        metadata: {
-          landlordId: String(landlord.id),
-        },
-      });
-
-      customerId = customer.id;
-
-      const { error: updateError } = await supabaseAdmin
-        .from('landlords')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', landlord.id);
-
-      if (updateError) {
-        console.error(
-          'Error updating landlord with stripe_customer_id:',
-          updateError
-        );
-      }
-    }
-
-    // 3) Create subscription Checkout Session
-    // IMPORTANT:
-    // - session.metadata does NOT reliably propagate to the Subscription/Invoice.
-    // - Put landlordId onto subscription_data.metadata so webhooks like invoice.* can read it.
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer: customerId,
-      client_reference_id: String(landlord.id),
-      line_items: [
-        {
-          price: SUBSCRIPTION_PRICE_ID,
-          quantity: 1,
-        },
-      ],
-      success_url: `${APP_URL}/landlord/settings?billing=success`,
-      cancel_url: `${APP_URL}/landlord/settings?billing=cancelled`,
-      metadata: {
-        landlordId: String(landlord.id),
-      },
-      subscription_data: {
-        metadata: {
-          landlordId: String(landlord.id),
-        },
-      },
-    });
-
-    if (!session.url) {
-      return NextResponse.json(
-        { error: 'Stripe session created without a redirect URL.' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ url: session.url }, { status: 200 });
-  } catch (err: any) {
-    console.error('Subscription checkout error:', err);
-    return NextResponse.json(
-      {
-        error:
-          err?.message ||
-          'Something went wrong creating the subscription checkout session.',
-      },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json(result.body, { status: result.status });
 }
