@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { resend } from '../../lib/resend';
+import { getDirection, buildRecipients, buildMessageEmail } from './messageEmailFlow';
 
 const FROM_EMAIL =
   process.env.RENTZENTRO_FROM_EMAIL ||
@@ -10,8 +11,6 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-type Direction = 'tenant_to_landlord' | 'landlord_or_team_to_tenant';
 
 type MessageRecord = {
   id: string;
@@ -95,15 +94,8 @@ export async function POST(req: Request) {
     }
 
     // 2) Determine direction based on sender_type
-    let direction: Direction;
-    if (message.sender_type === 'tenant') {
-      direction = 'tenant_to_landlord';
-    } else if (
-      message.sender_type === 'landlord' ||
-      message.sender_type === 'team'
-    ) {
-      direction = 'landlord_or_team_to_tenant';
-    } else {
+    const direction = getDirection(message.sender_type);
+    if (!direction) {
       console.error('message-email: unknown sender_type:', message);
       return NextResponse.json({ ok: true });
     }
@@ -203,11 +195,9 @@ export async function POST(req: Request) {
     }
 
     // 4) If tenant → landlord, also load active team members for this landlord
-    let recipients: string[] = [];
+    const teamEmails: string[] = [];
 
     if (direction === 'tenant_to_landlord') {
-      const teamEmails: string[] = [];
-
       try {
         const { data: teamRows, error: teamError } = await supabaseAdmin
           .from('landlord_team_members')
@@ -223,7 +213,7 @@ export async function POST(req: Request) {
         } else if (teamRows && teamRows.length > 0) {
           for (const row of teamRows as TeamMemberRow[]) {
             if (row.member_email) {
-              teamEmails.push(row.member_email.toLowerCase());
+              teamEmails.push(row.member_email);
             }
           }
         }
@@ -233,18 +223,14 @@ export async function POST(req: Request) {
           teamErr
         );
       }
-
-      // Deduplicate landlord + team emails
-      const uniqueSet = new Set<string>();
-      uniqueSet.add(landlordEmail.toLowerCase());
-      for (const e of teamEmails) {
-        uniqueSet.add(e);
-      }
-      recipients = Array.from(uniqueSet);
-    } else {
-      // Landlord/team → tenant: only email tenant
-      recipients = [tenantEmail];
     }
+
+    const recipients = buildRecipients({
+      direction,
+      landlordEmail,
+      tenantEmail,
+      teamEmails,
+    });
 
     if (recipients.length === 0) {
       console.error('message-email: no recipients resolved.');
@@ -252,39 +238,12 @@ export async function POST(req: Request) {
     }
 
     // 5) Build email content
-    let subject: string;
-    let introLine: string;
-
-    if (direction === 'tenant_to_landlord') {
-      subject = `New message from ${tenantName} in RentZentro`;
-      introLine = `${tenantName} sent you a new message in your RentZentro portal.`;
-    } else {
-      subject = `New message from your landlord in RentZentro`;
-      introLine = `${landlordName} sent you a new message in your RentZentro portal.`;
-    }
-
-    const preview =
-      messageBody.length > 180
-        ? messageBody.slice(0, 177).trimEnd() + '…'
-        : messageBody;
-
-    const html = `
-      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: #0f172a;">
-        <p>${introLine}</p>
-        <p style="margin-top: 16px; margin-bottom: 4px; font-weight: 600;">Message preview:</p>
-        <blockquote style="margin: 0; padding: 8px 12px; border-left: 3px solid #10b981; background:#f1f5f9;">
-          ${preview.replace(/\n/g, '<br/>')}
-        </blockquote>
-        <p style="margin-top: 16px;">
-          To reply, log in to your RentZentro portal.
-        </p>
-        <p style="margin-top: 24px; font-size: 12px; color:#64748b;">
-          This notification was sent by RentZentro so you don’t miss important messages about your rentals.
-        </p>
-      </div>
-    `;
-
-    const text = `${introLine}\n\nMessage preview:\n\n${messageBody}\n\nTo reply, log in to your RentZentro portal.`;
+    const { subject, html, text } = buildMessageEmail({
+      direction,
+      landlordName,
+      tenantName,
+      messageBody,
+    });
 
     try {
       await resend.emails.send({
