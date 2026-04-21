@@ -820,7 +820,7 @@ export default function LandlordDashboardPage() {
               href="/landlord/expenses"
               className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
             >
-              Manage expenses
+              View expense report
             </Link>
           </div>
 
@@ -993,10 +993,10 @@ export default function LandlordDashboardPage() {
     <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
       💰
     </span>
-    Expenses
+    View report
   </p>
   <p className="text-[11px] text-slate-400">
-    Track repairs, utilities, and property expenses.
+    Open your expense report and export it for Excel.
   </p>
 </Link>
 
