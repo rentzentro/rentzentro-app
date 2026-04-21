@@ -344,17 +344,12 @@ export default function LandlordSubscriptionPage() {
     setInfo(null);
 
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      const authedUserId = authData?.user?.id || null;
-
+      const headers = await getAuthHeaders();
       const res = await fetch('/api/account/delete-request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           landlordId: landlord.id,
-          landlordEmail: landlord.email,
-          landlordName: landlord.name,
-          userId: authedUserId,
           reason: 'User requested account deletion from Account & subscription page.',
         }),
       });

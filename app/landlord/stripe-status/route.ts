@@ -1,13 +1,28 @@
 // app/landlord/stripe-status/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { supabase } from '../../supabaseClient';
+import { isSupabaseAdminConfigured, supabaseAdmin } from '../../supabaseAdminClient';
 
 // Stripe client – no apiVersion so TS stops complaining
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || null;
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 export async function POST(req: Request) {
   try {
+    if (!isSupabaseAdminConfigured()) {
+      return NextResponse.json(
+        { error: 'Server database configuration is missing.' },
+        { status: 500 }
+      );
+    }
+
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Stripe is not configured.' },
+        { status: 500 }
+      );
+    }
+
     const { landlordId } = await req.json();
 
     if (!landlordId) {
@@ -18,7 +33,7 @@ export async function POST(req: Request) {
     }
 
     // 1) Get landlord with Stripe account id
-    const { data: landlord, error: landlordError } = await supabase
+    const { data: landlord, error: landlordError } = await supabaseAdmin
       .from('landlords')
       .select('id, stripe_connect_account_id, stripe_connect_onboarded')
       .eq('id', landlordId)
@@ -49,7 +64,7 @@ export async function POST(req: Request) {
 
     // 3) If onboarded and not marked yet, update Supabase flag
     if (isOnboarded && !landlord.stripe_connect_onboarded) {
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin
         .from('landlords')
         .update({ stripe_connect_onboarded: true })
         .eq('id', landlord.id);

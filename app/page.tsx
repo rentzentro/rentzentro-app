@@ -1,6 +1,6 @@
 // app/page.tsx
 import Link from 'next/link';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from './supabaseClient';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,12 +27,6 @@ export const metadata = {
       'Collect rent online, track expenses by property, and manage rentals in one place.',
   },
 };
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
-  { auth: { persistSession: false } }
-);
 
 type Listing = {
   id: number;
@@ -75,6 +69,7 @@ type Testimonial = {
   name: string;
   role: string;
   meta: string;
+  image: string;
 };
 
 const demoCards: DemoCard[] = [
@@ -117,13 +112,17 @@ const testimonials: Testimonial[] = [
     name: 'David Marsh',
     role: 'Independent landlord',
     meta: 'Landlord feedback',
+    image:
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80',
   },
   {
     quote:
       'The tenant side feels simple, which matters. If tenants can use it without confusion, everything gets easier.',
-    name: 'Sarah Cole',
+    name: 'Steven Cole',
     role: 'Self-managing owner',
     meta: 'Landlord feedback',
+    image:
+      'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=300&q=80',
   },
   {
     quote:
@@ -131,6 +130,8 @@ const testimonials: Testimonial[] = [
     name: 'James Porter',
     role: 'Small portfolio landlord',
     meta: 'Landlord feedback',
+    image:
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
   },
 ];
 
@@ -158,6 +159,11 @@ const fmtDate = (value: string | null | undefined) => {
 };
 
 async function getHomepageListings(limit = 6) {
+  if (!isSupabaseBrowserConfigured()) {
+    return { listings: [] as Listing[], coverMap: new Map<number, PhotoRow>() };
+  }
+
+  const supabase = getSupabaseBrowserClient();
   const { data: listings, error } = await supabase
     .from('listings')
     .select(`
@@ -414,12 +420,14 @@ function TestimonialCard({ item }: { item: Testimonial }) {
       </p>
 
       <div className="mt-5 flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/15 text-sm font-semibold text-emerald-200">
-          {item.name
-            .split(' ')
-            .map((word) => word[0])
-            .join('')
-            .slice(0, 2)}
+        <div className="h-11 w-11 overflow-hidden rounded-full border border-emerald-500/30 bg-slate-900">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={item.image}
+            alt={`${item.name} testimonial photo`}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
         </div>
 
         <div className="min-w-0">
@@ -589,6 +597,19 @@ export default async function HomePage() {
                 </span>
                 <p>Manage tenants, maintenance, documents, listings, and e-signatures</p>
               </div>
+              <div className="flex items-start gap-2">
+                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                  ✓
+                </span>
+                <p>Order tenant screening through our TransUnion-powered partner flow</p>
+              </div>
+            </div>
+
+            <div className="mt-5 inline-flex w-fit items-center gap-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-400/40 bg-slate-950/70 text-[9px] font-bold leading-tight text-emerald-300">
+                TU
+              </span>
+              <p className="leading-5">Tenant screening uses a trusted TransUnion-backed screening provider.</p>
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
@@ -732,7 +753,7 @@ export default async function HomePage() {
         </section>
 
         <section className="rz-fade-up rz-delay-4 border-t border-slate-900 py-8">
-          <div className="grid gap-4 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <TrustCard
               title="Secure payments"
               text="ACH and card payments are processed through Stripe with bank-level security."
@@ -748,6 +769,10 @@ export default async function HomePage() {
             <TrustCard
               title="Low-friction start"
               text="Start free for 35 days with no card required and get set up in minutes."
+            />
+            <TrustCard
+              title="Trusted screening partner"
+              text="Tenant screening is handled via our external partner flow that leverages TransUnion data."
             />
           </div>
         </section>

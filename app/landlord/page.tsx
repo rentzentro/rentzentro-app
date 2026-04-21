@@ -820,7 +820,7 @@ export default function LandlordDashboardPage() {
               href="/landlord/expenses"
               className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
             >
-              Manage expenses
+              View expense report
             </Link>
           </div>
 
@@ -993,10 +993,10 @@ export default function LandlordDashboardPage() {
     <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
       💰
     </span>
-    Expenses
+    View report
   </p>
   <p className="text-[11px] text-slate-400">
-    Track repairs, utilities, and property expenses.
+    Open your expense report and export it for Excel.
   </p>
 </Link>
 
@@ -1074,6 +1074,21 @@ export default function LandlordDashboardPage() {
               </p>
               <p className="text-[11px] text-slate-400">
                 Upload leases, share files, and send e-signature envelopes to tenants.
+              </p>
+            </Link>
+
+            <Link
+              href="/landlord/templates"
+              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
+            >
+              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
+                  🧾
+                </span>
+                Free printable templates
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Grab ready-to-print lease, checklist, and notice templates for your rentals.
               </p>
             </Link>
 

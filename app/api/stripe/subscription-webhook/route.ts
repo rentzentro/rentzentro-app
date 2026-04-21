@@ -1,18 +1,13 @@
 // app/api/stripe/subscription-webhook/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '../../../supabaseAdminClient';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-  process.env.SUPABASE_SERVICE_ROLE_KEY as string
-);
 
 // Helper: update landlord row from a Stripe subscription object
 async function updateLandlordFromSubscription(
