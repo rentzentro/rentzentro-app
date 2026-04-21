@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
@@ -54,7 +54,7 @@ export default function LandlordListingsPage() {
     process.env.NEXT_PUBLIC_APP_URL ||
     'https://www.rentzentro.com';
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -81,11 +81,11 @@ export default function LandlordListingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const publishedCount = useMemo(
     () => rows.filter((r) => r.published).length,

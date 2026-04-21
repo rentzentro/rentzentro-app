@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
@@ -165,7 +165,7 @@ export default function LandlordInquiriesPage() {
     return m;
   }, [properties]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoadStatus('loading');
     setError(null);
 
@@ -285,11 +285,11 @@ export default function LandlordInquiriesPage() {
       setError(err?.message || 'Failed to load inquiries.');
       setLoadStatus('error');
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const filteredInquiries = useMemo(() => {
     const q = search.trim().toLowerCase();

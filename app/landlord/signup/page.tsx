@@ -29,16 +29,18 @@ export default function LandlordSignupPage() {
     const validation = validateLandlordSignupInput({ email, password, confirmPassword });
 
     if (!validation.ok) {
-      setError(validation.message);
+      setError(validation.message || 'Unable to create your landlord account. Please try again.');
       return;
     }
+
+    const normalizedEmail = validation.normalizedEmail as string;
 
     setLoading(true);
 
     try {
       // 1) Create Supabase auth user
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email: validation.normalizedEmail,
+        email: normalizedEmail,
         password,
       });
 
@@ -56,7 +58,7 @@ export default function LandlordSignupPage() {
       // 2) Insert landlord row
       const { error: insertError } = await supabase.from('landlords').insert([
         {
-          email: validation.normalizedEmail,
+          email: normalizedEmail,
           user_id: user.id,
           trial_active: true,
           trial_end: trialEndYMD,
