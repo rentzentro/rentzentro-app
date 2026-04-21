@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
-import signupValidation from './signupValidation.cjs';
+import signupValidation from './signupValidation';
 
 export default function LandlordSignupPage() {
   const router = useRouter();

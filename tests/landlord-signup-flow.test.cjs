@@ -5,7 +5,7 @@ const {
   getTrialEndYMD,
   normalizeEmail,
   validateLandlordSignupInput,
-} = require('../app/landlord/signup/signupValidation.cjs');
+} = require('../app/landlord/signup/signupValidation.js');
 
 test('normalizeEmail trims and lowercases email', () => {
   assert.equal(normalizeEmail('  OWNER@Example.COM  '), 'owner@example.com');
