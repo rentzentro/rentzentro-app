@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type Photo = {
   id: number;
@@ -17,17 +17,21 @@ export default function PhotoGallery({ photos }: { photos: Photo[] }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const startX = useRef<number | null>(null);
 
-  const close = () => setOpenIndex(null);
+  const close = useCallback(() => setOpenIndex(null), []);
 
-  const prev = () => {
-    if (openIndex == null) return;
-    setOpenIndex((i) => (i == null ? null : (i - 1 + ordered.length) % ordered.length));
-  };
+  const prev = useCallback(() => {
+    setOpenIndex((i) => {
+      if (i == null) return null;
+      return (i - 1 + ordered.length) % ordered.length;
+    });
+  }, [ordered.length]);
 
-  const next = () => {
-    if (openIndex == null) return;
-    setOpenIndex((i) => (i == null ? null : (i + 1) % ordered.length));
-  };
+  const next = useCallback(() => {
+    setOpenIndex((i) => {
+      if (i == null) return null;
+      return (i + 1) % ordered.length;
+    });
+  }, [ordered.length]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -38,7 +42,7 @@ export default function PhotoGallery({ photos }: { photos: Photo[] }) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [openIndex, ordered.length]);
+  }, [close, next, openIndex, prev]);
 
   if (!ordered.length) {
     return <p className="mt-3 text-sm text-slate-400">No photos uploaded yet.</p>;
@@ -98,43 +102,33 @@ export default function PhotoGallery({ photos }: { photos: Photo[] }) {
                 onClick={close}
                 className="rounded-full border border-slate-600 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 hover:bg-slate-900"
               >
-                ✕ Close
+                Close
               </button>
             </div>
 
-            <div className="relative overflow-hidden rounded-2xl border border-slate-700 bg-black">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={ordered[openIndex].image_url}
-                alt="Listing photo large"
-                className="max-h-[75vh] w-full object-contain"
-              />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={ordered[openIndex].image_url}
+              alt="Listing photo full"
+              className="max-h-[78vh] w-full rounded-2xl border border-slate-700 object-contain bg-slate-950"
+            />
 
-              {ordered.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={prev}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-slate-600 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 hover:bg-slate-900"
-                    aria-label="Previous photo"
-                  >
-                    ◀
-                  </button>
-                  <button
-                    type="button"
-                    onClick={next}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-slate-600 bg-slate-900/60 px-3 py-2 text-xs text-slate-100 hover:bg-slate-900"
-                    aria-label="Next photo"
-                  >
-                    ▶
-                  </button>
-                </>
-              )}
+            <div className="mt-3 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={prev}
+                className="rounded-full border border-slate-600 bg-slate-900/70 px-4 py-2 text-xs text-slate-100 hover:bg-slate-900"
+              >
+                ← Previous
+              </button>
+              <button
+                type="button"
+                onClick={next}
+                className="rounded-full border border-slate-600 bg-slate-900/70 px-4 py-2 text-xs text-slate-100 hover:bg-slate-900"
+              >
+                Next →
+              </button>
             </div>
-
-            <p className="mt-2 text-[11px] text-slate-400">
-              Tip: Use ◀ ▶ keys on desktop or swipe on mobile.
-            </p>
           </div>
         </div>
       )}

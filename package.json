@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:flows": "node --test tests/landlord-signup-flow.test.cjs"
   },
   "dependencies": {
     "@react-email/render": "^1.4.0",
