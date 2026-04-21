@@ -1,16 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { resend } from '../../lib/resend';
+import { supabaseAdmin } from '../../supabaseAdminClient';
 import { getDirection, buildRecipients, buildMessageEmail } from './messageEmailFlow';
 
 const FROM_EMAIL =
   process.env.RENTZENTRO_FROM_EMAIL ||
   'RentZentro <notifications@rentzentro.com>';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 type MessageRecord = {
   id: string;
@@ -46,7 +41,10 @@ type TeamMemberRow = {
 
 export async function POST(req: Request) {
   // If Supabase admin is misconfigured, log + no-op so we don't break UI
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.SUPABASE_SERVICE_ROLE_KEY
+  ) {
     console.error(
       'message-email: Supabase admin credentials are not configured.'
     );
