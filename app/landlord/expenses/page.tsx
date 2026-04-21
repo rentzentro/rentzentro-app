@@ -279,6 +279,60 @@ export default function LandlordExpensesPage() {
     }
   };
 
+  const handleExportExpenseReport = () => {
+    if (filteredExpenses.length === 0) {
+      setError('There are no expenses in this report yet to export.');
+      return;
+    }
+
+    const escapeCsvCell = (value: string | number | null | undefined) => {
+      if (value == null) return '';
+      const stringValue = String(value);
+      const escapedValue = stringValue.replace(/"/g, '""');
+      return /[",\n]/.test(stringValue) ? `"${escapedValue}"` : escapedValue;
+    };
+
+    const header = [
+      'Expense Date',
+      'Property',
+      'Category',
+      'Description',
+      'Amount (USD)',
+      'Created At',
+    ];
+
+    const rows = filteredExpenses.map((expense) => {
+      const linkedProperty = expense.property_id
+        ? propertyMap.get(expense.property_id)
+        : undefined;
+
+      return [
+        expense.expense_date,
+        propertyLabel(linkedProperty),
+        expense.category || 'Other',
+        expense.description || '',
+        Number(expense.amount || 0).toFixed(2),
+        expense.created_at || '',
+      ];
+    });
+
+    const csvString = [header, ...rows]
+      .map((row) => row.map((cell) => escapeCsvCell(cell)).join(','))
+      .join('\n');
+
+    const fileName = `expense-report-${selectedMonth || getMonthInputValue()}.csv`;
+    const csvBlob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const downloadUrl = URL.createObjectURL(csvBlob);
+
+    const anchor = document.createElement('a');
+    anchor.href = downloadUrl;
+    anchor.setAttribute('download', fileName);
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(downloadUrl);
+  };
+
   if (loading && !landlord) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-50 p-6 flex items-center justify-center">
@@ -308,6 +362,13 @@ export default function LandlordExpensesPage() {
           </div>
 
           <div className="flex flex-wrap gap-2 md:justify-end">
+            <button
+              type="button"
+              onClick={handleExportExpenseReport}
+              className="text-xs px-3 py-2 rounded-full border border-emerald-500/50 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
+            >
+              Export report (Excel/CSV)
+            </button>
             <Link
               href="/landlord"
               className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
@@ -533,10 +594,10 @@ export default function LandlordExpensesPage() {
         <section className="mt-6 rounded-3xl border border-slate-800 bg-slate-950/70 shadow-sm">
           <div className="border-b border-slate-800 px-5 py-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Recent expenses
+              Expense report
             </p>
             <p className="mt-1 text-sm text-slate-200">
-              All logged expenses for the selected month.
+              Full report for the selected month. Export to CSV for Excel anytime.
             </p>
           </div>
 
