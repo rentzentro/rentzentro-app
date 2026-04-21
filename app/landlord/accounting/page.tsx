@@ -17,6 +17,7 @@ export default function LandlordAccountingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resultJson, setResultJson] = useState<string>('');
+  const [resultWorkflow, setResultWorkflow] = useState<any | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [invoiceId, setInvoiceId] = useState('inv_demo_1001');
@@ -114,11 +115,93 @@ export default function LandlordAccountingPage() {
       }
 
       setResultJson(JSON.stringify(body, null, 2));
+      setResultWorkflow(body);
     } catch (err: any) {
       setError(err?.message || 'Unable to run accounting workflow.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const formatUsdFromCents = (cents?: number) => {
+    if (typeof cents !== 'number' || Number.isNaN(cents)) return '-';
+    return (cents / 100).toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const downloadJournalCsv = () => {
+    const workflow = resultWorkflow;
+    const journal = workflow?.journalEntry;
+    const lines: any[] = Array.isArray(journal?.lines) ? journal.lines : [];
+
+    if (!journal || !lines.length) return;
+
+    const escape = (v: unknown) => `"${String(v ?? '').replaceAll('"', '""')}"`;
+    const rows = [
+      [
+        'journalId',
+        'occurredOn',
+        'description',
+        'reference',
+        'accountCode',
+        'debit',
+        'credit',
+        'memo',
+      ],
+      ...lines.map((line) => [
+        journal.journalId || '',
+        journal.occurredOn || '',
+        journal.description || '',
+        journal.reference || '',
+        line.accountCode || '',
+        formatUsdFromCents(line.debitCents || 0),
+        formatUsdFromCents(line.creditCents || 0),
+        line.memo || '',
+      ]),
+    ]
+      .map((row) => row.map(escape).join(','))
+      .join('\n');
+
+    const blob = new Blob([rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${journal.journalId || 'journal-entry'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const copyAccountantSummary = async () => {
+    const workflow = resultWorkflow;
+    const journal = workflow?.journalEntry;
+    if (!workflow || !journal) return;
+
+    const lines: any[] = Array.isArray(journal.lines) ? journal.lines : [];
+    const detailLines = lines
+      .map(
+        (line) =>
+          `- ${line.accountCode}: Dr ${formatUsdFromCents(line.debitCents || 0)} | Cr ${formatUsdFromCents(
+            line.creditCents || 0
+          )}`
+      )
+      .join('\n');
+
+    const summary = [
+      `Workflow: ${workflow.workflow || '-'}`,
+      `Reference: ${journal.reference || '-'}`,
+      `Date: ${journal.occurredOn || '-'}`,
+      `Total Debits: ${formatUsdFromCents(journal.totals?.debitCents || 0)}`,
+      `Total Credits: ${formatUsdFromCents(journal.totals?.creditCents || 0)}`,
+      'Journal lines:',
+      detailLines,
+    ].join('\n');
+
+    await navigator.clipboard.writeText(summary);
   };
 
   const submitInvoice = async (e: FormEvent) => {
@@ -206,11 +289,82 @@ export default function LandlordAccountingPage() {
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <h2 className="text-lg font-semibold">Workflow output</h2>
           <p className="text-sm text-slate-400 mt-1">
-            Copy this payload into your downstream ledger posting integration.
+            Use the buttons below to download a CSV journal entry or copy a plain-English summary for your accountant.
           </p>
-          <pre className="mt-3 overflow-x-auto rounded bg-slate-950 border border-slate-800 p-4 text-xs text-emerald-200 min-h-[220px]">
-            {resultJson || 'Run a workflow to preview the accounting payload here.'}
-          </pre>
+
+          {resultWorkflow?.journalEntry ? (
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded border border-slate-700 bg-slate-950 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Workflow</p>
+                  <p className="mt-1 text-sm font-semibold">{resultWorkflow.workflow || '-'}</p>
+                </div>
+                <div className="rounded border border-slate-700 bg-slate-950 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Reference</p>
+                  <p className="mt-1 text-sm font-semibold">{resultWorkflow.journalEntry.reference || '-'}</p>
+                </div>
+                <div className="rounded border border-slate-700 bg-slate-950 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Debits</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {formatUsdFromCents(resultWorkflow.journalEntry.totals?.debitCents)}
+                  </p>
+                </div>
+                <div className="rounded border border-slate-700 bg-slate-950 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Credits</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {formatUsdFromCents(resultWorkflow.journalEntry.totals?.creditCents)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={downloadJournalCsv}
+                  className="rounded bg-emerald-500 px-3 py-2 text-xs font-semibold text-slate-950"
+                >
+                  Download journal CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={copyAccountantSummary}
+                  className="rounded border border-slate-600 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-100"
+                >
+                  Copy accountant summary
+                </button>
+              </div>
+
+              <div className="overflow-x-auto rounded border border-slate-800">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-slate-950 text-slate-300">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Account</th>
+                      <th className="px-3 py-2 text-left">Debit</th>
+                      <th className="px-3 py-2 text-left">Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(resultWorkflow.journalEntry.lines || []).map((line: any, idx: number) => (
+                      <tr key={`${line.accountCode}-${idx}`} className="border-t border-slate-800">
+                        <td className="px-3 py-2">{line.accountCode || '-'}</td>
+                        <td className="px-3 py-2">{formatUsdFromCents(line.debitCents || 0)}</td>
+                        <td className="px-3 py-2">{formatUsdFromCents(line.creditCents || 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <details className="rounded border border-slate-800 bg-slate-950 p-3">
+                <summary className="cursor-pointer text-xs text-slate-300">View raw JSON</summary>
+                <pre className="mt-3 overflow-x-auto text-xs text-emerald-200">{resultJson}</pre>
+              </details>
+            </div>
+          ) : (
+            <pre className="mt-3 overflow-x-auto rounded bg-slate-950 border border-slate-800 p-4 text-xs text-emerald-200 min-h-[140px]">
+              Run a workflow to generate a downloadable journal entry.
+            </pre>
+          )}
         </section>
       </div>
     </main>
