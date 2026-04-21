@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import {
+  isSupabaseAdminConfigured,
+  supabaseAdmin,
+} from '../../supabaseAdminClient';
 import { resend } from '../../lib/resend';
-import { supabaseAdmin } from '../../supabaseAdminClient';
 import { getDirection, buildRecipients, buildMessageEmail } from './messageEmailFlow';
 
 const FROM_EMAIL =
@@ -41,10 +44,7 @@ type TeamMemberRow = {
 
 export async function POST(req: Request) {
   // If Supabase admin is misconfigured, log + no-op so we don't break UI
-  if (
-    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    !process.env.SUPABASE_SERVICE_ROLE_KEY
-  ) {
+  if (!isSupabaseAdminConfigured()) {
     console.error(
       'message-email: Supabase admin credentials are not configured.'
     );

@@ -7,6 +7,13 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 let cachedClient: SupabaseClient | null = null;
 
+export function isSupabaseAdminConfigured(): boolean {
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
+
 function getSupabaseAdminClient(): SupabaseClient {
   if (cachedClient) return cachedClient;
 
