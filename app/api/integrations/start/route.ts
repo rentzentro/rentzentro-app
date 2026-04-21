@@ -22,21 +22,6 @@ function buildOAuthUrl(provider: IntegrationProvider, landlordId?: number) {
   const callbackBase = `${APP_URL}/landlord/integrations`;
   const state = encodeState({ provider, landlordId: landlordId || null, ts: Date.now() });
 
-  if (provider === 'quickbooks') {
-    const clientId = process.env.QUICKBOOKS_CLIENT_ID;
-    if (!clientId) return null;
-    const redirectUri = encodeURIComponent(
-      process.env.QUICKBOOKS_REDIRECT_URI || `${callbackBase}?provider=quickbooks`
-    );
-
-    return `https://appcenter.intuit.com/connect/oauth2?client_id=${encodeURIComponent(
-      clientId
-    )}&redirect_uri=${redirectUri}&response_type=code&scope=${safeScopes(
-      process.env.QUICKBOOKS_SCOPES,
-      'com.intuit.quickbooks.accounting'
-    )}&state=${state}`;
-  }
-
   if (provider === 'xero') {
     const clientId = process.env.XERO_CLIENT_ID;
     if (!clientId) return null;
@@ -112,6 +97,15 @@ export async function POST(req: Request) {
   const oauthUrl = buildOAuthUrl(provider, landlordId);
   if (oauthUrl) {
     return NextResponse.json({ url: oauthUrl, mode: 'oauth' });
+  }
+
+  if (provider !== 'screening') {
+    return NextResponse.json(
+      {
+        error: 'This integration is not live yet in self-serve mode. Please contact support to activate.',
+      },
+      { status: 503 }
+    );
   }
 
   return NextResponse.json({ url: supportActivationUrl, mode: 'activation' });

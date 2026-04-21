@@ -1,5 +1,4 @@
 export type IntegrationProvider =
-  | 'quickbooks'
   | 'xero'
   | 'screening'
   | 'docusign'
@@ -17,18 +16,6 @@ export type IntegrationCard = {
 };
 
 export const integrationCards: IntegrationCard[] = [
-  {
-    provider: 'quickbooks',
-    name: 'QuickBooks Online',
-    category: 'Accounting',
-    summary:
-      'Connect QuickBooks to reduce duplicate bookkeeping and keep rent + expense data flowing into your accounting stack.',
-    outcomes: [
-      'Sync invoice and payment journal payloads from RentZentro workflows.',
-      'Reduce monthly close time by avoiding manual re-entry.',
-    ],
-    statusLabel: 'Beta connection',
-  },
   {
     provider: 'xero',
     name: 'Xero',

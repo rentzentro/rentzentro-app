@@ -438,7 +438,7 @@ export default function LandlordSettingsPage() {
           </div>
 
           <p className="text-xs text-slate-400">
-            Set up high-leverage integrations for QuickBooks/Xero, screening
+            Set up high-leverage integrations for Xero, screening
             providers, e-sign/storage ecosystems, and banking rails. Connections
             open provider auth or activation flows.
           </p>
