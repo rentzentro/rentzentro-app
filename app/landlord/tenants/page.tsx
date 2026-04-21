@@ -42,6 +42,10 @@ type TeamMemberRow = {
   status: string | null;
 };
 
+const screeningProviderBaseUrl =
+  process.env.NEXT_PUBLIC_TENANT_SCREENING_URL?.trim() ||
+  'https://www.mysmartmove.com/';
+
 // ---------- Helpers ----------
 
 const formatCurrency = (v: number | null | undefined) =>
@@ -517,6 +521,29 @@ export default function LandlordTenantsPage() {
     }
   };
 
+  const handleStartScreening = (tenant: TenantRow) => {
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const screeningUrl = new URL(screeningProviderBaseUrl);
+      if (tenant.email) screeningUrl.searchParams.set('email', tenant.email);
+      if (tenant.name) screeningUrl.searchParams.set('name', tenant.name);
+      if (tenant.phone) screeningUrl.searchParams.set('phone', tenant.phone);
+      screeningUrl.searchParams.set('source', 'rentzentro');
+
+      window.open(screeningUrl.toString(), '_blank', 'noopener,noreferrer');
+      setSuccess(
+        `Opened screening for ${tenant.name || tenant.email}. Complete the report in the new tab.`
+      );
+    } catch (err) {
+      console.error('Unable to open screening provider URL:', err);
+      setError(
+        'Unable to start screening. Please set NEXT_PUBLIC_TENANT_SCREENING_URL to a valid URL.'
+      );
+    }
+  };
+
   // ---------- Render ----------
 
   if (loading) {
@@ -922,6 +949,12 @@ export default function LandlordTenantsPage() {
 
         {/* Tenants list */}
         <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
+          <div className="mb-3 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-2">
+            <p className="text-[11px] text-indigo-100">
+              Tenant screening is now enabled. Use <span className="font-semibold">Screen tenant</span> to
+              launch your screening provider with each tenant&apos;s contact info prefilled.
+            </p>
+          </div>
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-wide">
@@ -1006,6 +1039,13 @@ export default function LandlordTenantsPage() {
                       )}
 
                       <div className="mt-1 flex flex-wrap items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleStartScreening(t)}
+                          className="rounded-full border border-indigo-500/70 bg-indigo-500/10 px-3 py-1 text-[11px] text-indigo-100 hover:bg-indigo-500/20"
+                        >
+                          Screen tenant
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleSendInvite(t, prop)}
