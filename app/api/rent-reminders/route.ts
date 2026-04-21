@@ -1,15 +1,9 @@
 // app/api/rent-reminders/route.ts
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { isSupabaseAdminConfigured, supabaseAdmin } from '../../supabaseAdminClient';
 
 export const runtime = 'nodejs';
-
-// --- Supabase admin client ---
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 // --- Email setup (same stack as maintenance emails) ---
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
@@ -20,7 +14,7 @@ const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 export async function POST() {
   try {
-    if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    if (!isSupabaseAdminConfigured()) {
       console.error('[rent-reminders] Supabase env vars missing');
       return NextResponse.json(
         { error: 'Server not configured for Supabase.' },

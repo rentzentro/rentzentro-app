@@ -1,14 +1,9 @@
 // app/api/tenant-landlord-access/route.ts
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '../../supabaseAdminClient';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 const parseSupabaseDate = (value: string | null | undefined): Date | null => {
   if (!value) return null;

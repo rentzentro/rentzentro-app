@@ -1,7 +1,8 @@
 // app/supabaseClient.ts
 import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-type BrowserSupabaseClient = ReturnType<typeof createClient>;
+type BrowserSupabaseClient = SupabaseClient<any, 'public', any>;
 
 let cachedClient: BrowserSupabaseClient | null = null;
 

@@ -7,20 +7,33 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 let cachedClient: SupabaseClient | null = null;
 
-function getSupabaseAdminClient(): SupabaseClient {
-  if (cachedClient) return cachedClient;
-
+function getMissingSupabaseAdminEnvReason(): string | null {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars.'
-    );
+    return 'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars.';
   }
 
+  return null;
+}
+
+function getSupabaseAdminClient(): SupabaseClient {
+  if (cachedClient) return cachedClient;
+
+  const missingReason = getMissingSupabaseAdminEnvReason();
+  if (missingReason) {
+    throw new Error(missingReason);
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
   cachedClient = createClient(supabaseUrl, serviceRoleKey);
   return cachedClient;
+}
+
+export function isSupabaseAdminConfigured(): boolean {
+  return getMissingSupabaseAdminEnvReason() === null;
 }
 
 // Keep existing import style (`import { supabaseAdmin } ...`) while deferring

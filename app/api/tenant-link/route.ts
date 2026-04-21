@@ -1,15 +1,10 @@
 // app/api/tenant-link/route.ts
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { isSupabaseAdminConfigured, supabaseAdmin } from '../../supabaseAdminClient';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
-
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+if (!isSupabaseAdminConfigured()) {
   console.error('Missing SUPABASE env vars for tenant-link route');
 }
-
-const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 export async function POST(req: Request) {
   try {
