@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 import { integrationCards } from '../../lib/integrationsCatalog';
 
@@ -12,10 +13,31 @@ type LandlordRow = {
 };
 
 export default function LandlordIntegrationsPage() {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [landlord, setLandlord] = useState<LandlordRow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
+
+  useEffect(() => {
+    const provider = searchParams.get('provider');
+    const status = searchParams.get('status');
+    const message = searchParams.get('message');
+    const realmId = searchParams.get('realmId');
+
+    if (provider !== 'quickbooks' || !status) return;
+
+    if (status === 'success') {
+      setNotice(
+        message || (realmId ? `QuickBooks connected (realm: ${realmId}).` : 'QuickBooks connected.')
+      );
+      setError(null);
+      return;
+    }
+
+    setError(message || 'QuickBooks connection failed.');
+  }, [searchParams]);
 
   useEffect(() => {
     const loadLandlord = async () => {
@@ -127,6 +149,12 @@ export default function LandlordIntegrationsPage() {
         {error ? (
           <section className="rounded-2xl border border-rose-700/60 bg-rose-950/40 p-4 text-sm text-rose-100">
             {error}
+          </section>
+        ) : null}
+
+        {notice ? (
+          <section className="rounded-2xl border border-emerald-700/40 bg-emerald-950/30 p-4 text-sm text-emerald-100">
+            {notice}
           </section>
         ) : null}
 
