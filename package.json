@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "prebuild": "npm run check:merge-markers",
-    "check:merge-markers": "if rg -n \"^(<<<<<<<|=======|>>>>>>>)\" app tests; then echo \"Unresolved merge conflict markers found.\" && exit 1; else echo \"No merge conflict markers found.\"; fi",
+    "check:merge-markers": "if command -v rg >/dev/null 2>&1; then rg -n \"^(<<<<<<<|=======|>>>>>>>)\" app tests; else grep -R -n -E \"^(<<<<<<<|=======|>>>>>>>)\" app tests; fi && (echo \"Unresolved merge conflict markers found.\" && exit 1) || echo \"No merge conflict markers found.\"",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
