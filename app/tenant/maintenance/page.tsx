@@ -4,6 +4,10 @@ import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
+import {
+  getMaintenanceStatusMeta,
+  MAINTENANCE_STATUS_ORDER,
+} from '../../lib/maintenanceStatus';
 
 // ---------- Types ----------
 
@@ -38,6 +42,9 @@ type FormState = {
   title: string;
   description: string;
   priority: string;
+  issueType: string;
+  location: string;
+  accessNotes: string;
 };
 
 // ---------- Component ----------
@@ -46,6 +53,18 @@ const emptyForm: FormState = {
   title: '',
   description: '',
   priority: 'normal',
+  issueType: 'plumbing',
+  location: '',
+  accessNotes: '',
+};
+
+const timelineLabels: Record<string, string> = {
+  new: 'Submitted',
+  acknowledged: 'Acknowledged',
+  scheduled: 'Scheduled',
+  in_progress: 'In progress',
+  waiting_parts: 'Waiting on parts',
+  completed: 'Completed',
 };
 
 export default function TenantMaintenancePage() {
@@ -163,13 +182,22 @@ export default function TenantMaintenancePage() {
 
     try {
       // 1) Insert into maintenance_requests
+      const detailLines = [
+        `Issue type: ${form.issueType}`,
+        form.location.trim() ? `Location in unit: ${form.location.trim()}` : '',
+        form.accessNotes.trim()
+          ? `Access notes: ${form.accessNotes.trim()}`
+          : '',
+      ].filter(Boolean);
+      const enrichedDescription = `${form.description.trim()}\n\n${detailLines.join('\n')}`;
+
       const { data: insertData, error: insertError } = await supabase
         .from('maintenance_requests')
         .insert({
           tenant_id: tenant.id,
           property_id: property?.id ?? null,
           title: form.title.trim(),
-          description: form.description.trim(),
+          description: enrichedDescription,
           priority: form.priority,
           status: 'new',
         })
@@ -182,8 +210,6 @@ export default function TenantMaintenancePage() {
       setRequests((prev) => [insertData as MaintenanceRow, ...prev]);
 
       // 2) Email to landlord (ONLY if property has an email)
-      const landlordEmail = property?.landlord_email || '';
-
 // 2) Email to landlord (let backend decide final "to" address)
 fetch('/api/maintenance-email', {
   method: 'POST',
@@ -196,7 +222,7 @@ fetch('/api/maintenance-email', {
     propertyName: property?.name,
     unitLabel: property?.unit_label,
     title: form.title,
-    description: form.description,
+    description: enrichedDescription,
     priority: form.priority,
   }),
 }).catch((err) => {
@@ -325,6 +351,25 @@ fetch('/api/maintenance-email', {
               <div className="flex flex-wrap items-center gap-3">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">
+                    Issue type
+                  </label>
+                  <select
+                    name="issueType"
+                    value={form.issueType}
+                    onChange={handleChange}
+                    className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="plumbing">Plumbing</option>
+                    <option value="electrical">Electrical</option>
+                    <option value="appliance">Appliance</option>
+                    <option value="heating_cooling">Heating / cooling</option>
+                    <option value="pest">Pest</option>
+                    <option value="safety">Safety concern</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">
                     Priority
                   </label>
                   <select
@@ -339,6 +384,34 @@ fetch('/api/maintenance-email', {
                     <option value="emergency">Emergency (already called)</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">
+                  Location in unit
+                </label>
+                <input
+                  type="text"
+                  name="location"
+                  value={form.location}
+                  onChange={handleChange}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Ex: Kitchen under sink / Bathroom ceiling"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">
+                  Access notes (optional)
+                </label>
+                <input
+                  type="text"
+                  name="accessNotes"
+                  value={form.accessNotes}
+                  onChange={handleChange}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="Ex: Dog in unit, best after 3 PM, call before entry."
+                />
               </div>
 
               <div className="mt-3 flex items-center gap-3">
@@ -380,13 +453,50 @@ fetch('/api/maintenance-email', {
                     key={r.id}
                     className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
                   >
+                    {(() => {
+                      const statusMeta = getMaintenanceStatusMeta(r.status);
+                      return (
+                        <>
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[11px] font-semibold text-slate-100 truncate">
                         {r.title || 'Maintenance request'}
                       </p>
                       <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-700 text-slate-200">
-                        Status: {r.status || 'new'}
+                        Status: {statusMeta.label}
                       </span>
+                    </div>
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-slate-800">
+                      <div
+                        className="h-1.5 rounded-full bg-emerald-500"
+                        style={{ width: `${statusMeta.progress}%` }}
+                      />
+                    </div>
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      Progress: {statusMeta.progress}%
+                    </p>
+                    <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3">
+                      {MAINTENANCE_STATUS_ORDER.map((step, index) => {
+                        const currentStepIndex =
+                          MAINTENANCE_STATUS_ORDER.findIndex(
+                            (status) => status === statusMeta.key
+                          );
+                        const active =
+                          currentStepIndex === -1
+                            ? index === 0
+                            : currentStepIndex >= index;
+                        return (
+                          <div
+                            key={`${r.id}-${step}`}
+                            className={`rounded-md border px-2 py-1 text-[10px] ${
+                              active
+                                ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
+                                : 'border-slate-700 bg-slate-900/40 text-slate-500'
+                            }`}
+                          >
+                            {timelineLabels[step] || step}
+                          </div>
+                        );
+                      })}
                     </div>
                     <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
                       {r.description || 'No description provided.'}
@@ -403,6 +513,9 @@ fetch('/api/maintenance-email', {
                       <span>{new Date(r.created_at).toLocaleString()}</span>
                       {r.priority && <span>Priority: {r.priority}</span>}
                     </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

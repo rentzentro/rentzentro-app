@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
+import {
+  MAINTENANCE_STATUS_OPTIONS,
+  normalizeMaintenanceStatus,
+} from '../../lib/maintenanceStatus';
 
 // ---------- Types ----------
 
@@ -71,6 +75,13 @@ export default function LandlordMaintenancePage() {
 
   const propertyById = new Map<number, PropertyRow>();
   properties.forEach((p) => propertyById.set(p.id, p));
+
+  const openRequests = requests.filter(
+    (r) => normalizeMaintenanceStatus(r.status) !== 'completed'
+  );
+  const emergencyOpenCount = openRequests.filter(
+    (r) => (r.priority || '').toLowerCase() === 'emergency'
+  ).length;
 
   // ---------- Load data ----------
 
@@ -167,7 +178,7 @@ export default function LandlordMaintenancePage() {
   };
 
   const handleStatusChange = (id: number, value: string) => {
-    updateRequest(id, { status: value });
+    updateRequest(id, { status: normalizeMaintenanceStatus(value) });
   };
 
   const handlePriorityChange = (id: number, value: string) => {
@@ -245,6 +256,33 @@ export default function LandlordMaintenancePage() {
         )}
 
         {/* Requests list */}
+        <section className="grid gap-3 sm:grid-cols-3">
+          <article className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">
+              Total requests
+            </p>
+            <p className="mt-1 text-xl font-semibold text-slate-100">
+              {requests.length}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">
+              Open requests
+            </p>
+            <p className="mt-1 text-xl font-semibold text-amber-200">
+              {openRequests.length}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">
+              Emergency open
+            </p>
+            <p className="mt-1 text-xl font-semibold text-rose-200">
+              {emergencyOpenCount}
+            </p>
+          </article>
+        </section>
+
         <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -285,15 +323,17 @@ export default function LandlordMaintenancePage() {
                             Status
                           </span>
                           <select
-                            value={r.status || 'new'}
+                            value={normalizeMaintenanceStatus(r.status)}
                             onChange={(e) =>
                               handleStatusChange(r.id, e.target.value)
                             }
                             className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-[11px] text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                           >
-                            <option value="new">New</option>
-                            <option value="in_progress">In progress</option>
-                            <option value="completed">Completed</option>
+                            {MAINTENANCE_STATUS_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
                           </select>
                         </div>
 
