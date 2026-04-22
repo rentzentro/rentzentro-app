@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
+import ExploreNearbySection from './ExploreNearbySection';
 
 // ---------- Types ----------
 
@@ -305,6 +306,12 @@ const buildLocalEventsLink = (areaHint: string | null) => {
 };
 
 function TenantPortalExploreNearbySection({
+  areaHint,
+  propertyName,
+}: {
+  areaHint: string | null;
+  propertyName: string | null;
+}) {
   areaHint,
   propertyName,
 }: {
@@ -1317,7 +1324,10 @@ export default function TenantPortalPage() {
               </div>
             </section>
 
-            <TenantPortalExploreNearbySection
+<TenantPortalExploreNearbySection
+  areaHint={localAreaHint}
+  propertyName={property?.name || null}
+/>
               areaHint={localAreaHint}
               propertyName={property?.name || null}
             />
