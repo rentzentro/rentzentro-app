@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
+import ExploreNearbySection from './ExploreNearbySection';
 
 // ---------- Types ----------
 
@@ -70,12 +71,6 @@ type RentStatus = {
   monthsDue: number;
   nextDueDate: string | null; // ISO or YYYY-MM-DD
   isCaughtUp: boolean;
-};
-
-type LocalCategory = {
-  label: string;
-  emoji: string;
-  query: string;
 };
 
 // ---------- Helpers ----------
@@ -258,20 +253,6 @@ const calculateRentStatus = (
     nextDueDate,
     isCaughtUp,
   };
-};
-
-const localCategories: LocalCategory[] = [
-  { label: 'Restaurants', emoji: '🍽️', query: 'restaurants' },
-  { label: 'Parks', emoji: '🌳', query: 'parks' },
-  { label: 'Zoos & aquariums', emoji: '🦁', query: 'zoos and aquariums' },
-  { label: 'Beaches & waterfronts', emoji: '🏖️', query: 'beaches and waterfront parks' },
-  { label: 'Museums', emoji: '🏛️', query: 'museums' },
-  { label: 'Family activities', emoji: '🎡', query: 'family activities' },
-];
-
-const buildMapsLink = (query: string, areaHint: string | null) => {
-  const fullQuery = areaHint ? `${query} near ${areaHint}` : `${query} near me`;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullQuery)}`;
 };
 
 // ---------- Component ----------
@@ -1193,45 +1174,10 @@ export default function TenantPortalPage() {
               </div>
             </section>
 
-            <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">Explore nearby</p>
-                  <p className="mt-1 text-sm font-medium text-slate-50">
-                    Things to do around your area
-                  </p>
-                </div>
-              </div>
-
-              <p className="mt-2 text-xs text-slate-400">
-                Discover local spots near {property?.name || 'your home'}.
-              </p>
-
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {localCategories.map((item) => (
-                  <a
-                    key={item.label}
-                    href={buildMapsLink(item.query, localAreaHint)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 hover:border-emerald-500/40"
-                  >
-                    <p className="text-sm font-medium text-slate-100">
-                      <span className="mr-1" aria-hidden="true">
-                        {item.emoji}
-                      </span>
-                      {item.label}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">Open in Google Maps</p>
-                  </a>
-                ))}
-              </div>
-
-              <p className="mt-3 text-[11px] text-slate-500">
-                We&apos;re starting with quick local discovery links. Personalized recommendations
-                and local events are coming soon.
-              </p>
-            </section>
+            <ExploreNearbySection
+              areaHint={localAreaHint}
+              propertyName={property?.name || null}
+            />
           </div>
         </div>
       </div>
