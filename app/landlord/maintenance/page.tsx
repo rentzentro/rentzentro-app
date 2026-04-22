@@ -295,11 +295,11 @@ export default function LandlordMaintenancePage() {
                             }
                             className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-[11px] text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                           >
-                            {MAINTENANCE_STATUS_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
+{MAINTENANCE_STATUS_OPTIONS.map((option) => (
+  <option key={option.value} value={option.value}>
+    {option.label}
+  </option>
+))}
                           </select>
                         </div>
 

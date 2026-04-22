@@ -55,6 +55,21 @@ const emptyForm: FormState = {
   accessNotes: '',
 };
 
+const STATUS_META: Record<string, { label: string; progress: number }> = {
+  new: { label: 'Submitted', progress: 20 },
+  acknowledged: { label: 'Acknowledged', progress: 40 },
+  scheduled: { label: 'Scheduled', progress: 60 },
+  in_progress: { label: 'In progress', progress: 80 },
+  waiting_parts: { label: 'Waiting on parts', progress: 85 },
+  completed: { label: 'Completed', progress: 100 },
+};
+
+const getStatusMeta = (status: string | null) =>
+  STATUS_META[status || ''] || {
+    label: status ? status.replaceAll('_', ' ') : 'Submitted',
+    progress: status === 'completed' ? 100 : 20,
+  };
+
 export default function TenantMaintenancePage() {
   const router = useRouter();
 
@@ -442,7 +457,11 @@ fetch('/api/maintenance-email', {
                     className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
                   >
                     {(() => {
+<<<<<<< codex/brainstorm-tenant-amenity-enhancements
                       const statusMeta = getMaintenanceStatusMeta(r.status);
+=======
+                      const statusMeta = getStatusMeta(r.status);
+>>>>>>> main
                       return (
                         <>
                     <div className="flex items-center justify-between gap-2">
