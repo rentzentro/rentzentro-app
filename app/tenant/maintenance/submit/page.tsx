@@ -35,12 +35,18 @@ type FormState = {
   title: string;
   description: string;
   priority: Priority;
+  issueType: string;
+  location: string;
+  accessNotes: string;
 };
 
 const emptyForm: FormState = {
   title: '',
   description: '',
   priority: 'normal',
+  issueType: 'plumbing',
+  location: '',
+  accessNotes: '',
 };
 
 const parseSupabaseDate = (value: string | null | undefined): Date | null => {
@@ -258,6 +264,15 @@ export default function TenantMaintenanceSubmitPage() {
     setSubmitting(true);
 
     try {
+      const detailLines = [
+        `Issue type: ${form.issueType}`,
+        form.location.trim() ? `Location in unit: ${form.location.trim()}` : '',
+        form.accessNotes.trim()
+          ? `Access notes: ${form.accessNotes.trim()}`
+          : '',
+      ].filter(Boolean);
+      const enrichedDescription = `${form.description.trim()}\n\n${detailLines.join('\n')}`;
+
       // 1) Insert into maintenance_requests
       const { data: insertData, error: insertError } = await supabase
         .from('maintenance_requests')
@@ -265,7 +280,7 @@ export default function TenantMaintenanceSubmitPage() {
           tenant_id: tenant.id,
           property_id: property?.id ?? null,
           title: form.title.trim(),
-          description: form.description.trim(),
+          description: enrichedDescription,
           priority: form.priority,
           status: 'new',
         })
@@ -287,7 +302,7 @@ export default function TenantMaintenanceSubmitPage() {
           propertyName: property?.name,
           unitLabel: property?.unit_label,
           title: form.title.trim(),
-          description: form.description.trim(),
+          description: enrichedDescription,
           priority: form.priority,
         }),
       });
@@ -451,6 +466,57 @@ export default function TenantMaintenanceSubmitPage() {
                   Emergency – needs immediate attention
                 </option>
               </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-slate-200">
+                Issue type
+              </label>
+              <select
+                name="issueType"
+                value={form.issueType}
+                onChange={handleChange}
+                disabled={billingBlocked || submitting}
+                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
+              >
+                <option value="plumbing">Plumbing</option>
+                <option value="electrical">Electrical</option>
+                <option value="appliance">Appliance</option>
+                <option value="heating_cooling">Heating / cooling</option>
+                <option value="pest">Pest</option>
+                <option value="safety">Safety concern</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-slate-200">
+                Location in unit
+              </label>
+              <input
+                type="text"
+                name="location"
+                value={form.location}
+                onChange={handleChange}
+                disabled={billingBlocked || submitting}
+                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
+                placeholder="Ex: Kitchen under sink / Bathroom ceiling"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-slate-200">
+                Access notes (optional)
+              </label>
+              <input
+                type="text"
+                name="accessNotes"
+                value={form.accessNotes}
+                onChange={handleChange}
+                disabled={billingBlocked || submitting}
+                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60"
+                placeholder="Ex: Dog in unit, best after 3 PM, call before entry."
+              />
             </div>
 
             <p className="text-[10px] text-amber-300 flex items-start gap-1">

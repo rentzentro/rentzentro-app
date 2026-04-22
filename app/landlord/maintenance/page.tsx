@@ -292,7 +292,10 @@ export default function LandlordMaintenancePage() {
                             className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-[11px] text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                           >
                             <option value="new">New</option>
+                            <option value="acknowledged">Acknowledged</option>
+                            <option value="scheduled">Scheduled</option>
                             <option value="in_progress">In progress</option>
+                            <option value="waiting_parts">Waiting on parts</option>
                             <option value="completed">Completed</option>
                           </select>
                         </div>
