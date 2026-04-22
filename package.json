@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "npm run check:merge-markers",
+    "check:merge-markers": "sh -c 'TMP_FILE=$(mktemp); if command -v rg >/dev/null 2>&1; then rg -n \"^(<<<<<<<|=======|>>>>>>>)\" app tests > \"$TMP_FILE\" || true; else grep -R -n -E \"^(<<<<<<<|=======|>>>>>>>)\" app tests > \"$TMP_FILE\" || true; fi; if [ -s \"$TMP_FILE\" ]; then cat \"$TMP_FILE\"; echo \"Unresolved merge conflict markers found.\"; rm -f \"$TMP_FILE\"; exit 1; else echo \"No merge conflict markers found.\"; rm -f \"$TMP_FILE\"; fi'",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
