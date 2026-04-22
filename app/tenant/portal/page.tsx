@@ -6,6 +6,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
 import ExploreNearbySection from './ExploreNearbySection';
+import {
+  getMaintenanceStatusMeta,
+  normalizeMaintenanceStatus,
+} from '../../lib/maintenanceStatus';
 
 // ---------- Types ----------
 
@@ -127,22 +131,21 @@ const formatDateTime = (iso: string | null | undefined) => {
 
 const formatStatusLabel = (status: string | null) => {
   if (!status) return 'Unknown';
-  const s = status.toLowerCase();
-  if (s === 'new') return 'New';
-  if (s === 'in progress') return 'In Progress';
-  if (s === 'resolved' || s === 'closed') return 'Resolved';
-  return status;
+  return getMaintenanceStatusMeta(status).label;
 };
 
 const statusBadgeClasses = (status: string | null) => {
-  const s = (status || '').toLowerCase();
+  const s = normalizeMaintenanceStatus(status);
   if (s === 'new') {
     return 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40';
   }
-  if (s === 'in progress') {
+  if (s === 'in_progress' || s === 'scheduled') {
     return 'bg-amber-500/15 text-amber-300 border border-amber-500/40';
   }
-  if (s === 'resolved' || s === 'closed') {
+  if (s === 'waiting_parts') {
+    return 'bg-orange-500/15 text-orange-300 border border-orange-500/40';
+  }
+  if (s === 'completed') {
     return 'bg-sky-500/15 text-sky-300 border border-sky-500/40';
   }
   return 'bg-slate-700 text-slate-200 border border-slate-500/60';

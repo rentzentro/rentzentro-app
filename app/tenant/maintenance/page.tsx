@@ -4,6 +4,7 @@ import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
+import { getMaintenanceStatusMeta } from '../../lib/maintenanceStatus';
 
 // ---------- Types ----------
 
@@ -456,7 +457,11 @@ fetch('/api/maintenance-email', {
                     className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
                   >
                     {(() => {
+<<<<<<< codex/brainstorm-tenant-amenity-enhancements
+                      const statusMeta = getMaintenanceStatusMeta(r.status);
+=======
                       const statusMeta = getStatusMeta(r.status);
+>>>>>>> main
                       return (
                         <>
                     <div className="flex items-center justify-between gap-2">
