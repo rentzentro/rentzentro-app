@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
+import {
+  MAINTENANCE_STATUS_OPTIONS,
+  normalizeMaintenanceStatus,
+} from '../../lib/maintenanceStatus';
 
 // ---------- Types ----------
 
@@ -167,7 +171,7 @@ export default function LandlordMaintenancePage() {
   };
 
   const handleStatusChange = (id: number, value: string) => {
-    updateRequest(id, { status: value });
+    updateRequest(id, { status: normalizeMaintenanceStatus(value) });
   };
 
   const handlePriorityChange = (id: number, value: string) => {
@@ -285,15 +289,17 @@ export default function LandlordMaintenancePage() {
                             Status
                           </span>
                           <select
-                            value={r.status || 'new'}
+                            value={normalizeMaintenanceStatus(r.status)}
                             onChange={(e) =>
                               handleStatusChange(r.id, e.target.value)
                             }
                             className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1.5 text-[11px] text-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                           >
-                            <option value="new">New</option>
-                            <option value="in_progress">In progress</option>
-                            <option value="completed">Completed</option>
+                            {MAINTENANCE_STATUS_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
                           </select>
                         </div>
 
