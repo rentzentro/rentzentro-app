@@ -305,7 +305,13 @@ const buildLocalEventsLink = (areaHint: string | null) => {
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 };
 
-function ExploreNearbySection({
+function TenantPortalExploreNearbySection({
+  areaHint,
+  propertyName,
+}: {
+  areaHint: string | null;
+  propertyName: string | null;
+}) {
   areaHint,
   propertyName,
 }: {
@@ -1318,7 +1324,10 @@ export default function TenantPortalPage() {
               </div>
             </section>
 
-            <ExploreNearbySection
+<TenantPortalExploreNearbySection
+  areaHint={localAreaHint}
+  propertyName={property?.name || null}
+/>
               areaHint={localAreaHint}
               propertyName={property?.name || null}
             />
