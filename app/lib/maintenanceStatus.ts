@@ -61,7 +61,6 @@ export const MAINTENANCE_STATUS_OPTIONS = [
   { value: 'waiting_parts', label: 'Waiting on parts' },
   { value: 'completed', label: 'Completed' },
 ] as const;
-
 export const MAINTENANCE_STATUS_ORDER = MAINTENANCE_STATUS_OPTIONS.map(
   (option) => option.value
 );
