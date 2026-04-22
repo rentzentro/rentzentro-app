@@ -6,25 +6,25 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'RentZentro | Collect rent, track expenses, and manage rentals',
+  title: 'RentZentro | Built for landlords who want clear rental profit',
   description:
-    'RentZentro is software for landlords. Collect rent online, enable auto-pay, send reminders, track expenses by property, view profit, manage maintenance, share documents, publish listings, and handle e-signatures in one simple platform.',
+    'RentZentro is software for landlords. See real rent, expense, and profit numbers for each property, collect payments securely with Stripe, and manage rentals in one simple system.',
   alternates: {
     canonical: 'https://www.rentzentro.com/',
   },
   openGraph: {
-    title: 'RentZentro | Collect rent online and see your real profit',
+    title: 'RentZentro | Stop guessing your rental profit',
     description:
-      'Collect rent online, track expenses by property, and manage rentals in one clean platform built for landlords.',
+      'Built for landlords to see real rent, expenses, and profit in one clear system.',
     url: 'https://www.rentzentro.com/',
     siteName: 'RentZentro',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'RentZentro | Collect rent online and see your real profit',
+    title: 'RentZentro | Stop guessing your rental profit',
     description:
-      'Collect rent online, track expenses by property, and manage rentals in one place.',
+      'See real rent, expenses, and profit numbers in one simple landlord system.',
   },
 };
 
@@ -54,16 +54,6 @@ type PhotoRow = {
   sort_order: number;
 };
 
-type DemoCard = {
-  title: string;
-  loc: string;
-  price: string;
-  bedsBaths: string;
-  available: string;
-  area: string;
-  image: string;
-};
-
 type Testimonial = {
   quote: string;
   name: string;
@@ -71,39 +61,6 @@ type Testimonial = {
   meta: string;
   image: string;
 };
-
-const demoCards: DemoCard[] = [
-  {
-    title: 'Bright 2BR • Renovated kitchen • Parking',
-    loc: 'East Side, Providence, RI',
-    price: '$2,350/mo',
-    bedsBaths: '2 / 1',
-    available: 'Now',
-    area: 'East Side, Providence, RI',
-    image:
-      'https://images.unsplash.com/photo-1501183638710-841dd1904471?auto=format&fit=crop&w=1400&q=70',
-  },
-  {
-    title: 'Modern 1BR • In-unit laundry • Gym access',
-    loc: 'Somerville, MA',
-    price: '$2,150/mo',
-    bedsBaths: '1 / 1',
-    available: 'Jan 5, 2026',
-    area: 'Somerville, MA',
-    image:
-      'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=1400&q=70',
-  },
-  {
-    title: 'Spacious 3BR • Backyard • Pet-friendly',
-    loc: 'Warwick, RI',
-    price: '$2,850/mo',
-    bedsBaths: '3 / 1.5',
-    available: 'Feb 1, 2026',
-    area: 'Warwick, RI',
-    image:
-      'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1400&q=70',
-  },
-];
 
 const testimonials: Testimonial[] = [
   {
@@ -201,52 +158,6 @@ async function getHomepageListings(limit = 6) {
   }
 
   return { listings: (listings || []) as Listing[], coverMap };
-}
-
-function DemoListingCard({ d }: { d: DemoCard }) {
-  return (
-    <div className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30 hover:bg-slate-900/70">
-      <div className="relative h-44 w-full overflow-hidden bg-slate-950/50 sm:h-48">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={d.image}
-          alt="Example rental listing preview"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-          loading="lazy"
-        />
-        <div className="absolute left-3 top-3 inline-flex items-center rounded-full border border-slate-700 bg-black/50 px-2.5 py-1 text-[10px] font-semibold text-slate-100 backdrop-blur">
-          {d.price}
-        </div>
-        <div className="absolute right-3 top-3 inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-200 backdrop-blur">
-          Example
-        </div>
-      </div>
-
-      <div className="p-4">
-        <p className="text-sm font-semibold text-slate-50">{d.title}</p>
-        <p className="mt-1 text-[12px] text-slate-300">{d.loc}</p>
-
-        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2.5">
-            <p className="text-slate-500">Beds / Baths</p>
-            <p className="mt-0.5 font-semibold text-slate-100">{d.bedsBaths}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2.5">
-            <p className="text-slate-500">Available</p>
-            <p className="mt-0.5 font-semibold text-slate-100">{d.available}</p>
-          </div>
-        </div>
-
-        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-2.5">
-          <p className="text-[11px] text-slate-500">Area</p>
-          <p className="mt-0.5 text-[12px] text-slate-200">{d.area}</p>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Exact address hidden until a showing is scheduled.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function LiveListingCard({
@@ -540,13 +451,12 @@ export default async function HomePage() {
         <section className="grid gap-8 pb-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="rz-fade-up rz-delay-2 order-1">
             <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl lg:text-6xl">
-              Collect Rent Online
-              <br className="hidden sm:block" /> and See Your Real Profit
+              Stop guessing your rental profit.
             </h1>
 
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-              RentZentro gives landlords one simple place to collect rent, track expenses, manage
-              tenants, and understand what each property is actually making.
+              Most landlords collect rent — but don’t actually know what they’re making.
+              RentZentro shows your real numbers across rent, expenses, and profit.
             </p>
 
             <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
@@ -571,12 +481,12 @@ export default async function HomePage() {
             </div>
 
             <p className="mt-3 text-[12px] leading-5 text-emerald-300">
-              Join landlords across the U.S. already using RentZentro
+              Rent goes directly to your account. RentZentro never holds your money.
             </p>
 
             <p className="mt-2 text-[12px] leading-5 text-slate-400">
-              No card required • Setup in minutes • Funds go directly to your Stripe-connected
-              account
+              Built for independent landlords • No complicated setup • Works with your existing
+              tenants
             </p>
 
             <div className="mt-5 grid max-w-xl gap-2.5 text-sm text-slate-200">
@@ -584,19 +494,19 @@ export default async function HomePage() {
                 <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
                   ✓
                 </span>
-                <p>Collect rent online with ACH and card payments</p>
+                <p>See exactly what each property is making</p>
               </div>
               <div className="flex items-start gap-2">
                 <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
                   ✓
                 </span>
-                <p>Track expenses by property and see real profit</p>
+                <p>Know your real monthly profit instantly</p>
               </div>
               <div className="flex items-start gap-2">
                 <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
                   ✓
                 </span>
-                <p>Manage tenants, maintenance, documents, listings, and e-signatures</p>
+                <p>Stop switching between tools</p>
               </div>
               <div className="flex items-start gap-2">
                 <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
@@ -788,28 +698,53 @@ export default async function HomePage() {
         </section>
 
         <section className="rz-fade-up rz-delay-4 border-t border-slate-900 py-8">
+          <div className="mb-8 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 sm:p-6">
+            <h2 className="text-2xl font-semibold text-slate-50">What most landlords deal with</h2>
+            <ul className="mt-4 space-y-3 text-sm text-slate-300">
+              {[
+                'Tracking rent across apps, texts, and spreadsheets',
+                'No clear view of profit per property',
+                'Chasing tenants for payments',
+                'Scattered maintenance, documents, and communication',
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                    ✓
+                  </span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-4 text-sm font-semibold text-emerald-300">
+              RentZentro replaces all of this with one simple system.
+            </p>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <TrustCard
-              title="Secure payments"
-              text="ACH and card payments are processed through Stripe with bank-level security."
+              title="Payments powered by Stripe"
+              text="ACH and card payments with bank-level security."
             />
             <TrustCard
-              title="Funds go directly to you"
-              text="Rent goes directly to your connected account. RentZentro does not hold landlord funds."
+              title="No platform holds funds"
+              text="Rent goes directly to your connected account. You stay in control of your money at all times."
             />
             <TrustCard
-              title="Built for real landlords"
-              text="Simple enough for smaller portfolios and strong enough to run your rental business cleanly."
+              title="Built for independent landlords"
+              text="Simple, clear, and built for landlords who want no bloated features."
             />
             <TrustCard
-              title="Low-friction start"
+              title="No complicated setup"
               text="Start free for 35 days with no card required and get set up in minutes."
             />
             <TrustCard
-              title="Trusted screening partner"
-              text="Tenant screening is handled via our external partner flow that leverages TransUnion data."
+              title="Works with your existing tenants"
+              text="Invite current tenants and keep rent, maintenance, and documents in one simple place."
             />
           </div>
+          <p className="mt-4 text-sm font-bold text-slate-100">
+            You stay in control of your money at all times.
+          </p>
         </section>
 
         <section id="demo" className="rz-fade-up rz-delay-5 border-t border-slate-900 py-10">
@@ -1006,10 +941,11 @@ export default async function HomePage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                 Public listings
               </p>
-              <h2 className="mt-2 text-2xl font-semibold text-slate-50">Browse rentals</h2>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+                Your listings will appear here once published
+              </h2>
               <p className="mt-2 text-[13px] leading-6 text-slate-400">
-                RentZentro landlords can publish listings with photos and share them publicly by
-                link.
+                Listings are created and published by landlords using RentZentro.
               </p>
             </div>
 
@@ -1022,26 +958,14 @@ export default async function HomePage() {
           </div>
 
           {publicListings.length === 0 ? (
-            <>
-              <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70">
-                <p className="text-sm font-semibold text-slate-100">Listing preview</p>
-                <p className="mt-1 text-[11px] leading-5 text-slate-400">
-                  Here’s what RentZentro listings look like. Real published listings will show here
-                  automatically.
-                </p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {demoCards.map((d) => (
-                  <DemoListingCard key={d.title} d={d} />
-                ))}
-              </div>
-
-              <p className="mt-3 text-[10px] leading-5 text-slate-500">
-                Example listings above are demos for presentation. RentZentro is software for
-                managing rentals — not a property management company.
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70">
+              <p className="text-sm font-semibold text-slate-100">
+                Your listings will appear here once published.
               </p>
-            </>
+              <p className="mt-1 text-[12px] leading-5 text-slate-400">
+                Listings are created and published by landlords using RentZentro.
+              </p>
+            </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {publicListings.map((listing) => (
@@ -1061,8 +985,7 @@ export default async function HomePage() {
               Start managing your rentals the right way
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              Create your free account, set up your first property in minutes, and start tracking
-              rent, expenses, and real performance from one place.
+              Set up your first property in minutes and see your real numbers immediately.
             </p>
 
             <div className="mt-5 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
