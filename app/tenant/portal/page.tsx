@@ -1310,7 +1310,8 @@ export default function TenantPortalPage() {
               </a>
 
               <p className="mt-3 text-[11px] text-slate-500">
-                Next step: we can personalize this based on resident preferences and lease profile.
+                We&apos;re starting with quick local discovery links. Next step: personalize
+                recommendations based on resident preferences and lease profile.
               </p>
             </section>
           </div>
