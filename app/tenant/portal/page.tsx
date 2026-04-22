@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
+import ExploreNearbySection from './ExploreNearbySection';
 
 // ---------- Types ----------
 
@@ -253,6 +254,7 @@ const calculateRentStatus = (
     isCaughtUp,
   };
 };
+
 
 // ---------- Component ----------
 
@@ -777,6 +779,7 @@ export default function TenantPortalPage() {
     : 'inline-block h-1.5 w-1.5 rounded-full bg-emerald-400';
 
   const tenantActionsBlocked = landlordBillingBlocked;
+  const localAreaHint = property?.name || property?.unit_label || null;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -1171,6 +1174,11 @@ export default function TenantPortalPage() {
                 </Link>
               </div>
             </section>
+
+            <ExploreNearbySection
+              areaHint={localAreaHint}
+              propertyName={property?.name || null}
+            />
           </div>
         </div>
       </div>

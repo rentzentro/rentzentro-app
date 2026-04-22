@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "npm run check:merge-markers",
+    "check:merge-markers": "if rg -n \"^(<<<<<<<|=======|>>>>>>>)\" app tests; then echo \"Unresolved merge conflict markers found.\" && exit 1; else echo \"No merge conflict markers found.\"; fi",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
