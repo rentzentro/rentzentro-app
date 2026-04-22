@@ -4,7 +4,10 @@ import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
-import { getMaintenanceStatusMeta } from '../../lib/maintenanceStatus';
+import {
+  getMaintenanceStatusMeta,
+  MAINTENANCE_STATUS_ORDER,
+} from '../../lib/maintenanceStatus';
 
 // ---------- Types ----------
 
@@ -53,6 +56,15 @@ const emptyForm: FormState = {
   issueType: 'plumbing',
   location: '',
   accessNotes: '',
+};
+
+const timelineLabels: Record<string, string> = {
+  new: 'Submitted',
+  acknowledged: 'Acknowledged',
+  scheduled: 'Scheduled',
+  in_progress: 'In progress',
+  waiting_parts: 'Waiting on parts',
+  completed: 'Completed',
 };
 
 const STATUS_META: Record<string, { label: string; progress: number }> = {
@@ -477,6 +489,28 @@ const statusMeta = getMaintenanceStatusMeta(r.status);
                     <p className="mt-1 text-[10px] text-slate-500">
                       Progress: {statusMeta.progress}%
                     </p>
+<div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3">
+  {MAINTENANCE_STATUS_ORDER.map((step, index) => {
+    const currentStepIndex = MAINTENANCE_STATUS_ORDER.findIndex(
+      (status) => status === statusMeta.key
+    );
+    const active =
+      currentStepIndex === -1 ? index === 0 : currentStepIndex >= index;
+
+    return (
+      <div
+        key={`${r.id}-${step}`}
+        className={`rounded-md border px-2 py-1 text-[10px] ${
+          active
+            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
+            : 'border-slate-700 bg-slate-900/40 text-slate-500'
+        }`}
+      >
+        {timelineLabels[step] || step}
+      </div>
+    );
+  })}
+</div>
                     <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
                       {r.description || 'No description provided.'}
                     </p>

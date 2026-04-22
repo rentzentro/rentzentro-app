@@ -76,6 +76,13 @@ export default function LandlordMaintenancePage() {
   const propertyById = new Map<number, PropertyRow>();
   properties.forEach((p) => propertyById.set(p.id, p));
 
+  const openRequests = requests.filter(
+    (r) => normalizeMaintenanceStatus(r.status) !== 'completed'
+  );
+  const emergencyOpenCount = openRequests.filter(
+    (r) => (r.priority || '').toLowerCase() === 'emergency'
+  ).length;
+
   // ---------- Load data ----------
 
   useEffect(() => {
@@ -249,6 +256,33 @@ export default function LandlordMaintenancePage() {
         )}
 
         {/* Requests list */}
+        <section className="grid gap-3 sm:grid-cols-3">
+          <article className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">
+              Total requests
+            </p>
+            <p className="mt-1 text-xl font-semibold text-slate-100">
+              {requests.length}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">
+              Open requests
+            </p>
+            <p className="mt-1 text-xl font-semibold text-amber-200">
+              {openRequests.length}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">
+              Emergency open
+            </p>
+            <p className="mt-1 text-xl font-semibold text-rose-200">
+              {emergencyOpenCount}
+            </p>
+          </article>
+        </section>
+
         <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div>
