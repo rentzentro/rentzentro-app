@@ -590,6 +590,10 @@ export default function LandlordSubscriptionPage() {
                   const isSelected = selectedPlan === plan.key;
                   const maxUnits = plan.key === 'starter' ? 3 : plan.key === 'core' ? 20 : 75;
                   const isAvailable = unitCount <= maxUnits;
+              <p className="text-[11px] text-slate-300">Choose your plan before checkout:</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {PLAN_OPTIONS.map((plan) => {
+                  const isSelected = selectedPlan === plan.key;
                   return (
                     <button
                       key={plan.key}
@@ -602,6 +606,7 @@ export default function LandlordSubscriptionPage() {
                           : isAvailable
                           ? 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
                           : 'border-slate-800 bg-slate-950/70 opacity-50 cursor-not-allowed'
+                          : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
                       }`}
                     >
                       <p className="text-sm font-semibold text-slate-50">
@@ -612,6 +617,7 @@ export default function LandlordSubscriptionPage() {
                         {plan.subLabel}
                         {!isAvailable ? ` • Too small for ${unitCount} units` : ''}
                       </p>
+                      <p className="text-[11px] text-slate-400">{plan.subLabel}</p>
                     </button>
                   );
                 })}
