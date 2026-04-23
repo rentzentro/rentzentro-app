@@ -290,7 +290,7 @@ export default function OwnerDashboardPage() {
                       {formatCurrency(metrics.MRR)}
                     </p>
                     <p className="mt-1 text-slate-400">
-                      {metrics.paidLandlords} paid landlords × $29.95/month.
+                      {metrics.paidLandlords} paid landlords × assumed blended rate ($29.95/month).
                     </p>
                   </div>
 

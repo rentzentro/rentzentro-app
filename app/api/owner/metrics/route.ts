@@ -38,6 +38,7 @@ const ACTIVE_SUBSCRIPTION_STATUSES = new Set([
   'active',
   'active_cancel_at_period_end',
 ]);
+const ASSUMED_AVERAGE_PLAN_PRICE = 29.95;
 
 const safeTime = (value: string | null | undefined): number | null => {
   if (!value) return null;
@@ -153,7 +154,7 @@ export async function GET() {
       }
     }
 
-    const MRR = paidLandlords * 29.95;
+    const MRR = paidLandlords * ASSUMED_AVERAGE_PLAN_PRICE;
 
     const thirtyDaysAgo = new Date(
       now.getFullYear(),
