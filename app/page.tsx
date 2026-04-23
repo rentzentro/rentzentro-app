@@ -138,7 +138,6 @@ const pricingPlans: PricingPlan[] = [
   },
 ];
 
-
 const money = (v: number | null | undefined) =>
   v == null || isNaN(v) ? null : `$${v.toLocaleString('en-US')}`;
 

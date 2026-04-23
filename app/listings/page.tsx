@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from '../supabaseClient';
+import GoogleMapsRentalSearch from './GoogleMapsRentalSearch';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -117,6 +118,8 @@ export default async function PublicListingsPage() {
             landlord and kept up to date in real time.
           </p>
         </div>
+
+        <GoogleMapsRentalSearch />
 
         {/* Listings */}
         {hasListings ? (
