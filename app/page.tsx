@@ -375,7 +375,7 @@ export default async function HomePage() {
       'RentZentro is software for landlords. Collect rent online, track expenses by property, view property profit, manage tenants, maintenance, documents, listings, and e-signatures in one place.',
     offers: {
       '@type': 'Offer',
-      price: '29.95',
+      price: '19',
       priceCurrency: 'USD',
       url: 'https://www.rentzentro.com/landlord/signup',
     },
@@ -422,7 +422,7 @@ export default async function HomePage() {
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-4 sm:px-5 sm:py-6 lg:px-6">
         <div className="rz-fade-up mb-4 rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-slate-900 px-3 py-2.5 text-center text-[11px] font-medium leading-5 text-emerald-100 shadow-sm sm:rounded-full sm:px-4">
           🎉 Start free for <span className="font-semibold text-emerald-300">35 days</span>. No
-          card required. Then $29.95/month.
+          card required. Paid plans start at $19/month.
         </div>
 
         <header className="rz-fade-up rz-delay-1 mb-8 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
@@ -562,14 +562,37 @@ export default async function HomePage() {
                 35-day free trial
               </span>
               <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
-                $29.95/mo flat pricing
+                Starter • Core • Growth
               </span>
               <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
-                Unlimited units
+                Unit-based plans
               </span>
               <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
                 Secure payments via Stripe
               </span>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">Starter</p>
+                <p className="mt-1 text-xl font-semibold text-slate-50">$19<span className="text-sm font-medium text-slate-300">/mo</span></p>
+                <p className="mt-1 text-[11px] text-slate-300">Up to 3 units</p>
+                <p className="mt-2 text-[11px] text-slate-400">Great for new landlords getting online rent collection set up.</p>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/30 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-emerald-200">Core • Most popular</p>
+                <p className="mt-1 text-xl font-semibold text-slate-50">$29.95<span className="text-sm font-medium text-slate-300">/mo</span></p>
+                <p className="mt-1 text-[11px] text-slate-200">Up to 20 units</p>
+                <p className="mt-2 text-[11px] text-emerald-100/80">Best for growing portfolios that need day-to-day operations in one place.</p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">Growth</p>
+                <p className="mt-1 text-xl font-semibold text-slate-50">$59<span className="text-sm font-medium text-slate-300">/mo</span></p>
+                <p className="mt-1 text-[11px] text-slate-300">Up to 75 units</p>
+                <p className="mt-2 text-[11px] text-slate-400">For larger operators who need more scale without custom enterprise setup.</p>
+              </div>
             </div>
           </div>
 
