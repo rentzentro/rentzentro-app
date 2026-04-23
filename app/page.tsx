@@ -138,6 +138,10 @@ const pricingPlans: PricingPlan[] = [
   },
 ];
 
+const LISTINGS_MAP_URL = `https://www.google.com/maps/search/${encodeURIComponent(
+  'apartments for rent near me'
+)}`;
+
 
 const money = (v: number | null | undefined) =>
   v == null || isNaN(v) ? null : `$${v.toLocaleString('en-US')}`;
@@ -558,7 +562,9 @@ export default async function HomePage() {
                 Create Free Account
               </Link>
               <Link
-                href="/listings"
+                href={LISTINGS_MAP_URL}
+                target="_blank"
+                rel="noreferrer"
                 className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-white/15 bg-white/[0.03] px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-white/[0.08] active:scale-95"
               >
                 Browse rentals
@@ -1065,7 +1071,9 @@ export default async function HomePage() {
             </div>
 
             <Link
-              href="/listings"
+              href={LISTINGS_MAP_URL}
+              target="_blank"
+              rel="noreferrer"
               className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-400 active:scale-95 md:w-auto"
             >
               Browse all listings
@@ -1111,7 +1119,9 @@ export default async function HomePage() {
                 Create Free Account
               </Link>
               <Link
-                href="/listings"
+                href={LISTINGS_MAP_URL}
+                target="_blank"
+                rel="noreferrer"
                 className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-slate-800 active:scale-95"
               >
                 Browse rentals
