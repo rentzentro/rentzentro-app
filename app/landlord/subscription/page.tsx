@@ -61,6 +61,19 @@ const prettyStatus = (status: string | null) => {
   return status || 'Not subscribed';
 };
 
+type PlanKey = 'starter' | 'core' | 'growth';
+
+const PLAN_OPTIONS: Array<{
+  key: PlanKey;
+  name: string;
+  priceLabel: string;
+  subLabel: string;
+}> = [
+  { key: 'starter', name: 'Starter', priceLabel: '$19', subLabel: 'Up to 3 units' },
+  { key: 'core', name: 'Core', priceLabel: '$29.95', subLabel: 'Up to 20 units' },
+  { key: 'growth', name: 'Growth', priceLabel: '$59', subLabel: 'Up to 75 units' },
+];
+
 // ---------- Component ----------
 export default function LandlordSubscriptionPage() {
   const router = useRouter();
@@ -82,6 +95,7 @@ export default function LandlordSubscriptionPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [requestingDeletion, setRequestingDeletion] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<PlanKey>('core');
 
   const getAuthHeaders = async () => {
     const { data, error } = await supabase.auth.getSession();
@@ -239,7 +253,7 @@ export default function LandlordSubscriptionPage() {
       const res = await fetch('/api/subscription/checkout', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ landlordId: landlord.id }),
+        body: JSON.stringify({ landlordId: landlord.id, planKey: selectedPlan }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -403,6 +417,7 @@ export default function LandlordSubscriptionPage() {
   })();
 
   const trialEndLabel = trialEndDate ? formatDate(landlord?.trial_end || null) : null;
+  const selectedPlanOption = PLAN_OPTIONS.find((p) => p.key === selectedPlan) || PLAN_OPTIONS[1];
 
   // Only show the trial banner when they are NOT actively subscribed (paid) and trial is active
   const showPromoBanner = !!landlord && isOnPromoTrial && !isActive;
@@ -487,7 +502,7 @@ export default function LandlordSubscriptionPage() {
                 {trialEndLabel || 'the end of your free month'}
               </span>
               . During this time, you won&apos;t be billed. When you&apos;re ready to continue after your free month,
-              start your $29.95/mo subscription from this page.
+              start a paid plan from this page.
             </p>
           </div>
         )}
@@ -507,10 +522,10 @@ export default function LandlordSubscriptionPage() {
 
         {/* Plan card */}
         <section className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-900/30 via-slate-900 to-slate-950 px-4 py-4 space-y-3 shadow-sm">
-          <p className="text-xs text-emerald-200/90 uppercase tracking-wide">RentZentro landlord plan</p>
+          <p className="text-xs text-emerald-200/90 uppercase tracking-wide">RentZentro landlord plans</p>
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
             <div>
-              <p className="text-2xl font-semibold text-slate-50">$29.95</p>
+              <p className="text-2xl font-semibold text-slate-50">$19 / $29.95 / $59</p>
               <p className="text-xs text-slate-300">per month • cancel anytime</p>
 
               {showPromoBanner && (
@@ -546,6 +561,35 @@ export default function LandlordSubscriptionPage() {
               </p>
             </div>
           </div>
+
+          {!isActive && !isPastDueOrUnpaid && (
+            <div className="space-y-2 pt-1">
+              <p className="text-[11px] text-slate-300">Choose your plan before checkout:</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {PLAN_OPTIONS.map((plan) => {
+                  const isSelected = selectedPlan === plan.key;
+                  return (
+                    <button
+                      key={plan.key}
+                      type="button"
+                      onClick={() => setSelectedPlan(plan.key)}
+                      className={`rounded-xl border px-3 py-2 text-left transition ${
+                        isSelected
+                          ? 'border-emerald-400 bg-emerald-500/10'
+                          : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-slate-50">
+                        {plan.name} · {plan.priceLabel}
+                        <span className="text-xs font-normal text-slate-300">/mo</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400">{plan.subLabel}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Status + actions */}
@@ -618,7 +662,11 @@ export default function LandlordSubscriptionPage() {
                   disabled={startingCheckout}
                   className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {startingCheckout ? 'Starting…' : isCanceled ? 'Restart subscription ($29.95/mo)' : 'Subscribe for $29.95/mo'}
+                  {startingCheckout
+                    ? 'Starting…'
+                    : isCanceled
+                    ? `Restart ${selectedPlanOption.name} (${selectedPlanOption.priceLabel}/mo)`
+                    : `Subscribe to ${selectedPlanOption.name} (${selectedPlanOption.priceLabel}/mo)`}
                 </button>
               )}
 
@@ -679,7 +727,7 @@ export default function LandlordSubscriptionPage() {
             <div className="pt-2 border-t border-slate-800 mt-2 text-[11px] text-slate-400">
               <p>
                 During your free month, you can set up payouts and use RentZentro with real tenants. You&apos;ll only
-                be billed if you choose to start the $29.95/mo subscription.
+                be billed if you choose to start a paid plan.
               </p>
             </div>
           )}

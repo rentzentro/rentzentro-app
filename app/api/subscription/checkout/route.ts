@@ -9,6 +9,11 @@ const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const SUPABASE_URL = getSupabaseUrl() as string;
 const SERVICE_ROLE_KEY = getSupabaseServiceRoleKey() as string;
 const SUBSCRIPTION_PRICE_ID = process.env.STRIPE_SUBSCRIPTION_PRICE_ID as string;
+const SUBSCRIPTION_PRICE_ID_STARTER =
+  process.env.STRIPE_SUBSCRIPTION_PRICE_ID_STARTER as string;
+const SUBSCRIPTION_PRICE_ID_CORE = process.env.STRIPE_SUBSCRIPTION_PRICE_ID_CORE as string;
+const SUBSCRIPTION_PRICE_ID_GROWTH =
+  process.env.STRIPE_SUBSCRIPTION_PRICE_ID_GROWTH as string;
 const SUPABASE_ANON_KEY = getSupabaseAnonKey() as string;
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ||
@@ -32,13 +37,33 @@ const supabaseAuth =
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
-  const { landlordId } = body as { landlordId?: number };
+  const { landlordId, planKey } = body as {
+    landlordId?: number;
+    planKey?: 'starter' | 'core' | 'growth';
+  };
+
+  const normalizedPlanKey =
+    planKey === 'starter' || planKey === 'core' || planKey === 'growth' ? planKey : 'core';
+  const priceMap = {
+    starter: SUBSCRIPTION_PRICE_ID_STARTER || '',
+    core: SUBSCRIPTION_PRICE_ID_CORE || SUBSCRIPTION_PRICE_ID || '',
+    growth: SUBSCRIPTION_PRICE_ID_GROWTH || '',
+  } as const;
+
+  const selectedPriceId = priceMap[normalizedPlanKey];
+
+  if (!selectedPriceId) {
+    return NextResponse.json(
+      { error: `Stripe price ID is missing for the "${normalizedPlanKey}" plan.` },
+      { status: 500 }
+    );
+  }
 
   const result = await createSubscriptionCheckout({
     stripe,
     supabaseAdmin,
     supabaseAuth,
-    subscriptionPriceId: SUBSCRIPTION_PRICE_ID,
+    subscriptionPriceId: selectedPriceId,
     appUrl: APP_URL,
     authHeader: req.headers.get('authorization') || '',
     landlordId,

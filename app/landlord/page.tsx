@@ -668,7 +668,7 @@ export default function LandlordDashboardPage() {
             To access your dashboard, properties, tenants, and online rent collection,
             please activate the{' '}
             <span className="font-semibold text-emerald-300">
-              $29.95/mo RentZentro Landlord Plan
+              RentZentro paid plan (starting at $19/mo)
             </span>
             .
           </p>
