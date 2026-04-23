@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+import ListingsSearchForm from './ListingsSearchForm';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -55,93 +57,29 @@ export default async function PublicListingsPage({
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-10">
+      <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_20px_50px_rgba(2,6,23,0.45)] backdrop-blur-xl sm:p-8">
           <p className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
             RentZentro Search
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Where will you end up?
+            Find your next rental
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-            Enter your criteria below and we’ll search for you.
+            Set your filters below. We’ll run the Google rental search when you submit.
 
           </p>
 
-          <form method="GET" className="mt-7 grid gap-3 md:grid-cols-2 lg:grid-cols-6">
-            <label className="lg:col-span-2">
-              <span className="mb-1 block text-xs font-medium text-slate-300">Location</span>
-              <input
-                type="text"
-                name="location"
-                placeholder="City, neighborhood, or state"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
-              />
-            </label>
+          <ListingsSearchForm defaultLocation={params.location} />
 
-            <label>
-              <span className="mb-1 block text-xs font-medium text-slate-300">Beds (min)</span>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                name="beds"
-                placeholder="Any"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
-              />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-xs font-medium text-slate-300">Baths (min)</span>
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                name="baths"
-                placeholder="Any"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
-              />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-xs font-medium text-slate-300">Min rent</span>
-              <input
-                type="number"
-                min="0"
-                step="50"
-                name="minRent"
-                placeholder="$0"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
-              />
-            </label>
-
-            <label>
-              <span className="mb-1 block text-xs font-medium text-slate-300">Max rent</span>
-              <input
-                type="number"
-                min="0"
-                step="50"
-                name="maxRent"
-                placeholder="No cap"
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
-              />
-            </label>
-
-            <div className="flex flex-wrap gap-3 pt-1 lg:col-span-6">
-              <button
-                type="submit"
-                className="inline-flex items-center rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
-              >
-                Find a place
-              </button>
-              <Link
-                href="/"
-                className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-5 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-slate-800"
-              >
-                Back to homepage
-              </Link>
-            </div>
-          </form>
+          <div className="mt-3 flex flex-wrap gap-3 pt-1">
+            <Link
+              href="/"
+              className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-5 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-slate-800"
+            >
+              Back to homepage
+            </Link>
+          </div>
         </div>
       </div>
     </main>
