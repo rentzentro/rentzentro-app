@@ -49,6 +49,11 @@ export async function POST(req: Request) {
     core: SUBSCRIPTION_PRICE_ID_CORE || SUBSCRIPTION_PRICE_ID || '',
     growth: SUBSCRIPTION_PRICE_ID_GROWTH || '',
   } as const;
+  const unitLimitByPlan = {
+    starter: 3,
+    core: 20,
+    growth: 75,
+  } as const;
 
   const selectedPriceId = priceMap[normalizedPlanKey];
 
@@ -64,6 +69,8 @@ export async function POST(req: Request) {
     supabaseAdmin,
     supabaseAuth,
     subscriptionPriceId: selectedPriceId,
+    selectedPlanKey: normalizedPlanKey,
+    selectedPlanUnitLimit: unitLimitByPlan[normalizedPlanKey],
     appUrl: APP_URL,
     authHeader: req.headers.get('authorization') || '',
     landlordId,

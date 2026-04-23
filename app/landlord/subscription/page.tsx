@@ -96,6 +96,7 @@ export default function LandlordSubscriptionPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [requestingDeletion, setRequestingDeletion] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>('core');
+  const [unitCount, setUnitCount] = useState<number>(0);
 
   const getAuthHeaders = async () => {
     const { data, error } = await supabase.auth.getSession();
@@ -198,6 +199,11 @@ export default function LandlordSubscriptionPage() {
       }
 
       setLandlord(landlordRow as LandlordRow);
+      const { count: propertyCount } = await supabase
+        .from('properties')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', user.id);
+      setUnitCount(propertyCount || 0);
       setLoading(false);
     };
 
@@ -241,6 +247,16 @@ export default function LandlordSubscriptionPage() {
 
     fetchStripeCancelDate();
   }, [landlord]);
+
+  useEffect(() => {
+    const planOrder: PlanKey[] = ['starter', 'core', 'growth'];
+    const selectedIndex = planOrder.indexOf(selectedPlan);
+    const highestAllowedIndex = unitCount <= 3 ? 0 : unitCount <= 20 ? 1 : 2;
+
+    if (selectedIndex < highestAllowedIndex) {
+      setSelectedPlan(planOrder[highestAllowedIndex]);
+    }
+  }, [selectedPlan, unitCount]);
 
   const handleStartSubscription = async () => {
     if (!landlord) return;
@@ -418,6 +434,7 @@ export default function LandlordSubscriptionPage() {
 
   const trialEndLabel = trialEndDate ? formatDate(landlord?.trial_end || null) : null;
   const selectedPlanOption = PLAN_OPTIONS.find((p) => p.key === selectedPlan) || PLAN_OPTIONS[1];
+  const exceedsSelfServeLimit = unitCount > 75;
 
   // Only show the trial banner when they are NOT actively subscribed (paid) and trial is active
   const showPromoBanner = !!landlord && isOnPromoTrial && !isActive;
@@ -542,7 +559,13 @@ export default function LandlordSubscriptionPage() {
 
             <div className="text-[11px] text-slate-300">
               <p className="flex items-center gap-1">
-                <span>✅</span> Unlimited properties and units
+                <span>✅</span> Starter: up to 3 units
+              </p>
+              <p className="flex items-center gap-1">
+                <span>✅</span> Core: up to 20 units
+              </p>
+              <p className="flex items-center gap-1">
+                <span>✅</span> Growth: up to 75 units
               </p>
               <p className="flex items-center gap-1">
                 <span>✅</span> Secure Stripe-powered card & ACH payments
@@ -551,19 +574,22 @@ export default function LandlordSubscriptionPage() {
                 <span>✅</span> Tenant portal & maintenance tracking
               </p>
               <p className="flex items-center gap-1">
-                <span>✅</span> Listings (public rental pages + inquiries)
-              </p>
-              <p className="flex items-center gap-1">
-                <span>✅</span> Team members & managers access
-              </p>
-              <p className="flex items-center gap-1">
-                <span>✅</span> Dashboard for overdue & upcoming rent
+                <span>✅</span> Listings + team access
               </p>
             </div>
           </div>
 
           {!isActive && !isPastDueOrUnpaid && (
             <div className="space-y-2 pt-1">
+              <p className="text-[11px] text-slate-300">
+                You currently have <span className="font-semibold text-slate-100">{unitCount}</span> units.
+                Choose an eligible plan before checkout:
+              </p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {PLAN_OPTIONS.map((plan) => {
+                  const isSelected = selectedPlan === plan.key;
+                  const maxUnits = plan.key === 'starter' ? 3 : plan.key === 'core' ? 20 : 75;
+                  const isAvailable = unitCount <= maxUnits;
               <p className="text-[11px] text-slate-300">Choose your plan before checkout:</p>
               <div className="grid gap-2 sm:grid-cols-3">
                 {PLAN_OPTIONS.map((plan) => {
@@ -572,10 +598,14 @@ export default function LandlordSubscriptionPage() {
                     <button
                       key={plan.key}
                       type="button"
+                      disabled={!isAvailable}
                       onClick={() => setSelectedPlan(plan.key)}
                       className={`rounded-xl border px-3 py-2 text-left transition ${
                         isSelected
                           ? 'border-emerald-400 bg-emerald-500/10'
+                          : isAvailable
+                          ? 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
+                          : 'border-slate-800 bg-slate-950/70 opacity-50 cursor-not-allowed'
                           : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
                       }`}
                     >
@@ -583,11 +613,20 @@ export default function LandlordSubscriptionPage() {
                         {plan.name} · {plan.priceLabel}
                         <span className="text-xs font-normal text-slate-300">/mo</span>
                       </p>
+                      <p className="text-[11px] text-slate-400">
+                        {plan.subLabel}
+                        {!isAvailable ? ` • Too small for ${unitCount} units` : ''}
+                      </p>
                       <p className="text-[11px] text-slate-400">{plan.subLabel}</p>
                     </button>
                   );
                 })}
               </div>
+              {exceedsSelfServeLimit && (
+                <p className="text-[11px] text-amber-200">
+                  You have more than 75 units. Please contact support for a custom plan.
+                </p>
+              )}
             </div>
           )}
         </section>
@@ -659,7 +698,7 @@ export default function LandlordSubscriptionPage() {
                 <button
                   type="button"
                   onClick={handleStartSubscription}
-                  disabled={startingCheckout}
+                  disabled={startingCheckout || exceedsSelfServeLimit}
                   className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {startingCheckout
