@@ -561,7 +561,7 @@ export default async function HomePage() {
                 href="/listings"
                 className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-white/15 bg-white/[0.03] px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-white/[0.08] active:scale-95"
               >
-                Browse rentals
+                Need a place? Search now
               </Link>
               <Link
                 href="#demo"
@@ -576,7 +576,7 @@ export default async function HomePage() {
             </p>
 
             <p className="mt-2 text-[12px] leading-5 text-slate-400">
-              Crafted for independent landlords • No complicated setup • Works with your existing
+              Crafted for landlords need • No complicated setup • Works with your existing
               tenants
             </p>
 
@@ -821,8 +821,8 @@ export default async function HomePage() {
               text="Rent goes directly to your connected account. You stay in control of your money at all times."
             />
             <TrustCard
-              title="Built for independent landlords"
-              text="Simple, clear, and built for landlords who want no bloated features."
+              title="Built for independent landlords or property managers"
+              text="Simple, clear, enough fo landlords. Strong enough for property managers."
             />
             <TrustCard
               title="No complicated setup"
@@ -1029,7 +1029,7 @@ export default async function HomePage() {
                 Landlord feedback
               </p>
               <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-                Built to feel simple, not bloated
+                Built to feel simple
               </h2>
               <p className="mt-2 max-w-2xl text-[13px] leading-6 text-slate-400">
                 A cleaner, modern experience for landlords who want real visibility without
@@ -1057,10 +1057,10 @@ export default async function HomePage() {
                 Public listings
               </p>
               <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-                Your listings will appear here once published
+                Search for where you want to be
               </h2>
               <p className="mt-2 text-[13px] leading-6 text-slate-400">
-                Listings are created and published by landlords using RentZentro.
+                Listings can be created and shared anywhere by landlords using RentZentro.
               </p>
             </div>
 
@@ -1068,17 +1068,17 @@ export default async function HomePage() {
               href="/listings"
               className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-400 active:scale-95 md:w-auto"
             >
-              Browse all listings
+              Need a place? Search now
             </Link>
           </div>
 
           {publicListings.length === 0 ? (
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70">
               <p className="text-sm font-semibold text-slate-100">
-                Your listings will appear here once published.
+                Use RentZentro to search listings nationwide.
               </p>
               <p className="mt-1 text-[12px] leading-5 text-slate-400">
-                Listings are created and published by landlords using RentZentro.
+                Listings can be created and shared anywhere by landlords using RentZentro.
               </p>
             </div>
           ) : (
@@ -1114,7 +1114,7 @@ export default async function HomePage() {
                 href="/listings"
                 className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-slate-800 active:scale-95"
               >
-                Browse rentals
+                Need a place? Search now
               </Link>
               <Link
                 href="/login"
