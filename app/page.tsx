@@ -83,7 +83,7 @@ const testimonials: Testimonial[] = [
   },
   {
     quote:
-      'What sood out to me was having payments, maintenance, documents, and expenses in one place instead of using multiple tools.',
+      'What stood out to me was having payments, maintenance, documents, and expenses in one place instead of using multiple tools.',
     name: 'James Porter',
     role: 'Small portfolio landlord',
     meta: 'Landlord feedback',
