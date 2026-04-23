@@ -468,7 +468,7 @@ export default async function HomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50">
+    <main className="min-h-screen bg-[#020617] text-slate-50">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -505,15 +505,21 @@ export default async function HomePage() {
         }}
       />
 
-      <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-4 sm:px-5 sm:py-6 lg:px-6">
-        <div className="rz-fade-up mb-4 rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-slate-900 px-3 py-2.5 text-center text-[11px] font-medium leading-5 text-emerald-100 shadow-sm sm:rounded-full sm:px-4">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-28 top-16 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
+        <div className="absolute right-[-8rem] top-44 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" />
+        <div className="absolute bottom-24 left-1/3 h-56 w-56 rounded-full bg-violet-500/10 blur-3xl" />
+      </div>
+
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-4 sm:px-5 sm:py-6 lg:px-6">
+        <div className="rz-fade-up mb-4 rounded-2xl border border-emerald-300/40 bg-gradient-to-r from-emerald-400/20 via-emerald-300/5 to-slate-900/80 px-3 py-2.5 text-center text-[11px] font-medium leading-5 text-emerald-50 shadow-[0_0_35px_rgba(16,185,129,0.2)] backdrop-blur sm:rounded-full sm:px-4">
           🎉 Start free for <span className="font-semibold text-emerald-300">35 days</span>. No
           card required. Then plans from $19/month.
         </div>
 
-        <header className="rz-fade-up rz-delay-1 mb-8 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
+        <header className="rz-fade-up rz-delay-1 mb-8 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[0_12px_40px_rgba(2,6,23,0.55)] backdrop-blur-xl sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-500/30 transition duration-300 hover:scale-105">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-300/30 to-cyan-300/20 ring-1 ring-emerald-200/40 transition duration-300 hover:scale-105">
               <span className="text-lg font-semibold text-emerald-400">RZ</span>
             </div>
             <div className="leading-tight">
@@ -537,30 +543,30 @@ export default async function HomePage() {
         <section className="grid gap-8 pb-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="rz-fade-up rz-delay-2 order-1">
             <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl lg:text-6xl">
-              Stop guessing your rental profit.
+              The premium operating system for modern landlords.
             </h1>
 
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-              Most landlords collect rent — but don’t actually know what they’re making.
-              RentZentro shows your real numbers across rent, expenses, and profit.
+              Collect rent, track expenses, monitor property performance, and run your portfolio
+              from one beautifully simple dashboard designed to feel world-class.
             </p>
 
             <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
               <Link
                 href="/landlord/signup"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-sm transition duration-200 hover:scale-[1.02] hover:bg-emerald-400 active:scale-95"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-gradient-to-r from-emerald-400 to-cyan-300 px-6 py-3 text-sm font-semibold text-slate-950 shadow-[0_10px_30px_rgba(16,185,129,0.35)] transition duration-200 hover:scale-[1.02] hover:from-emerald-300 hover:to-cyan-200 active:scale-95"
               >
                 Create Free Account
               </Link>
               <Link
                 href="/listings"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-slate-800 active:scale-95"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-white/15 bg-white/[0.03] px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-white/[0.08] active:scale-95"
               >
                 Browse rentals
               </Link>
               <Link
                 href="#demo"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-800 bg-slate-950 px-6 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-6 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
               >
                 Watch 2-Minute Demo
               </Link>
@@ -571,7 +577,7 @@ export default async function HomePage() {
             </p>
 
             <p className="mt-2 text-[12px] leading-5 text-slate-400">
-              Built for independent landlords • No complicated setup • Works with your existing
+              Crafted for independent landlords • No complicated setup • Works with your existing
               tenants
             </p>
 
@@ -659,7 +665,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <div className="rz-fade-up rz-delay-3 order-2 rounded-3xl border border-slate-800 bg-slate-950/70 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 sm:p-5">
+          <div className="rz-fade-up rz-delay-3 order-2 rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 via-slate-950/90 to-slate-950 p-4 shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 sm:p-5">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-slate-500">
