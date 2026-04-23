@@ -543,11 +543,11 @@ export default async function HomePage() {
         <section className="grid gap-8 pb-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="rz-fade-up rz-delay-2 order-1">
             <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl lg:text-6xl">
-              Most landlords don't know what they actually make.
+            Manage your rentals, collect rent, and stay on top of everything.
             </h1>
 
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-            Rent collected ≠ profit. RentZentro shows your real numbers across rent, expenses, and net income — all in one place
+            From listings and tenants to payments and expenses, RentZentro gives you a complete system to run your properties — and actually know what you’re making.
             </p>
 
             <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
