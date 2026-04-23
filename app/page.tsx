@@ -514,7 +514,7 @@ export default async function HomePage() {
       <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-4 sm:px-5 sm:py-6 lg:px-6">
         <div className="rz-fade-up mb-4 rounded-2xl border border-emerald-300/40 bg-gradient-to-r from-emerald-400/20 via-emerald-300/5 to-slate-900/80 px-3 py-2.5 text-center text-[11px] font-medium leading-5 text-emerald-50 shadow-[0_0_35px_rgba(16,185,129,0.2)] backdrop-blur sm:rounded-full sm:px-4">
           🎉 Start free for <span className="font-semibold text-emerald-300">35 days</span>. No
-          card required. Then plans from $19/month.
+          card required.
         </div>
 
         <header className="rz-fade-up rz-delay-1 mb-8 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[0_12px_40px_rgba(2,6,23,0.55)] backdrop-blur-xl sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
@@ -543,7 +543,7 @@ export default async function HomePage() {
         <section className="grid gap-8 pb-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="rz-fade-up rz-delay-2 order-1">
             <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl lg:text-6xl">
-              The premium operating system for modern landlords.
+              Stop chasing rent and start owning your time.
             </h1>
 
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
