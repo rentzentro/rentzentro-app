@@ -1,5 +1,21 @@
 'use client';
+const emptyForm: FormState = {
+  title: '',
+  description: '',
+  priority: 'normal',
+  issueType: 'plumbing',
+  location: '',
+  accessNotes: '',
+};
 
+const timelineLabels: Record<string, string> = {
+  new: 'Submitted',
+  acknowledged: 'Acknowledged',
+  scheduled: 'Scheduled',
+  in_progress: 'In progress',
+  waiting_parts: 'Waiting on parts',
+  completed: 'Completed',
+};
 import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
