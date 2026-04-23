@@ -375,7 +375,7 @@ export default async function HomePage() {
       'RentZentro is software for landlords. Collect rent online, track expenses by property, view property profit, manage tenants, maintenance, documents, listings, and e-signatures in one place.',
     offers: {
       '@type': 'Offer',
-      price: '29.95',
+      price: '19',
       priceCurrency: 'USD',
       url: 'https://www.rentzentro.com/landlord/signup',
     },
@@ -422,7 +422,7 @@ export default async function HomePage() {
       <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-4 sm:px-5 sm:py-6 lg:px-6">
         <div className="rz-fade-up mb-4 rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-slate-900 px-3 py-2.5 text-center text-[11px] font-medium leading-5 text-emerald-100 shadow-sm sm:rounded-full sm:px-4">
           🎉 Start free for <span className="font-semibold text-emerald-300">35 days</span>. No
-          card required. Then $29.95/month.
+          card required. Then plans from $19/month.
         </div>
 
         <header className="rz-fade-up rz-delay-1 mb-8 flex flex-col gap-3 sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
@@ -562,10 +562,10 @@ export default async function HomePage() {
                 35-day free trial
               </span>
               <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
-                $29.95/mo flat pricing
+                Plans: $19 / $29.95 / $59
               </span>
               <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
-                Unlimited units
+                Clear unit-based tiers
               </span>
               <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
                 Secure payments via Stripe
