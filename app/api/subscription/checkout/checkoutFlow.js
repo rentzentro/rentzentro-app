@@ -8,6 +8,8 @@ async function createSubscriptionCheckout({
   supabaseAdmin,
   supabaseAuth,
   subscriptionPriceId,
+  selectedPlanKey,
+  selectedPlanUnitLimit,
   appUrl,
   authHeader,
   landlordId,
@@ -60,6 +62,23 @@ async function createSubscriptionCheckout({
 
     if (landlordId != null && landlord.id !== landlordId) {
       return json(403, { error: 'Forbidden: landlordId does not match authenticated account.' });
+    }
+
+    if (selectedPlanKey && typeof selectedPlanUnitLimit === 'number') {
+      const { count: unitCount, error: unitCountError } = await supabaseAdmin
+        .from('properties')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', authedUserId);
+
+      if (unitCountError) {
+        return json(500, { error: 'Unable to validate unit count for selected plan.' });
+      }
+
+      if ((unitCount || 0) > selectedPlanUnitLimit) {
+        return json(400, {
+          error: `Your account has ${unitCount || 0} units, which exceeds the ${selectedPlanKey} plan limit of ${selectedPlanUnitLimit}. Please choose a larger plan.`,
+        });
+      }
     }
 
     let customerId = landlord.stripe_customer_id || null;
