@@ -61,11 +61,11 @@ export default async function PublicListingsPage({
             RentZentro Search
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Find rentals on Google Maps
+            Where will you end up?
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-            Enter your criteria below and we’ll take you directly to Google Maps results with your
-            rental search already filled in.
+            Enter your criteria below and we’ll search for you.
+
           </p>
 
           <form method="GET" className="mt-7 grid gap-3 md:grid-cols-2 lg:grid-cols-6">
@@ -132,7 +132,7 @@ export default async function PublicListingsPage({
                 type="submit"
                 className="inline-flex items-center rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
               >
-                Search on Google Maps
+                Find a place
               </button>
               <Link
                 href="/"
