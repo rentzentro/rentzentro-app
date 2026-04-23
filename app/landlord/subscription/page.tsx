@@ -590,34 +590,46 @@ export default function LandlordSubscriptionPage() {
                   const isSelected = selectedPlan === plan.key;
                   const maxUnits = plan.key === 'starter' ? 3 : plan.key === 'core' ? 20 : 75;
                   const isAvailable = unitCount <= maxUnits;
-              <p className="text-[11px] text-slate-300">Choose your plan before checkout:</p>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {PLAN_OPTIONS.map((plan) => {
-                  const isSelected = selectedPlan === plan.key;
-                  return (
-                    <button
-                      key={plan.key}
-                      type="button"
-                      disabled={!isAvailable}
-                      onClick={() => setSelectedPlan(plan.key)}
-                      className={`rounded-xl border px-3 py-2 text-left transition ${
-                        isSelected
-                          ? 'border-emerald-400 bg-emerald-500/10'
-                          : isAvailable
-                          ? 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
-                          : 'border-slate-800 bg-slate-950/70 opacity-50 cursor-not-allowed'
-                          : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
-                      }`}
-                    >
-                      <p className="text-sm font-semibold text-slate-50">
-                        {plan.name} · {plan.priceLabel}
-                        <span className="text-xs font-normal text-slate-300">/mo</span>
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        {plan.subLabel}
-                        {!isAvailable ? ` • Too small for ${unitCount} units` : ''}
-                      </p>
-                      <p className="text-[11px] text-slate-400">{plan.subLabel}</p>
+<p className="text-[11px] text-slate-300">
+  You currently have <span className="font-semibold text-slate-100">{unitCount}</span> units.
+  Choose an eligible plan before checkout:
+</p>
+<div className="grid gap-2 sm:grid-cols-3">
+  {PLAN_OPTIONS.map((plan) => {
+    const isSelected = selectedPlan === plan.key;
+    const maxUnits = plan.key === 'starter' ? 3 : plan.key === 'core' ? 20 : 75;
+    const isAvailable = unitCount <= maxUnits;
+    return (
+      <button
+        key={plan.key}
+        type="button"
+        disabled={!isAvailable}
+        onClick={() => setSelectedPlan(plan.key)}
+        className={`rounded-xl border px-3 py-2 text-left transition ${
+          isSelected
+            ? 'border-emerald-400 bg-emerald-500/10'
+            : isAvailable
+            ? 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
+            : 'border-slate-800 bg-slate-950/70 opacity-50 cursor-not-allowed'
+        }`}
+      >
+        <p className="text-sm font-semibold text-slate-50">
+          {plan.name} · {plan.priceLabel}
+          <span className="text-xs font-normal text-slate-300">/mo</span>
+        </p>
+        <p className="text-[11px] text-slate-400">
+          {plan.subLabel}
+          {!isAvailable ? ` • Too small for ${unitCount} units` : ''}
+        </p>
+      </button>
+    );
+  })}
+</div>
+{exceedsSelfServeLimit && (
+  <p className="text-[11px] text-amber-200">
+    You have more than 75 units. Please contact support for a custom plan.
+  </p>
+)}
                     </button>
                   );
                 })}
