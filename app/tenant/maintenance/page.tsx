@@ -1,21 +1,5 @@
 'use client';
-const emptyForm: FormState = {
-  title: '',
-  description: '',
-  priority: 'normal',
-  issueType: 'plumbing',
-  location: '',
-  accessNotes: '',
-};
 
-const timelineLabels: Record<string, string> = {
-  new: 'Submitted',
-  acknowledged: 'Acknowledged',
-  scheduled: 'Scheduled',
-  in_progress: 'In progress',
-  waiting_parts: 'Waiting on parts',
-  completed: 'Completed',
-};
 import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -72,6 +56,7 @@ const emptyForm: FormState = {
   issueType: 'plumbing',
   location: '',
   accessNotes: '',
+};
 
 const timelineLabels: Record<string, string> = {
   new: 'Submitted',
@@ -81,21 +66,6 @@ const timelineLabels: Record<string, string> = {
   waiting_parts: 'Waiting on parts',
   completed: 'Completed',
 };
-
-const STATUS_META: Record<string, { label: string; progress: number }> = {
-  new: { label: 'Submitted', progress: 20 },
-  acknowledged: { label: 'Acknowledged', progress: 40 },
-  scheduled: { label: 'Scheduled', progress: 60 },
-  in_progress: { label: 'In progress', progress: 80 },
-  waiting_parts: { label: 'Waiting on parts', progress: 85 },
-  completed: { label: 'Completed', progress: 100 },
-};
-
-const getStatusMeta = (status: string | null) =>
-  STATUS_META[status || ''] || {
-    label: status ? status.replaceAll('_', ' ') : 'Submitted',
-    progress: status === 'completed' ? 100 : 20,
-  };
 
 export default function TenantMaintenancePage() {
   const router = useRouter();
@@ -239,26 +209,24 @@ export default function TenantMaintenancePage() {
       // Optimistically update list in UI
       setRequests((prev) => [insertData as MaintenanceRow, ...prev]);
 
-      // 2) Email to landlord (ONLY if property has an email)
-// 2) Email to landlord (let backend decide final "to" address)
-fetch('/api/maintenance-email', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    // If landlord_email is blank, backend will fall back to your default
-    landlordEmail: property?.landlord_email || undefined,
-    tenantName: tenant.name,
-    tenantEmail: tenant.email,
-    propertyName: property?.name,
-    unitLabel: property?.unit_label,
-    title: form.title,
-    description: enrichedDescription,
-    priority: form.priority,
-  }),
-}).catch((err) => {
-  console.error('Maintenance email fire-and-forget error:', err);
-});
-
+      // 2) Email to landlord (let backend decide final "to" address)
+      fetch('/api/maintenance-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // If landlord_email is blank, backend will fall back to your default
+          landlordEmail: property?.landlord_email || undefined,
+          tenantName: tenant.name,
+          tenantEmail: tenant.email,
+          propertyName: property?.name,
+          unitLabel: property?.unit_label,
+          title: form.title,
+          description: enrichedDescription,
+          priority: form.priority,
+        }),
+      }).catch((err) => {
+        console.error('Maintenance email fire-and-forget error:', err);
+      });
 
       setForm(emptyForm);
       setSuccess('Your maintenance request has been submitted.');
@@ -484,66 +452,65 @@ fetch('/api/maintenance-email', {
                     className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2"
                   >
                     {(() => {
-import {
-  getMaintenanceStatusMeta,
-  MAINTENANCE_STATUS_ORDER,
-} from '../../lib/maintenanceStatus';
+                      const statusMeta = getMaintenanceStatusMeta(r.status);
                       return (
                         <>
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[11px] font-semibold text-slate-100 truncate">
-                        {r.title || 'Maintenance request'}
-                      </p>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-700 text-slate-200">
-                        Status: {statusMeta.label}
-                      </span>
-                    </div>
-                    <div className="mt-2 h-1.5 w-full rounded-full bg-slate-800">
-                      <div
-                        className="h-1.5 rounded-full bg-emerald-500"
-                        style={{ width: `${statusMeta.progress}%` }}
-                      />
-                    </div>
-                    <p className="mt-1 text-[10px] text-slate-500">
-                      Progress: {statusMeta.progress}%
-                    </p>
-<div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3">
-  {MAINTENANCE_STATUS_ORDER.map((step, index) => {
-    const currentStepIndex = MAINTENANCE_STATUS_ORDER.findIndex(
-      (status) => status === statusMeta.key
-    );
-    const active =
-      currentStepIndex === -1 ? index === 0 : currentStepIndex >= index;
-
-    return (
-      <div
-        key={`${r.id}-${step}`}
-        className={`rounded-md border px-2 py-1 text-[10px] ${
-          active
-            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
-            : 'border-slate-700 bg-slate-900/40 text-slate-500'
-        }`}
-      >
-        {timelineLabels[step] || step}
-      </div>
-    );
-  })}
-</div>
-                    <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
-                      {r.description || 'No description provided.'}
-                    </p>
-                    {r.resolution_note && (
-                      <p className="mt-1 text-[10px] text-slate-300 line-clamp-2 break-words">
-                        <span className="font-semibold text-slate-200">
-                          Landlord note:{' '}
-                        </span>
-                        {r.resolution_note}
-                      </p>
-                    )}
-                    <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
-                      <span>{new Date(r.created_at).toLocaleString()}</span>
-                      {r.priority && <span>Priority: {r.priority}</span>}
-                    </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[11px] font-semibold text-slate-100 truncate">
+                              {r.title || 'Maintenance request'}
+                            </p>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-700 text-slate-200">
+                              Status: {statusMeta.label}
+                            </span>
+                          </div>
+                          <div className="mt-2 h-1.5 w-full rounded-full bg-slate-800">
+                            <div
+                              className="h-1.5 rounded-full bg-emerald-500"
+                              style={{ width: `${statusMeta.progress}%` }}
+                            />
+                          </div>
+                          <p className="mt-1 text-[10px] text-slate-500">
+                            Progress: {statusMeta.progress}%
+                          </p>
+                          <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3">
+                            {MAINTENANCE_STATUS_ORDER.map((step, index) => {
+                              const currentStepIndex =
+                                MAINTENANCE_STATUS_ORDER.findIndex(
+                                  (status) => status === statusMeta.key
+                                );
+                              const active =
+                                currentStepIndex === -1
+                                  ? index === 0
+                                  : currentStepIndex >= index;
+                              return (
+                                <div
+                                  key={`${r.id}-${step}`}
+                                  className={`rounded-md border px-2 py-1 text-[10px] ${
+                                    active
+                                      ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'
+                                      : 'border-slate-700 bg-slate-900/40 text-slate-500'
+                                  }`}
+                                >
+                                  {timelineLabels[step] || step}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
+                            {r.description || 'No description provided.'}
+                          </p>
+                          {r.resolution_note && (
+                            <p className="mt-1 text-[10px] text-slate-300 line-clamp-2 break-words">
+                              <span className="font-semibold text-slate-200">
+                                Landlord note:{' '}
+                              </span>
+                              {r.resolution_note}
+                            </p>
+                          )}
+                          <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+                            <span>{new Date(r.created_at).toLocaleString()}</span>
+                            {r.priority && <span>Priority: {r.priority}</span>}
+                          </div>
                         </>
                       );
                     })()}
