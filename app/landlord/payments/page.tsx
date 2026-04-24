@@ -581,6 +581,21 @@ export default function LandlordPaymentsPage() {
           </p>
         </div>
 
+        <div className="mb-4 rounded-2xl border border-emerald-700/40 bg-emerald-950/20 px-4 py-3 text-[12px] text-emerald-100">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              Enable <span className="font-semibold">Esusu rent reporting</span> to help residents
+              build credit with eligible on-time rent payments.
+            </p>
+            <Link
+              href="/landlord/integrations"
+              className="inline-flex w-fit items-center rounded-full border border-emerald-500/50 px-3 py-1.5 text-[11px] font-semibold text-emerald-100 transition hover:border-emerald-300 hover:text-white"
+            >
+              Connect Esusu
+            </Link>
+          </div>
+        </div>
+
         {/* Global errors / messages */}
         {(error || formMessage) && (
           <div

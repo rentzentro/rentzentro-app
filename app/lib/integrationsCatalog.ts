@@ -1,6 +1,7 @@
 export type IntegrationProvider =
   | 'quickbooks'
   | 'xero'
+  | 'esusu'
   | 'screening'
   | 'docusign'
   | 'dropbox'
@@ -40,6 +41,18 @@ export const integrationCards: IntegrationCard[] = [
       'Keep landlord and accountant workflows in one ledger system.',
     ],
     statusLabel: 'Beta connection',
+  },
+  {
+    provider: 'esusu',
+    name: 'Esusu',
+    category: 'Rent reporting',
+    summary:
+      'Connect Esusu to report eligible on-time rent payments to major credit bureaus and help residents build credit history.',
+    outcomes: [
+      'Stream rent payment history from RentZentro to your Esusu reporting workflow.',
+      'Offer residents a clear credit-building value proposition tied to on-time payments.',
+    ],
+    statusLabel: 'Partner activation',
   },
   {
     provider: 'screening',

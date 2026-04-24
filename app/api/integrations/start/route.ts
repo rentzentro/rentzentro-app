@@ -9,6 +9,11 @@ const APP_URL =
 const supportActivationUrl =
   process.env.NEXT_PUBLIC_INTEGRATIONS_ACTIVATION_URL ||
   `mailto:support@rentzentro.com?subject=${encodeURIComponent('Integration activation request')}`;
+const esusuActivationUrl =
+  process.env.NEXT_PUBLIC_ESUSU_ACTIVATION_URL ||
+  `mailto:support@rentzentro.com?subject=${encodeURIComponent(
+    'Esusu rent reporting activation request'
+  )}`;
 
 const safeScopes = (input: string | undefined, fallback: string) => {
   const value = (input || fallback).trim();
@@ -98,6 +103,10 @@ function buildOAuthUrl(provider: IntegrationProvider, landlordId?: number) {
     return configuredUrl || null;
   }
 
+  if (provider === 'esusu') {
+    return esusuActivationUrl;
+  }
+
   return null;
 }
 
@@ -112,6 +121,9 @@ export async function POST(req: Request) {
 
   const oauthUrl = buildOAuthUrl(provider, landlordId);
   if (oauthUrl) {
+    if (provider === 'esusu') {
+      return NextResponse.json({ url: oauthUrl, mode: 'activation' });
+    }
     return NextResponse.json({ url: oauthUrl, mode: 'oauth' });
   }
 
