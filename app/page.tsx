@@ -1067,7 +1067,6 @@ export default async function HomePage() {
             </h2>
             <p className="mt-2 max-w-2xl text-[13px] leading-6 text-slate-400">
               Browse available listings and rental options published by landlords using RentZentro.
-              {publicListings.length > 0 && ` ${publicListings.length} listings currently available.`}
             </p>
 
             <div className="mt-5">
