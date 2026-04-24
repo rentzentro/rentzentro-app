@@ -431,7 +431,7 @@ export default function ListingCreateEditPage() {
       await loadEditMode(id);
 
       if (nextPublished) {
-        setSavedFlash('Published. Copy your link and share it to receive inquiries.');
+        setSavedFlash('Published. Copy your link and share it anywhere.');
         window.setTimeout(() => setSavedFlash(null), 2200);
       } else {
         setSavedFlash('Unpublished.');
@@ -615,7 +615,7 @@ export default function ListingCreateEditPage() {
   const steps = [
     { n: 1, title: 'Create draft', desc: 'Save the basics to generate your public link.' },
     { n: 2, title: 'Upload photos', desc: 'Drag to reorder — cover photo is #1.' },
-    { n: 3, title: 'Publish & share', desc: 'Copy the link and post it to get inquiries.' },
+    { n: 3, title: 'Publish & share', desc: 'Copy the link and post it wherever you market rentals.' },
   ];
 
   const currentStep =
@@ -651,7 +651,7 @@ export default function ListingCreateEditPage() {
 
             <p className="mt-1 text-[13px] text-slate-400">
               {mode === 'create'
-                ? 'Create a draft listing. Then add photos, publish, and share your link to receive inquiries.'
+                ? 'Create a draft listing. Then add photos, publish, and share your link.'
                 : 'Update details, upload photos, and publish when you’re ready.'}
             </p>
 
@@ -709,7 +709,7 @@ export default function ListingCreateEditPage() {
                   )}
 
                   <span className="text-[11px] text-slate-500">
-                    • Publishing does not market your listing — share your link to get inquiries.
+                    • Publishing does not market your listing — share your link on your preferred channels.
                   </span>
                 </div>
               )}
@@ -1130,7 +1130,7 @@ export default function ListingCreateEditPage() {
                     <p className="text-[11px] text-slate-400">Public link</p>
                     <p className="mt-1 text-[12px] text-slate-200 break-all">{publicUrl}</p>
                     <p className="mt-1 text-[11px] text-slate-500">
-                      Publish + share this link to receive inquiries.
+                      Publish + share this link to market the unit.
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button

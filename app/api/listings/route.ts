@@ -16,14 +16,6 @@ const supabaseAdmin =
     ? createClient(supabaseUrl, supabaseServiceRoleKey)
     : null;
 
-const ALLOWED_INQUIRY_STATUSES = new Set([
-  'new',
-  'contacted',
-  'showing_scheduled',
-  'converted',
-  'closed',
-  'archived',
-]);
 
 export async function POST(req: Request) {
   try {
@@ -109,35 +101,6 @@ export async function POST(req: Request) {
       }
 
       return NextResponse.json({ ok: true, listing: data });
-    }
-
-    if (action === 'inquiry_status') {
-      const inquiryId = Number(body?.inquiryId);
-      const status = String(body?.status || '').trim();
-      if (!inquiryId || !status) {
-        return NextResponse.json({ error: 'Missing inquiryId/status.' }, { status: 400 });
-      }
-      if (!ALLOWED_INQUIRY_STATUSES.has(status)) {
-        return NextResponse.json({ error: 'Invalid inquiry status.' }, { status: 400 });
-      }
-
-      const { data, error } = await supabaseAdmin
-        .from('listing_inquiries')
-        .update({ status })
-        .eq('id', inquiryId)
-        .eq('owner_id', user.id)
-        .select('*')
-        .maybeSingle();
-
-      if (error) throw error;
-      if (!data) {
-        return NextResponse.json(
-          { error: 'Inquiry not found or not owned by authenticated user.' },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json({ ok: true, inquiry: data });
     }
 
     return NextResponse.json({ error: 'Unknown action.' }, { status: 400 });

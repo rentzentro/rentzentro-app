@@ -187,7 +187,7 @@ export default function LandlordListingsPage() {
 
             <h1 className="mt-1 text-xl font-semibold text-slate-50">Listings</h1>
             <p className="mt-1 text-[13px] text-slate-400">
-              Create public listing pages and capture inquiries in your lead inbox.
+              Create public listing pages for your rentals and share them anywhere.
             </p>
             <p className="mt-1 text-[11px] text-slate-500">
               Published: <span className="text-slate-200">{publishedCount}</span> · Total:{' '}
