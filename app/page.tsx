@@ -1058,24 +1058,28 @@ export default async function HomePage() {
         </section>
 
         <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Public listings
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-              Need a place? Search nationwide listings here.
-            </h2>
-            <p className="mt-2 max-w-2xl text-[13px] leading-6 text-slate-400">
-              Browse available listings and rental options published by landlords using RentZentro.
-            </p>
+<section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
+  <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70 sm:p-6">
+    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+      Public listings
+    </p>
+    <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+      Need a place? Search nationwide listings here.
+    </h2>
+    <p className="mt-2 max-w-2xl text-[13px] leading-6 text-slate-400">
+      Browse available listings and rental options published by landlords using RentZentro.
+    </p>
 
-            <div className="mt-5">
-              <Link
-                href="/listings"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-400 active:scale-95"
-              >
-                Need a place? Search now
-              </Link>
+    <div className="mt-5">
+      <Link
+        href="/listings"
+        className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-400 active:scale-95"
+      >
+        Need a place? Search now
+      </Link>
+    </div>
+  </div>
+</section>
             </div>
           </div>
         </section>
