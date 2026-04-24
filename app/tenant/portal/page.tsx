@@ -163,10 +163,12 @@ const calculateRentStatus = (
   firstDueDateISO: string | null,
   payments: PaymentRow[]
 ): RentStatus => {
+  const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
   if (!monthlyRent || !firstDueDateISO) {
     return {
       totalDue: 0,
-      totalPaid: 0,
+      totalPaid,
       outstanding: 0,
       monthsDue: 0,
       nextDueDate: firstDueDateISO,
@@ -178,7 +180,7 @@ const calculateRentStatus = (
   if (!firstDue) {
     return {
       totalDue: 0,
-      totalPaid: 0,
+      totalPaid,
       outstanding: 0,
       monthsDue: 0,
       nextDueDate: firstDueDateISO,
@@ -201,7 +203,7 @@ const calculateRentStatus = (
   if (firstDueMidnight > todayMidnight) {
     return {
       totalDue: 0,
-      totalPaid: 0,
+      totalPaid,
       outstanding: 0,
       monthsDue: 0,
       nextDueDate: dateToYMD(firstDueMidnight),
@@ -213,7 +215,6 @@ const calculateRentStatus = (
   const monthsDue = Math.max(1, mDiff + 1);
 
   const totalDue = monthsDue * monthlyRent;
-  const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const outstanding = Math.max(0, totalDue - totalPaid);
   const isCaughtUp = outstanding <= 0;
 
