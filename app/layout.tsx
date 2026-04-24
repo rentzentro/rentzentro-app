@@ -3,6 +3,7 @@ import './globals.css';
 import Link from 'next/link';
 import Script from 'next/script';
 import type { Metadata } from 'next';
+import BrandWordmark from './components/BrandWordmark';
 import MetaPixelTracker from './components/MetaPixelTracker';
 
 export const metadata: Metadata = {
@@ -120,11 +121,12 @@ function SiteFooter() {
         <div className="grid gap-8 md:grid-cols-3">
           {/* Left */}
           <div>
-            <p className="text-sm font-semibold text-slate-50">RentZentro</p>
-            <p className="mt-2 text-[12px] text-slate-400">
-              RentZentro is software for landlords — not a property management
-              company.
-            </p>
+            <BrandWordmark
+              subtitle="RentZentro is software for landlords — not a property management company."
+              iconClassName="h-9 w-9 rounded-lg text-base"
+              titleClassName="text-sm"
+              subtitleClassName="mt-2 text-[12px] text-slate-400"
+            />
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <Link

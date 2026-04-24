@@ -1,5 +1,6 @@
 // app/login/page.tsx
 import Link from 'next/link';
+import BrandWordmark from '../components/BrandWordmark';
 
 export const metadata = {
   title: 'Log in | RentZentro',
@@ -54,17 +55,11 @@ export default function LoginChooserPage() {
         </div>
 
         <div className="mb-8 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-950 to-slate-900 p-6 sm:p-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-500/30">
-              <span className="text-lg font-semibold text-emerald-400">RZ</span>
-            </div>
-            <div>
-              <p className="text-sm font-semibold tracking-tight text-slate-50">RentZentro</p>
-              <p className="text-[11px] text-slate-400">
-                Choose the right login for your account
-              </p>
-            </div>
-          </div>
+          <BrandWordmark
+            subtitle="Choose the right login for your account"
+            iconClassName="h-11 w-11 rounded-xl text-lg bg-emerald-500/15 ring-emerald-500/30"
+            titleClassName="text-sm"
+          />
 
           <h1 className="mt-6 text-3xl font-semibold tracking-tight text-slate-50 sm:text-4xl">
             Log in to RentZentro
