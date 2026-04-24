@@ -64,6 +64,59 @@ const toDateInputValue = (iso: string | null | undefined): string => {
   return iso.slice(0, 10);
 };
 
+const toYMD = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const dateInputToYMD = (raw: string, fieldLabel: string): string => {
+  const value = raw.trim();
+  if (!value) {
+    throw new Error(`${fieldLabel} is required.`);
+  }
+
+  const ymdMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (ymdMatch) {
+    return value;
+  }
+
+  const monthDayYearMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(value);
+  if (monthDayYearMatch) {
+    const month = Number(monthDayYearMatch[1]);
+    const day = Number(monthDayYearMatch[2]);
+    const rawYear = Number(monthDayYearMatch[3]);
+    const year =
+      monthDayYearMatch[3].length === 2
+        ? 2000 + rawYear
+        : rawYear;
+    const d = new Date(year, month - 1, day);
+    if (
+      d.getFullYear() === year &&
+      d.getMonth() === month - 1 &&
+      d.getDate() === day
+    ) {
+      return toYMD(d);
+    }
+  }
+
+  const textMonthMatch =
+    /^([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{2}|\d{4})$/.exec(value);
+  if (textMonthMatch) {
+    const rawYear = Number(textMonthMatch[3]);
+    const year = textMonthMatch[3].length === 2 ? 2000 + rawYear : rawYear;
+    const parsed = new Date(`${textMonthMatch[1]} ${textMonthMatch[2]}, ${year}`);
+    if (!isNaN(parsed.getTime())) {
+      return toYMD(parsed);
+    }
+  }
+
+  throw new Error(
+    `${fieldLabel} must be a valid date (for example: 2026-01-01).`
+  );
+};
+
 // Human-readable lease date label (safe for date-only or ISO)
 const formatLeaseDateLabel = (value: string | null | undefined): string => {
   if (!value) return '—';
@@ -329,6 +382,18 @@ export default function LandlordTenantsPage() {
         );
       }
 
+      const normalizedLeaseStart = dateInputToYMD(
+        formLeaseStart,
+        'Lease start / first rent due date'
+      );
+      const normalizedLeaseEnd = formLeaseEnd
+        ? dateInputToYMD(formLeaseEnd, 'Lease end')
+        : null;
+
+      if (normalizedLeaseEnd && normalizedLeaseEnd < normalizedLeaseStart) {
+        throw new Error('Lease end cannot be before lease start.');
+      }
+
       const { data, error: insertError } = await supabase
         .from('tenants')
         .insert({
@@ -339,8 +404,8 @@ export default function LandlordTenantsPage() {
           property_id: formPropertyId,
           status: 'Current',
           monthly_rent: null, // property is source of truth for rent
-          lease_start: formLeaseStart,
-          lease_end: formLeaseEnd || null,
+          lease_start: normalizedLeaseStart,
+          lease_end: normalizedLeaseEnd,
           allow_early_payment: formAllowEarlyPayment,
         })
         .select('*')
@@ -409,6 +474,18 @@ export default function LandlordTenantsPage() {
         );
       }
 
+      const normalizedLeaseStart = dateInputToYMD(
+        editLeaseStart,
+        'Lease start / first rent due date'
+      );
+      const normalizedLeaseEnd = editLeaseEnd
+        ? dateInputToYMD(editLeaseEnd, 'Lease end')
+        : null;
+
+      if (normalizedLeaseEnd && normalizedLeaseEnd < normalizedLeaseStart) {
+        throw new Error('Lease end cannot be before lease start.');
+      }
+
       const { data, error: updateError } = await supabase
         .from('tenants')
         .update({
@@ -416,8 +493,8 @@ export default function LandlordTenantsPage() {
           email: editEmail.trim(),
           phone: editPhone.trim() || null,
           property_id: editPropertyId || null,
-          lease_start: editLeaseStart,
-          lease_end: editLeaseEnd || null,
+          lease_start: normalizedLeaseStart,
+          lease_end: normalizedLeaseEnd,
           allow_early_payment: editAllowEarlyPayment,
         })
         .eq('id', editingTenant.id)
