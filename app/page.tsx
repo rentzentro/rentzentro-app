@@ -1,5 +1,6 @@
 // app/page.tsx
 import Link from 'next/link';
+import BrandWordmark from './components/BrandWordmark';
 import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from './supabaseClient';
 
 export const runtime = 'nodejs';
@@ -518,17 +519,11 @@ export default async function HomePage() {
         </div>
 
         <header className="rz-fade-up rz-delay-1 mb-8 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[0_12px_40px_rgba(2,6,23,0.55)] backdrop-blur-xl sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-300/30 to-cyan-300/20 ring-1 ring-emerald-200/40 transition duration-300 hover:scale-105">
-              <span className="text-lg font-semibold text-emerald-400">RZ</span>
-            </div>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold tracking-tight">RentZentro</p>
-              <p className="text-[11px] text-slate-400">
-                Software for landlords — not a property management company
-              </p>
-            </div>
-          </div>
+          <BrandWordmark
+            subtitle="Software for landlords — not a property management company"
+            iconClassName="h-10 w-10 rounded-xl text-lg transition duration-300 hover:scale-105"
+            titleClassName="text-sm"
+          />
 
           <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <Link
