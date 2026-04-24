@@ -553,12 +553,6 @@ export default async function HomePage() {
                 Create Free Account
               </Link>
               <Link
-                href="/listings"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-white/15 bg-white/[0.03] px-6 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-white/[0.08] active:scale-95"
-              >
-                Need a place? Search now
-              </Link>
-              <Link
                 href="#demo"
                 className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-6 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
               >
