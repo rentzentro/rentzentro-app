@@ -15,6 +15,7 @@ import {
 
 type TenantRow = {
   id: number;
+  created_at: string;
   owner_id: string | null; // landlord's auth UID
   name: string | null;
   email: string;
@@ -163,10 +164,12 @@ const calculateRentStatus = (
   firstDueDateISO: string | null,
   payments: PaymentRow[]
 ): RentStatus => {
+  const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
   if (!monthlyRent || !firstDueDateISO) {
     return {
       totalDue: 0,
-      totalPaid: 0,
+      totalPaid,
       outstanding: 0,
       monthsDue: 0,
       nextDueDate: firstDueDateISO,
@@ -178,7 +181,7 @@ const calculateRentStatus = (
   if (!firstDue) {
     return {
       totalDue: 0,
-      totalPaid: 0,
+      totalPaid,
       outstanding: 0,
       monthsDue: 0,
       nextDueDate: firstDueDateISO,
@@ -201,7 +204,7 @@ const calculateRentStatus = (
   if (firstDueMidnight > todayMidnight) {
     return {
       totalDue: 0,
-      totalPaid: 0,
+      totalPaid,
       outstanding: 0,
       monthsDue: 0,
       nextDueDate: dateToYMD(firstDueMidnight),
@@ -213,7 +216,6 @@ const calculateRentStatus = (
   const monthsDue = Math.max(1, mDiff + 1);
 
   const totalDue = monthsDue * monthlyRent;
-  const totalPaid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const outstanding = Math.max(0, totalDue - totalPaid);
   const isCaughtUp = outstanding <= 0;
 
@@ -256,6 +258,56 @@ const calculateRentStatus = (
     nextDueDate,
     isCaughtUp,
   };
+};
+
+const resolveFirstDueDateISO = (
+  leaseStartISO: string | null,
+  nextDueISO: string | null,
+  tenantCreatedAtISO: string | null
+): string | null => {
+  const leaseStartDate = parseSupabaseDate(leaseStartISO);
+  if (leaseStartDate) {
+    const tenantCreatedDate = parseSupabaseDate(tenantCreatedAtISO);
+    if (tenantCreatedDate) {
+      const leaseStartMidnight = new Date(
+        leaseStartDate.getFullYear(),
+        leaseStartDate.getMonth(),
+        leaseStartDate.getDate()
+      );
+      const createdMidnight = new Date(
+        tenantCreatedDate.getFullYear(),
+        tenantCreatedDate.getMonth(),
+        tenantCreatedDate.getDate()
+      );
+
+      if (leaseStartMidnight < createdMidnight) {
+        const alignedToCreatedMonth = new Date(
+          createdMidnight.getFullYear(),
+          createdMidnight.getMonth(),
+          leaseStartMidnight.getDate()
+        );
+        const firstDueAfterOnboarding =
+          alignedToCreatedMonth < createdMidnight
+            ? new Date(
+                createdMidnight.getFullYear(),
+                createdMidnight.getMonth() + 1,
+                leaseStartMidnight.getDate()
+              )
+            : alignedToCreatedMonth;
+
+        return dateToYMD(firstDueAfterOnboarding);
+      }
+    }
+
+    return dateToYMD(leaseStartDate);
+  }
+
+  const nextDueDate = parseSupabaseDate(nextDueISO);
+  if (nextDueDate) {
+    return dateToYMD(nextDueDate);
+  }
+
+  return null;
 };
 
 // ---------- Component ----------
@@ -308,7 +360,7 @@ export default function TenantPortalPage() {
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select(
-            'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment, auto_pay_enabled'
+            'id, created_at, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment, auto_pay_enabled'
           )
           .or(`user_id.eq.${authUserId},email.eq.${email}`)
           .order('created_at', { ascending: true });
@@ -341,7 +393,7 @@ export default function TenantPortalPage() {
             .update({ user_id: authUserId })
             .eq('id', t.id)
             .select(
-              'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment, auto_pay_enabled'
+              'id, created_at, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment, auto_pay_enabled'
             )
             .maybeSingle();
 
@@ -444,22 +496,11 @@ export default function TenantPortalPage() {
         const payData = (payRows || []) as PaymentRow[];
         setPayments(payData);
 
-        const leaseStartDate = parseSupabaseDate(t.lease_start);
-        const nextDueDate = parseSupabaseDate(prop?.next_due_date || null);
-
-        let firstDueDateISO: string | null = null;
-
-        if (leaseStartDate && nextDueDate) {
-          firstDueDateISO = dateToYMD(
-            leaseStartDate <= nextDueDate ? leaseStartDate : nextDueDate
-          );
-        } else if (leaseStartDate) {
-          firstDueDateISO = dateToYMD(leaseStartDate);
-        } else if (nextDueDate) {
-          firstDueDateISO = dateToYMD(nextDueDate);
-        } else {
-          firstDueDateISO = null;
-        }
+        const firstDueDateISO = resolveFirstDueDateISO(
+          t.lease_start,
+          prop?.next_due_date || null,
+          t.created_at || null
+        );
 
         const rs = calculateRentStatus(effectiveRent, firstDueDateISO, payData);
         setRentStatus(rs);
@@ -634,17 +675,13 @@ export default function TenantPortalPage() {
       today.getDate()
     );
 
-    const leaseStartDate = parseSupabaseDate(tenant.lease_start);
-    const nextDueDate = parseSupabaseDate(property?.next_due_date || null);
-
-    let earliestDue: Date | null = null;
-    if (leaseStartDate && nextDueDate) {
-      earliestDue = leaseStartDate <= nextDueDate ? leaseStartDate : nextDueDate;
-    } else if (leaseStartDate) {
-      earliestDue = leaseStartDate;
-    } else if (nextDueDate) {
-      earliestDue = nextDueDate;
-    }
+    const earliestDue = parseSupabaseDate(
+      resolveFirstDueDateISO(
+        tenant.lease_start,
+        property?.next_due_date || null,
+        tenant.created_at || null
+      )
+    );
 
     const earlyAllowed = !!tenant.allow_early_payment;
     const isBeforeFirstDue = !!earliestDue && todayMidnight < earliestDue;
@@ -754,7 +791,14 @@ export default function TenantPortalPage() {
 
   const isRentOverdue = !!dueDateObj && dueDateObj.getTime() < todayMidnight.getTime();
 
-  const earliestDueDate = parseSupabaseDate(tenant.lease_start) || dueDateObj;
+  const earliestDueDate =
+    parseSupabaseDate(
+      resolveFirstDueDateISO(
+        tenant.lease_start,
+        property?.next_due_date || null,
+        tenant.created_at || null
+      )
+    ) || dueDateObj;
   const isBeforeDue = !!earliestDueDate && todayMidnight < earliestDueDate;
   const earlyAllowed = !!tenant.allow_early_payment;
   const isTooEarlyToPay = isBeforeDue && !earlyAllowed;
