@@ -14,7 +14,6 @@ It is designed to run the full leasing lifecycle in one place:
 
 - **Landlord account system** with signup/login, setup flow, and role-based owner/team access.
 - **Public listings engine** with listing creation, publish/unpublish states, and shareable listing pages.
-- **Inquiry capture workflow** from public listings, including follow-up notification support.
 - **Tenant onboarding flows** including invite-by-email and account linking.
 - **Rent collection tools** with Stripe-powered online payments (card + ACH support in checkout flows).
 - **Autopay support** for recurring tenant payment convenience.
@@ -53,7 +52,7 @@ It is designed to run the full leasing lifecycle in one place:
 
 - `app/landlord/*` → landlord dashboard, listings, tenants, payments, docs, accounting, team, settings.
 - `app/tenant/*` → tenant portal, maintenance, messages, payments.
-- `app/listings/*` → public listing search/detail pages and inquiry UI.
+- `app/listings/*` → public listing search/detail pages.
 - `app/api/*` → backend workflows (payments, billing, webhooks, invites, reminders, messaging, integrations).
 - `tests/*.test.cjs` → workflow-level automated tests for critical business flows.
 

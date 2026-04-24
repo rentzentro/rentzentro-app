@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import PhotoGallery from './PhotoGallery';
-import ListingInquiryForm from './ListingInquiryForm';
 import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from '../../supabaseClient';
 
 export const runtime = 'nodejs';
@@ -258,7 +257,7 @@ export default async function ListingDetailsPage({
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold tracking-tight text-slate-50">{l.title}</h1>
               <p className="mt-1 text-sm text-slate-400">
-                {loc || 'Location available upon inquiry'}
+                {loc || 'Location available on request'}
               </p>
 
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
@@ -321,56 +320,54 @@ export default async function ListingDetailsPage({
                 )}
               </div>
 
-              {/* Inquiry form (1-way, goes to landlord + team) */}
               <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Send an inquiry
+                  Contact information
                 </p>
                 <p className="mt-2 text-[11px] text-slate-400">
-                  This sends a one-way inquiry to the landlord (and any authorized team members).
-                  You’ll get a reply directly from them using the contact info you provide.
+                  RentZentro listing inquiries are disabled. Reach out directly using the contact details below.
                 </p>
 
-                <div className="mt-4">
-                  <ListingInquiryForm listingId={l.id} listingTitle={l.title} listingSlug={l.slug} />
+                <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-3">
+                  <p className="text-[11px] font-semibold text-slate-200">Direct contact</p>
+                  <div className="mt-2 space-y-1 text-sm">
+                    <p className="text-slate-200">
+                      Email:{' '}
+                      {l.contact_email ? (
+                        <a
+                          className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
+                          href={`mailto:${l.contact_email}`}
+                        >
+                          {l.contact_email}
+                        </a>
+                      ) : (
+                        <span className="text-slate-500">Not provided</span>
+                      )}
+                    </p>
+                    <p className="text-slate-200">
+                      Phone:{' '}
+                      {l.contact_phone ? (
+                        <a
+                          className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
+                          href={`tel:${l.contact_phone}`}
+                        >
+                          {l.contact_phone}
+                        </a>
+                      ) : (
+                        <span className="text-slate-500">Not provided</span>
+                      )}
+                    </p>
+                  </div>
                 </div>
 
-                {showDirectContact && (
-                  <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/40 p-3">
-                    <p className="text-[11px] font-semibold text-slate-200">Direct contact (optional)</p>
-                    <div className="mt-2 space-y-1 text-sm">
-                      <p className="text-slate-200">
-                        Email:{' '}
-                        {l.contact_email ? (
-                          <a
-                            className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
-                            href={`mailto:${l.contact_email}`}
-                          >
-                            {l.contact_email}
-                          </a>
-                        ) : (
-                          <span className="text-slate-500">Not provided</span>
-                        )}
-                      </p>
-                      <p className="text-slate-200">
-                        Phone:{' '}
-                        {l.contact_phone ? (
-                          <a
-                            className="text-emerald-300 underline underline-offset-2 hover:text-emerald-200"
-                            href={`tel:${l.contact_phone}`}
-                          >
-                            {l.contact_phone}
-                          </a>
-                        ) : (
-                          <span className="text-slate-500">Not provided</span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
+                {!showDirectContact && (
+                  <p className="mt-3 text-[11px] text-amber-300">
+                    No direct contact info is currently available for this listing.
+                  </p>
                 )}
 
                 <p className="mt-3 text-[11px] text-slate-500">
-                  Safety tip: Never send sensitive info (SSN, bank details, etc.) in an inquiry.
+                  Safety tip: Never send sensitive info (SSN, bank details, etc.) in initial outreach.
                 </p>
               </div>
             </div>
