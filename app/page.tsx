@@ -1040,7 +1040,7 @@ export default async function HomePage() {
               New on RentZentro
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-              Helpful day-to-day tools for landlords and tenants
+              Helpful day-to-day tools for landlords and the tenant experiance
             </h2>
             <p className="mt-2 max-w-3xl text-[13px] leading-6 text-slate-300">
             </p>
