@@ -333,95 +333,19 @@ function TrustCard({
 
 
 function NationwideCoverageMap() {
-  const usMapAsset =
-    'https://upload.wikimedia.org/wikipedia/commons/3/32/Blank_US_Map_%28states_only%29.svg';
-
   return (
     <div className="relative overflow-hidden rounded-3xl border border-cyan-400/30 bg-gradient-to-br from-slate-900/80 via-[#0b1f49] to-slate-950 p-4 shadow-[0_20px_45px_rgba(8,47,73,0.5)]">
       <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-cyan-300/20 blur-3xl" />
       <div className="absolute -bottom-16 -left-10 h-36 w-36 rounded-full bg-blue-500/20 blur-3xl" />
 
-      <div className="relative z-10 overflow-hidden rounded-2xl border border-cyan-200/20 bg-slate-950/50 p-2">
-        <svg
-          viewBox="0 0 1000 620"
-          className="w-full"
-          role="img"
-          aria-label="United States coverage map with nationwide connections"
-        >
-          <defs>
-            <filter id="usBlueTone" colorInterpolationFilters="sRGB">
-              <feColorMatrix
-                type="matrix"
-                values="0 0 0 0 0.07
-                        0 0 0 0 0.34
-                        0 0 0 0 0.78
-                        0 0 0 1 0"
-              />
-            </filter>
-            <filter id="rzGlow" x="-30%" y="-30%" width="160%" height="160%">
-              <feGaussianBlur stdDeviation="2.8" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            <linearGradient id="mapShine" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.28" />
-              <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.55" />
-            </linearGradient>
-          </defs>
-
-          <image
-            href={usMapAsset}
-            x="70"
-            y="80"
-            width="860"
-            height="460"
-            preserveAspectRatio="xMidYMid meet"
-            filter="url(#usBlueTone)"
-            opacity="0.95"
-          />
-
-          <rect x="70" y="80" width="860" height="460" fill="url(#mapShine)" opacity="0.78" />
-
-          {[
-            [188, 258, 356, 208],
-            [260, 300, 458, 216],
-            [322, 270, 560, 212],
-            [396, 316, 646, 224],
-            [490, 284, 734, 236],
-            [580, 298, 810, 280],
-            [324, 378, 512, 300],
-            [430, 388, 620, 320],
-            [532, 390, 744, 344],
-            [622, 348, 822, 254],
-          ].map((line, i) => (
-            <path
-              key={i}
-              d={`M${line[0]} ${line[1]} Q ${(line[0] + line[2]) / 2} ${Math.min(line[1], line[3]) - 55} ${line[2]} ${line[3]}`}
-              fill="none"
-              stroke="#f8fafc"
-              strokeWidth="2.6"
-              opacity="0.82"
-            />
-          ))}
-
-          {[
-            [176, 262],
-            [208, 332],
-            [292, 248],
-            [338, 362],
-            [402, 236],
-            [464, 330],
-            [538, 246],
-            [610, 332],
-            [688, 258],
-            [770, 364],
-            [822, 282],
-          ].map((dot, i) => (
-            <circle key={i} cx={dot[0]} cy={dot[1]} r="6" fill="#ffffff" filter="url(#rzGlow)" />
-          ))}
-        </svg>
+      <div className="relative z-10 overflow-hidden rounded-2xl border border-cyan-200/20 bg-slate-950/45 p-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/us-network-map.png"
+          alt="United States coverage map with glowing network connections"
+          className="h-auto max-w-full object-contain"
+          loading="lazy"
+        />
       </div>
     </div>
   );
