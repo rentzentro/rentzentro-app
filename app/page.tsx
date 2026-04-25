@@ -1035,7 +1035,7 @@ export default async function HomePage() {
         </section>
 
         <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-14">
-          <div className="mb-6 rounded-3xl border border-sky-300/40 bg-sky-500/15 p-5 sm:p-6">
+          <div className="mb-6 rounded-3xl border border-sky-300/40 bg-gradient-to-br from-sky-500/20 via-slate-950 to-slate-950 p-5 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-sky-100">
               New on RentZentro
             </p>
