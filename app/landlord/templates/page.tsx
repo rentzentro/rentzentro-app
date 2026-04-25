@@ -17,6 +17,12 @@ type Template = {
 };
 
 type LeaseBuilderMode = 'manual' | 'ai';
+type AiAssistResult = {
+  summary: string;
+  suggestions: string[];
+  clausePack: string[];
+  legalReminder: string;
+};
 
 type StateComplianceGuide = {
   code: string;
@@ -456,6 +462,9 @@ export default function LandlordTemplatesPage() {
   const [occupancyRules, setOccupancyRules] = useState('');
   const [utilities, setUtilities] = useState('');
   const [additionalTerms, setAdditionalTerms] = useState('');
+  const [aiAssistResult, setAiAssistResult] = useState<AiAssistResult | null>(null);
+  const [aiAssistLoading, setAiAssistLoading] = useState(false);
+  const [aiAssistError, setAiAssistError] = useState('');
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) || templates[0],
@@ -467,18 +476,51 @@ export default function LandlordTemplatesPage() {
     [selectedStateCode]
   );
 
-  const aiDraftSuggestions = useMemo(() => {
-    if (builderMode !== 'ai') {
-      return [];
-    }
+  const aiDraftSuggestions = aiAssistResult?.suggestions || [];
 
-    return [
-      `Add a state-tailored disclosure packet section for ${selectedCompliance.name} and local municipality forms.`,
-      `Include a plain-language rent default and cure workflow that references notice periods required in ${selectedCompliance.name}.`,
-      'Add an attachment index: move-in checklist, pet addendum, maintenance entry notice, and utility schedule.',
-      'Add a signature checklist to verify every signer initials each page before e-sign submission.',
-    ];
-  }, [builderMode, selectedCompliance.name]);
+  const generateAiAssistance = async () => {
+    setAiAssistError('');
+    setAiAssistLoading(true);
+
+    try {
+      const response = await fetch('/api/lease-assistant', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          stateName: selectedCompliance.name,
+          landlordName,
+          tenantNames,
+          propertyAddress,
+          leaseTerm,
+          monthlyRent,
+          dueDay,
+          deposit,
+          occupancyRules,
+          utilities,
+          additionalTerms,
+          checklist: selectedCompliance.checklist,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to generate AI assistance right now.');
+      }
+
+      setAiAssistResult({
+        summary: typeof data?.summary === 'string' ? data.summary : '',
+        suggestions: Array.isArray(data?.suggestions) ? data.suggestions : [],
+        clausePack: Array.isArray(data?.clausePack) ? data.clausePack : [],
+        legalReminder: typeof data?.legalReminder === 'string' ? data.legalReminder : '',
+      });
+    } catch (error: any) {
+      setAiAssistError(error?.message || 'Unable to generate AI assistance right now.');
+    } finally {
+      setAiAssistLoading(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -562,7 +604,13 @@ export default function LandlordTemplatesPage() {
                 Lease drafting mode
                 <select
                   value={builderMode}
-                  onChange={(event) => setBuilderMode(event.target.value as LeaseBuilderMode)}
+                  onChange={(event) => {
+                    const nextMode = event.target.value as LeaseBuilderMode;
+                    setBuilderMode(nextMode);
+                    if (nextMode === 'manual') {
+                      setAiAssistError('');
+                    }
+                  }}
                   className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
                 >
                   <option value="manual">Manual drafting</option>
@@ -703,13 +751,49 @@ export default function LandlordTemplatesPage() {
               <section className="rounded-xl border border-violet-500/40 bg-violet-500/10 p-4">
                 <h3 className="text-sm font-semibold text-violet-100">AI drafting assistant suggestions</h3>
                 <p className="mt-1 text-xs text-violet-200">
-                  Generated as drafting guidance only. Verify every clause manually and with legal counsel.
+                  Generate lease guidance from your entered draft terms. Verify every clause manually and with
+                  legal counsel.
                 </p>
-                <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-violet-100">
-                  {aiDraftSuggestions.map((suggestion) => (
-                    <li key={suggestion}>{suggestion}</li>
-                  ))}
-                </ul>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={generateAiAssistance}
+                    disabled={aiAssistLoading}
+                    className="rounded-lg border border-violet-300/60 bg-violet-300/20 px-3 py-2 text-xs font-medium text-violet-100 hover:bg-violet-300/30 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {aiAssistLoading ? 'Generating AI suggestions...' : 'Generate AI suggestions'}
+                  </button>
+                  {aiAssistResult?.legalReminder ? (
+                    <p className="text-xs text-violet-200">{aiAssistResult.legalReminder}</p>
+                  ) : null}
+                </div>
+                {aiAssistError ? <p className="mt-3 text-xs text-rose-300">{aiAssistError}</p> : null}
+                {aiAssistResult?.summary ? (
+                  <p className="mt-3 rounded-md border border-violet-400/30 bg-violet-950/40 p-2 text-xs text-violet-100">
+                    {aiAssistResult.summary}
+                  </p>
+                ) : null}
+                {aiDraftSuggestions.length ? (
+                  <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-violet-100">
+                    {aiDraftSuggestions.map((suggestion) => (
+                      <li key={suggestion}>{suggestion}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 text-xs text-violet-200">
+                    No AI output yet. Click &quot;Generate AI suggestions&quot; to create state-aware drafting guidance.
+                  </p>
+                )}
+                {aiAssistResult?.clausePack?.length ? (
+                  <div className="mt-3 rounded-md border border-violet-400/30 bg-violet-950/40 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-200">Suggested clause pack</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-violet-100">
+                      {aiAssistResult.clausePack.map((clause) => (
+                        <li key={clause}>{clause}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </section>
             ) : null}
 
