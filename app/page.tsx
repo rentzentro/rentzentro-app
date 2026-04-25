@@ -622,8 +622,8 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="mt-5 inline-flex w-fit items-center gap-3 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
-              <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-emerald-400/30 bg-emerald-500/20">
+            <div className="mt-5 inline-flex w-fit items-center gap-3 rounded-2xl border border-sky-300/40 bg-sky-500/15 px-3 py-2 text-[11px] text-sky-100">
+              <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-sky-300/40 bg-sky-500/25">
                 <svg
                   aria-hidden="true"
                   viewBox="0 0 64 64"
