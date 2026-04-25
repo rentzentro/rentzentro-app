@@ -432,7 +432,7 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
           </p>
         </div>
         {plan.featured && (
-          <span className="rounded-full border border-emerald-400/50 bg-emerald-500/14 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
             Most popular
           </span>
         )}
