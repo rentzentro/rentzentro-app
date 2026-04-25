@@ -932,7 +932,7 @@ export default async function HomePage() {
           <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70 sm:p-4">
             <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
               <iframe
-                src="https://www.loom.com/embed/092d99c74b704644b8ae91fd76b5b60b"
+                src="https://www.youtube.com/embed/cRv_PzLZZAI"
                 frameBorder="0"
                 allowFullScreen
                 className="h-full w-full"
