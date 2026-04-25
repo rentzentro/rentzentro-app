@@ -275,6 +275,10 @@ export default function LandlordSubscriptionPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
+        if (res.status === 409 && data?.portalUrl) {
+          window.location.href = data.portalUrl as string;
+          return;
+        }
         throw new Error(
           data?.error || `Unable to start subscription checkout (status ${res.status}).`
         );

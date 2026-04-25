@@ -85,6 +85,9 @@ test('creates checkout session for authenticated landlord', async () => {
       customers: {
         create: async () => ({ id: 'cus_created' }),
       },
+      subscriptions: {
+        list: async () => ({ data: [] }),
+      },
       checkout: {
         sessions: {
           create: async (payload) => {
@@ -121,4 +124,44 @@ test('creates checkout session for authenticated landlord', async () => {
   assert.equal(session.cancel_url, 'https://rentzentro.com/landlord/settings?billing=cancelled');
   assert.equal(session.metadata.landlordId, '44');
   assert.equal(session.subscription_data.metadata.landlordId, '44');
+});
+
+test('blocks checkout when landlord already has an active subscription', async () => {
+  const result = await createSubscriptionCheckout({
+    stripe: {
+      subscriptions: {
+        list: async () => ({ data: [{ id: 'sub_existing', status: 'active' }] }),
+      },
+      billingPortal: {
+        sessions: {
+          create: async () => ({ url: 'https://billing.stripe.test/session-1' }),
+        },
+      },
+      checkout: {
+        sessions: {
+          create: async () => ({ url: 'https://checkout.stripe.test/session-2' }),
+        },
+      },
+    },
+    supabaseAdmin: makeSupabaseAdmin({
+      landlord: {
+        id: 55,
+        user_id: 'user-1',
+        email: 'owner@example.com',
+        stripe_customer_id: 'cus_existing',
+      },
+    }),
+    supabaseAuth: makeSupabaseAuth(),
+    subscriptionPriceId: 'price_123',
+    appUrl: 'https://rentzentro.com',
+    authHeader: 'Bearer token',
+    landlordId: 55,
+  });
+
+  assert.equal(result.status, 409);
+  assert.equal(
+    result.body.error,
+    'You already have an active subscription. Manage it in billing.'
+  );
+  assert.equal(result.body.portalUrl, 'https://billing.stripe.test/session-1');
 });
