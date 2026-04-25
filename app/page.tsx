@@ -1035,8 +1035,8 @@ export default async function HomePage() {
         </section>
 
         <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-14">
-          <div className="mb-6 rounded-3xl border border-emerald-400/30 bg-emerald-950/25 p-5 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90">
+          <div className="mb-6 rounded-3xl border border-sky-300/40 bg-sky-500/15 p-5 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-sky-100">
               New on RentZentro
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-50">
@@ -1050,7 +1050,7 @@ export default async function HomePage() {
             <div className="mt-4">
               <Link
                 href="/landlord/maintenance-directory"
-                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-5 py-2.5 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-400/40 hover:bg-white/5 active:scale-95"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-5 py-2.5 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-sky-300/40 hover:bg-white/5 active:scale-95"
               >
                 Explore maintenance directory
               </Link>
