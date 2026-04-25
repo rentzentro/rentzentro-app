@@ -56,7 +56,7 @@ export default function TeamLoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
+    <main className="rz-auth-shell">
       <div className="mx-auto max-w-md space-y-6">
         {/* Header */}
         <header className="space-y-2">
@@ -102,7 +102,7 @@ export default function TeamLoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="rz-field text-xs placeholder:text-slate-500"
                 placeholder="name@example.com"
                 autoComplete="email"
                 required
@@ -117,7 +117,7 @@ export default function TeamLoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="rz-field text-xs placeholder:text-slate-500"
                 placeholder="Your RentZentro password"
                 autoComplete="current-password"
                 required
@@ -131,7 +131,7 @@ export default function TeamLoginPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="mt-2 w-full rounded-full bg-emerald-500 px-4 py-2.5 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rz-btn-primary mt-2 text-xs"
             >
               {submitting ? 'Signing you in…' : 'Sign in as team member'}
             </button>

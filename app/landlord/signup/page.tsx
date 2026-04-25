@@ -88,8 +88,8 @@ export default function LandlordSignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/80 p-6 shadow-sm">
+    <div className="rz-auth-shell flex items-center justify-center">
+      <div className="rz-auth-card">
         <div className="mb-4">
           <Link href="/" className="text-[11px] text-slate-500 hover:text-emerald-400">
             ← Back to homepage
@@ -124,14 +124,14 @@ export default function LandlordSignupPage() {
         <form onSubmit={handleSignUp} className="space-y-3 text-sm">
           <div>
             <label className="block text-[11px] text-slate-400 mb-1">Email</label>
-            <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-50 focus:ring-emerald-500"
-              required
-            />
+              <input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="rz-field"
+                required
+              />
           </div>
 
           <div>
@@ -142,7 +142,7 @@ export default function LandlordSignupPage() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 pr-16 text-sm text-slate-50 focus:ring-emerald-500"
+                className="rz-field pr-16"
                 required
               />
               <button
@@ -165,7 +165,7 @@ export default function LandlordSignupPage() {
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 pr-16 text-sm text-slate-50 focus:ring-emerald-500"
+                className="rz-field pr-16"
                 required
               />
               <button
@@ -181,7 +181,7 @@ export default function LandlordSignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-3 w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+            className="rz-btn-primary mt-3"
           >
             {loading ? 'Creating your account…' : 'Create landlord account'}
           </button>

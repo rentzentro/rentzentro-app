@@ -128,8 +128,8 @@ export default function TenantSignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
+    <div className="rz-auth-shell flex items-center justify-center">
+      <div className="rz-auth-card bg-slate-900/70">
         <Link
           href="/"
           className="text-xs text-slate-400 hover:text-emerald-400"
@@ -156,25 +156,25 @@ export default function TenantSignupPage() {
             <label className="text-xs font-medium text-slate-300">
               Full name (optional)
             </label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 outline-none focus:border-emerald-500"
-              placeholder="John Tenant"
-            />
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="rz-field bg-slate-950"
+                placeholder="John Tenant"
+              />
           </div>
 
           <div className="space-y-1">
             <label className="text-xs font-medium text-slate-300">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value.trim())}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 outline-none focus:border-emerald-500"
-              placeholder="you@example.com"
-              required
-            />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value.trim())}
+                className="rz-field bg-slate-950"
+                placeholder="you@example.com"
+                required
+              />
           </div>
 
           <div className="space-y-1">
@@ -186,7 +186,7 @@ export default function TenantSignupPage() {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 pr-20 text-sm text-slate-50 outline-none focus:border-emerald-500"
+                className="rz-field bg-slate-950 pr-20"
                 placeholder="Create a password"
                 required
               />
@@ -208,7 +208,7 @@ export default function TenantSignupPage() {
               type={showPassword ? 'text' : 'password'}
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-50 outline-none focus:border-emerald-500"
+              className="rz-field bg-slate-950"
               placeholder="Re-enter your password"
               required
             />
@@ -217,7 +217,7 @@ export default function TenantSignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 w-full rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+            className="rz-btn-primary mt-2"
           >
             {loading ? 'Creating account…' : 'Create tenant account'}
           </button>

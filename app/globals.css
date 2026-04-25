@@ -25,3 +25,25 @@ body {
     )
     rgb(var(--background-start-rgb));
 }
+
+@layer components {
+  .rz-auth-shell {
+    @apply min-h-screen bg-slate-950 px-4 py-6 text-slate-50 sm:px-5 sm:py-8;
+  }
+
+  .rz-auth-card {
+    @apply w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950/80 p-5 shadow-xl shadow-black/35 sm:p-6;
+  }
+
+  .rz-field {
+    @apply w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-sm text-slate-50 outline-none transition focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500;
+  }
+
+  .rz-btn-primary {
+    @apply inline-flex min-h-[48px] w-full items-center justify-center rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition duration-200 hover:bg-emerald-400 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .rz-btn-secondary {
+    @apply inline-flex min-h-[48px] w-full items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-semibold text-slate-100 transition duration-200 hover:border-slate-600 hover:bg-slate-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+}
