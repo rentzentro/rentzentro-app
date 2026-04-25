@@ -337,66 +337,88 @@ function NationwideCoverageMap() {
     <div className="relative overflow-hidden rounded-3xl border border-cyan-400/30 bg-gradient-to-br from-sky-500/20 via-blue-500/10 to-slate-950 p-4 shadow-[0_20px_45px_rgba(8,47,73,0.5)]">
       <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-cyan-300/20 blur-3xl" />
       <div className="absolute -bottom-16 -left-10 h-36 w-36 rounded-full bg-blue-500/20 blur-3xl" />
-      <svg viewBox="0 0 900 520" className="relative z-10 w-full" role="img" aria-label="Stylized United States coverage map with connection lines">
+      <svg
+        viewBox="0 0 1000 540"
+        className="relative z-10 w-full"
+        role="img"
+        aria-label="United States coverage map with nationwide connections"
+      >
         <defs>
           <linearGradient id="usFill" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.85" />
             <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.95" />
           </linearGradient>
-          <filter id="rzGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="2.2" result="blur" />
+          <filter id="rzGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.6" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+          <clipPath id="usClip">
+            <path d="M88 157l23-49 95-32 84-11 91 9 102-18 68 13 90-4 96 29 80 43-38 31-5 41-17 33-13 39-17 29-41 17-41 40-49 14-58-5-82 10-73 16-60-12-84 12-79-13-49 16-30-42-43-9 11-44 15-44 18-48z" />
+          </clipPath>
         </defs>
 
         <path
-          d="M34 208l32-78 116-34 144 8 140-26 80 18 101 2 129 63-34 34-10 59-17 37-31 44-84 18-81 8-96 23-78-10-90 15-96-16-49 17-36-60-64-16z"
+          d="M88 157l23-49 95-32 84-11 91 9 102-18 68 13 90-4 96 29 80 43-38 31-5 41-17 33-13 39-17 29-41 17-41 40-49 14-58-5-82 10-73 16-60-12-84 12-79-13-49 16-30-42-43-9 11-44 15-44 18-48z"
           fill="url(#usFill)"
-          stroke="#bfdbfe"
-          strokeWidth="3"
-          opacity="0.92"
+          stroke="#e0f2fe"
+          strokeWidth="4"
+          opacity="0.95"
         />
 
+        <g clipPath="url(#usClip)" opacity="0.35" stroke="#bfdbfe" strokeWidth="2">
+          <path d="M205 84v278" />
+          <path d="M278 70v304" />
+          <path d="M354 80v296" />
+          <path d="M432 66v310" />
+          <path d="M515 72v300" />
+          <path d="M594 76v296" />
+          <path d="M672 88v276" />
+          <path d="M748 116v236" />
+          <path d="M98 196h786" />
+          <path d="M98 254h786" />
+          <path d="M98 310h786" />
+        </g>
+
         {[
-          [130, 170, 252, 150],
-          [220, 205, 358, 150],
-          [268, 240, 472, 148],
-          [340, 180, 548, 170],
-          [408, 228, 650, 178],
-          [500, 200, 736, 242],
-          [232, 268, 418, 220],
-          [330, 300, 540, 244],
-          [446, 280, 680, 290],
-          [552, 246, 748, 196],
+          [160, 200, 338, 150],
+          [224, 242, 418, 166],
+          [296, 214, 520, 168],
+          [365, 250, 616, 178],
+          [454, 220, 700, 194],
+          [556, 232, 780, 236],
+          [286, 304, 484, 232],
+          [402, 316, 612, 268],
+          [520, 318, 748, 292],
+          [620, 286, 812, 206],
         ].map((line, i) => (
           <path
             key={i}
-            d={`M${line[0]} ${line[1]} Q ${(line[0] + line[2]) / 2} ${Math.min(line[1], line[3]) - 45} ${line[2]} ${line[3]}`}
+            d={`M${line[0]} ${line[1]} Q ${(line[0] + line[2]) / 2} ${Math.min(line[1], line[3]) - 50} ${line[2]} ${line[3]}`}
             fill="none"
-            stroke="#e0f2fe"
-            strokeWidth="2"
-            opacity="0.7"
+            stroke="#f0f9ff"
+            strokeWidth="2.4"
+            opacity="0.8"
           />
         ))}
 
         {[
-          [106, 187],
-          [158, 246],
-          [226, 170],
-          [286, 276],
-          [350, 165],
-          [410, 250],
-          [476, 165],
-          [542, 258],
-          [608, 185],
-          [684, 279],
-          [742, 195],
-          [786, 250],
+          [150, 204], // Seattle
+          [188, 262], // Bay Area
+          [258, 188], // Denver
+          [302, 293], // Phoenix
+          [366, 176], // Minneapolis
+          [424, 264], // Dallas
+          [490, 190], // Chicago
+          [566, 268], // Atlanta
+          [638, 199], // DC
+          [718, 300], // Miami
+          [778, 232], // NYC
+          [828, 248], // Boston
         ].map((dot, i) => (
-          <circle key={i} cx={dot[0]} cy={dot[1]} r="5.2" fill="#f8fafc" filter="url(#rzGlow)" />
+          <circle key={i} cx={dot[0]} cy={dot[1]} r="6" fill="#ffffff" filter="url(#rzGlow)" />
         ))}
       </svg>
     </div>
