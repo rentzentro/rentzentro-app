@@ -528,7 +528,7 @@ export default function LandlordTemplatesPage() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-400">Resource center</p>
-            <h1 className="mt-1 text-2xl font-semibold">Lease builder + state compliance assistant</h1>
+            <h1 className="mt-1 text-2xl font-semibold">Lease Builder + State Guidance</h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-300">
               Build complete lease packets manually or with AI drafting suggestions. This workflow is reference-only
               and should always be reviewed by your attorney before sharing with tenants.
@@ -595,7 +595,7 @@ export default function LandlordTemplatesPage() {
                 }
                 className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-500/20"
               >
-                Print sample template
+                Print template
               </button>
             </div>
 

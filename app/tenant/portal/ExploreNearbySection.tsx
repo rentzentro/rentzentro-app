@@ -109,8 +109,7 @@ export default function ExploreNearbySection({
               </span>
               {item.label}
             </p>
-            <p className="mt-0.5 text-[11px] text-slate-500">
-              Open in Google Maps
+            <p className="mt-0.5 text-[11px] text-slate-500"> 
             </p>
           </a>
         ))}
