@@ -853,15 +853,15 @@ export default async function HomePage() {
                 collect rent, track expenses, and keep your rental business organized in one
                 place.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-400">
-                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-[12px] text-emerald-100">
+              <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-300">
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/45 bg-emerald-400/16 px-4 py-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-300/25 text-[12px] text-emerald-50">
                     ✓
                   </span>
                   Works in all 50 states
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-[12px] text-emerald-100">
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/45 bg-emerald-400/16 px-4 py-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-300/25 text-[12px] text-emerald-50">
                     👥
                   </span>
                   Built for portfolios of any size
