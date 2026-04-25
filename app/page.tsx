@@ -1043,7 +1043,7 @@ export default async function HomePage() {
               Helpful day-to-day tools for landlords and tenants
             </h2>
             <p className="mt-2 max-w-3xl text-[13px] leading-6 text-slate-300">
-              Manual + AI-powered lease assistance is now highlighted on the home page so landlords can
+              Manual or AI document and lease assistance is now highlighted on the home page so landlords can
               draft cleaner lease language faster while still keeping full control of final terms.
             </p>
             <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -1070,25 +1070,25 @@ export default async function HomePage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-100">
                   Highlighted feature
                 </p>
-                <p className="mt-2 text-sm font-semibold text-slate-50">Manual or AI lease assistance</p>
+                <p className="mt-2 text-sm font-semibold text-slate-50">Lease / Document builder with optional AI assistance</p>
                 <p className="mt-2 text-[13px] leading-6 text-slate-200">
-                  Build stronger lease drafts with either manual guidance or AI-generated suggestions.
-                  You stay in control of edits, clauses, and final approval before sending anything out.
+                  Build stronger lease drafts manually or with optional AI-generated suggestions.
+                  You stay in control of edits, clauses, and final approval before sending or exporting anything.
                 </p>
                 <div className="mt-3">
                   <Link
                     href="/landlord/login?redirect=%2Flandlord%2Fdocuments"
                     className="inline-flex min-h-[40px] items-center justify-center rounded-full border border-sky-200/40 bg-slate-950/80 px-4 py-2 text-sm font-semibold text-slate-100 transition duration-200 hover:scale-[1.02] hover:border-sky-200 hover:bg-white/5 active:scale-95"
                   >
-                    Try lease assistance
+                    Try lease / document builder
                   </Link>
                 </div>
               </div>
               <div className="rounded-2xl border border-sky-300/20 bg-slate-950/60 p-4">
                 <p className="text-sm font-semibold text-slate-50">Tenant Explore Nearby</p>
                 <p className="mt-2 text-[13px] leading-6 text-slate-300">
-                  Tenants can discover nearby restaurants, parks, and essentials plus check local
-                  weekend events right from their portal.
+                Give your tenants a better living experience with local recommendations like restaurants, parks, essentials,
+                  weekend events and farmers markets right from their portal.
                 </p>
                 <div className="mt-3">
                   <Link
