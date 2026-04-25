@@ -333,94 +333,96 @@ function TrustCard({
 
 
 function NationwideCoverageMap() {
+  const usMapAsset =
+    'https://upload.wikimedia.org/wikipedia/commons/3/32/Blank_US_Map_%28states_only%29.svg';
+
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-cyan-400/30 bg-gradient-to-br from-sky-500/20 via-blue-500/10 to-slate-950 p-4 shadow-[0_20px_45px_rgba(8,47,73,0.5)]">
+    <div className="relative overflow-hidden rounded-3xl border border-cyan-400/30 bg-gradient-to-br from-slate-900/80 via-[#0b1f49] to-slate-950 p-4 shadow-[0_20px_45px_rgba(8,47,73,0.5)]">
       <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-cyan-300/20 blur-3xl" />
       <div className="absolute -bottom-16 -left-10 h-36 w-36 rounded-full bg-blue-500/20 blur-3xl" />
-      <svg
-        viewBox="0 0 1000 540"
-        className="relative z-10 w-full"
-        role="img"
-        aria-label="United States coverage map with nationwide connections"
-      >
-        <defs>
-          <linearGradient id="usFill" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.85" />
-            <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.95" />
-          </linearGradient>
-          <filter id="rzGlow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="2.6" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <clipPath id="usClip">
-            <path d="M88 157l23-49 95-32 84-11 91 9 102-18 68 13 90-4 96 29 80 43-38 31-5 41-17 33-13 39-17 29-41 17-41 40-49 14-58-5-82 10-73 16-60-12-84 12-79-13-49 16-30-42-43-9 11-44 15-44 18-48z" />
-          </clipPath>
-        </defs>
 
-        <path
-          d="M88 157l23-49 95-32 84-11 91 9 102-18 68 13 90-4 96 29 80 43-38 31-5 41-17 33-13 39-17 29-41 17-41 40-49 14-58-5-82 10-73 16-60-12-84 12-79-13-49 16-30-42-43-9 11-44 15-44 18-48z"
-          fill="url(#usFill)"
-          stroke="#e0f2fe"
-          strokeWidth="4"
-          opacity="0.95"
-        />
+      <div className="relative z-10 overflow-hidden rounded-2xl border border-cyan-200/20 bg-slate-950/50 p-2">
+        <svg
+          viewBox="0 0 1000 620"
+          className="w-full"
+          role="img"
+          aria-label="United States coverage map with nationwide connections"
+        >
+          <defs>
+            <filter id="usBlueTone" colorInterpolationFilters="sRGB">
+              <feColorMatrix
+                type="matrix"
+                values="0 0 0 0 0.07
+                        0 0 0 0 0.34
+                        0 0 0 0 0.78
+                        0 0 0 1 0"
+              />
+            </filter>
+            <filter id="rzGlow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="2.8" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <linearGradient id="mapShine" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.55" />
+            </linearGradient>
+          </defs>
 
-        <g clipPath="url(#usClip)" opacity="0.35" stroke="#bfdbfe" strokeWidth="2">
-          <path d="M205 84v278" />
-          <path d="M278 70v304" />
-          <path d="M354 80v296" />
-          <path d="M432 66v310" />
-          <path d="M515 72v300" />
-          <path d="M594 76v296" />
-          <path d="M672 88v276" />
-          <path d="M748 116v236" />
-          <path d="M98 196h786" />
-          <path d="M98 254h786" />
-          <path d="M98 310h786" />
-        </g>
-
-        {[
-          [160, 200, 338, 150],
-          [224, 242, 418, 166],
-          [296, 214, 520, 168],
-          [365, 250, 616, 178],
-          [454, 220, 700, 194],
-          [556, 232, 780, 236],
-          [286, 304, 484, 232],
-          [402, 316, 612, 268],
-          [520, 318, 748, 292],
-          [620, 286, 812, 206],
-        ].map((line, i) => (
-          <path
-            key={i}
-            d={`M${line[0]} ${line[1]} Q ${(line[0] + line[2]) / 2} ${Math.min(line[1], line[3]) - 50} ${line[2]} ${line[3]}`}
-            fill="none"
-            stroke="#f0f9ff"
-            strokeWidth="2.4"
-            opacity="0.8"
+          <image
+            href={usMapAsset}
+            x="70"
+            y="80"
+            width="860"
+            height="460"
+            preserveAspectRatio="xMidYMid meet"
+            filter="url(#usBlueTone)"
+            opacity="0.95"
           />
-        ))}
 
-        {[
-          [150, 204], // Seattle
-          [188, 262], // Bay Area
-          [258, 188], // Denver
-          [302, 293], // Phoenix
-          [366, 176], // Minneapolis
-          [424, 264], // Dallas
-          [490, 190], // Chicago
-          [566, 268], // Atlanta
-          [638, 199], // DC
-          [718, 300], // Miami
-          [778, 232], // NYC
-          [828, 248], // Boston
-        ].map((dot, i) => (
-          <circle key={i} cx={dot[0]} cy={dot[1]} r="6" fill="#ffffff" filter="url(#rzGlow)" />
-        ))}
-      </svg>
+          <rect x="70" y="80" width="860" height="460" fill="url(#mapShine)" opacity="0.78" />
+
+          {[
+            [188, 258, 356, 208],
+            [260, 300, 458, 216],
+            [322, 270, 560, 212],
+            [396, 316, 646, 224],
+            [490, 284, 734, 236],
+            [580, 298, 810, 280],
+            [324, 378, 512, 300],
+            [430, 388, 620, 320],
+            [532, 390, 744, 344],
+            [622, 348, 822, 254],
+          ].map((line, i) => (
+            <path
+              key={i}
+              d={`M${line[0]} ${line[1]} Q ${(line[0] + line[2]) / 2} ${Math.min(line[1], line[3]) - 55} ${line[2]} ${line[3]}`}
+              fill="none"
+              stroke="#f8fafc"
+              strokeWidth="2.6"
+              opacity="0.82"
+            />
+          ))}
+
+          {[
+            [176, 262],
+            [208, 332],
+            [292, 248],
+            [338, 362],
+            [402, 236],
+            [464, 330],
+            [538, 246],
+            [610, 332],
+            [688, 258],
+            [770, 364],
+            [822, 282],
+          ].map((dot, i) => (
+            <circle key={i} cx={dot[0]} cy={dot[1]} r="6" fill="#ffffff" filter="url(#rzGlow)" />
+          ))}
+        </svg>
+      </div>
     </div>
   );
 }
