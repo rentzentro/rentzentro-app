@@ -26,7 +26,6 @@ type TenantRow = {
   email: string;
   property_id: number | null;
   monthly_rent: number | null;
-  lease_start: string | null;
 };
 
 type PropertyRow = {
@@ -295,7 +294,7 @@ export default function LandlordPaymentsPage() {
             .order('created_at', { ascending: false }),
           supabase
             .from('tenants')
-            .select('id, owner_id, name, email, property_id, monthly_rent, lease_start')
+            .select('id, owner_id, name, email, property_id, monthly_rent')
             .eq('owner_id', ownerUuid)
             .order('created_at', { ascending: false }),
           // Payments: RLS should already restrict to this landlord owner_id
@@ -349,22 +348,18 @@ export default function LandlordPaymentsPage() {
   properties.forEach((p) => propertyById.set(p.id, p));
 
   const refreshPropertyNextDueDate = async (
-    propertyId: number | null | undefined
+    propertyId: number | null | undefined,
+    referencePaidOn?: string | null
   ) => {
     if (!propertyId) return;
 
     const property = propertyById.get(propertyId);
     const linkedTenants = tenants.filter((t) => t.property_id === propertyId);
-    const tenantWithLeaseStart = linkedTenants.find((t) => !!t.lease_start);
-
-    const baseDate =
-      parseDateOnly(tenantWithLeaseStart?.lease_start) ||
-      parseDateOnly(property?.next_due_date);
-    if (!baseDate) return;
+    const currentDueDate = parseDateOnly(property?.next_due_date);
+    if (!currentDueDate) return;
 
     const rentAmount =
       property?.monthly_rent ||
-      tenantWithLeaseStart?.monthly_rent ||
       linkedTenants.find((t) => (t.monthly_rent || 0) > 0)?.monthly_rent ||
       0;
 
@@ -372,7 +367,7 @@ export default function LandlordPaymentsPage() {
 
     const { data: propertyPayments, error: payError } = await supabase
       .from('payments')
-      .select('amount')
+      .select('amount, paid_on')
       .eq('property_id', propertyId);
 
     if (payError) {
@@ -380,15 +375,51 @@ export default function LandlordPaymentsPage() {
       throw new Error(payError.message || 'Unable to sync due date.');
     }
 
-    const totalPaid = (propertyPayments || []).reduce((sum, row: any) => {
-      const amount = Number(row?.amount || 0);
-      return amount > 0 ? sum + amount : sum;
+    const paymentsWithDate = (propertyPayments || []).map((row: any) => ({
+      amount: Number(row?.amount || 0),
+      paidDate: parseDateOnly(row?.paid_on),
+    }));
+
+    const windowStart = addMonthsPreservingDay(currentDueDate, -1);
+    const paidThisCycle = paymentsWithDate.reduce((sum, row) => {
+      if (!row.paidDate || row.amount <= 0) return sum;
+      if (row.paidDate < windowStart || row.paidDate > currentDueDate) return sum;
+      return sum + row.amount;
     }, 0);
 
-    const monthsCovered = Math.floor((totalPaid + 1e-8) / rentAmount);
-    const computedNextDue = dateToYMD(
-      addMonthsPreservingDay(baseDate, monthsCovered)
+    const monthsCoveredThisCycle = Math.floor((paidThisCycle + 1e-8) / rentAmount);
+    let computedDueDate = addMonthsPreservingDay(
+      currentDueDate,
+      monthsCoveredThisCycle
     );
+
+    // If a payment in the immediately previous cycle is removed/edited down,
+    // allow one-month rollback so deleting a just-logged payment restores the prior due date.
+    if (monthsCoveredThisCycle === 0 && referencePaidOn) {
+      const referenceDate = parseDateOnly(referencePaidOn);
+      const previousDueDate = addMonthsPreservingDay(currentDueDate, -1);
+      const previousWindowStart = addMonthsPreservingDay(currentDueDate, -2);
+
+      if (
+        referenceDate &&
+        referenceDate >= previousWindowStart &&
+        referenceDate <= previousDueDate
+      ) {
+        const paidPreviousCycle = paymentsWithDate.reduce((sum, row) => {
+          if (!row.paidDate || row.amount <= 0) return sum;
+          if (row.paidDate < previousWindowStart || row.paidDate > previousDueDate) {
+            return sum;
+          }
+          return sum + row.amount;
+        }, 0);
+
+        if (paidPreviousCycle + 1e-8 < rentAmount) {
+          computedDueDate = previousDueDate;
+        }
+      }
+    }
+
+    const computedNextDue = dateToYMD(computedDueDate);
 
     const { error: propUpdateError } = await supabase
       .from('properties')
@@ -467,7 +498,7 @@ export default function LandlordPaymentsPage() {
         (data as Payment).property_id ||
         tenants.find((t) => t.id === (data as Payment).tenant_id)?.property_id ||
         null;
-      await refreshPropertyNextDueDate(resolvedPropertyId);
+      await refreshPropertyNextDueDate(resolvedPropertyId, (data as Payment).paid_on);
       resetForm();
       setShowForm(false);
       setFormMessage('Manual payment recorded.');
@@ -572,9 +603,9 @@ export default function LandlordPaymentsPage() {
         (data as Payment).property_id ||
         tenants.find((t) => t.id === (data as Payment).tenant_id)?.property_id ||
         null;
-      await refreshPropertyNextDueDate(oldPropertyId);
+      await refreshPropertyNextDueDate(oldPropertyId, editingPayment.paid_on);
       if (newPropertyId && newPropertyId !== oldPropertyId) {
-        await refreshPropertyNextDueDate(newPropertyId);
+        await refreshPropertyNextDueDate(newPropertyId, (data as Payment).paid_on);
       }
       cancelEditPayment();
       setFormMessage('Payment updated.');
@@ -624,7 +655,7 @@ export default function LandlordPaymentsPage() {
         payment.property_id ||
         tenants.find((t) => t.id === payment.tenant_id)?.property_id ||
         null;
-      await refreshPropertyNextDueDate(resolvedPropertyId);
+      await refreshPropertyNextDueDate(resolvedPropertyId, payment.paid_on);
       setFormMessage(
         'Payment deleted. If this was the payment keeping this period current, the unit will show as past due again based on your existing rent logic.'
       );
