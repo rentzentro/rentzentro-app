@@ -32,7 +32,7 @@ body {
   }
 
   .rz-auth-card {
-    @apply w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950/80 p-5 shadow-xl shadow-black/35 sm:p-6;
+    @apply w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950/80 p-5 shadow-xl sm:p-6;
   }
 
   .rz-field {
