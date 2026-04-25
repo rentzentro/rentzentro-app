@@ -569,7 +569,7 @@ export default async function HomePage() {
                 href="/landlord/signup"
                 className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-gradient-to-r from-emerald-400 to-emerald-300 px-6 py-3 text-sm font-semibold text-slate-950 shadow-[0_10px_30px_rgba(16,185,129,0.25)] transition duration-200 hover:scale-[1.02] hover:from-emerald-300 hover:to-emerald-200 active:scale-95"
               >
-                Create Free Account
+                Start Free - No Card Required
               </Link>
               <Link
                 href="#demo"
@@ -826,13 +826,13 @@ export default async function HomePage() {
 
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[12px] leading-5 text-slate-400">
-                Watch the actual product flow before creating your account.
+                Watch the actual product flow - Start free.
               </p>
               <Link
                 href="/landlord/signup"
                 className="inline-flex min-h-[40px] w-fit items-center justify-center rounded-full bg-gradient-to-r from-emerald-400 to-emerald-300 px-4 py-2 text-[11px] font-semibold text-slate-950 shadow-[0_10px_30px_rgba(16,185,129,0.25)] transition duration-200 hover:scale-[1.02] hover:from-emerald-300 hover:to-emerald-200 active:scale-95"
               >
-                Create Free Account
+                Start Free - No Card Required
               </Link>
             </div>
           </div>
@@ -1172,7 +1172,7 @@ export default async function HomePage() {
                 href="/landlord/signup"
                 className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-400 active:scale-95"
               >
-                Create Free Account
+                Start Free - No Card Required
               </Link>
               <Link
                 href="/login"
