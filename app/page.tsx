@@ -9,14 +9,14 @@ export const dynamic = 'force-dynamic';
 export const metadata = {
   title: 'RentZentro | Built for landlords who want clear rental profit',
   description:
-    'RentZentro is software for landlords. See real rent, expense, and profit numbers for each property, collect payments securely with Stripe, and manage rentals in one simple system.',
+    'RentZentro is powerful rental operations software for landlords and teams managing portfolios of any size. Track profit by property, collect rent securely with Stripe, and run leasing, maintenance, and documents in one platform.',
   alternates: {
     canonical: 'https://www.rentzentro.com/',
   },
   openGraph: {
     title: 'RentZentro | Stop guessing your rental profit',
     description:
-      'Built for landlords to see real rent, expenses, and profit in one clear system.',
+      'Powerful landlord software to see real rent, expenses, and profit across portfolios of any size.',
     url: 'https://www.rentzentro.com/',
     siteName: 'RentZentro',
     type: 'website',
@@ -25,7 +25,7 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'RentZentro | Stop guessing your rental profit',
     description:
-      'See real rent, expenses, and profit numbers in one simple landlord system.',
+      'See real rent, expenses, and profit numbers in a powerful landlord platform built to scale.',
   },
 };
 
@@ -659,7 +659,7 @@ export default async function HomePage() {
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
               <span className="rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/20 hover:text-slate-300">
-                35-day free trial
+                Free trial available
               </span>
               <span className="rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/20 hover:text-slate-300">
                 Plans: $19 / $29.95 / $59
@@ -864,7 +864,7 @@ export default async function HomePage() {
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-[12px] text-emerald-100">
                     👥
                   </span>
-                  For DIY landlords and small portfolios
+                  Built for portfolios of any size
                 </span>
               </div>
             </div>
@@ -1020,7 +1020,7 @@ export default async function HomePage() {
                 Clear plans based on your number of units
               </h2>
               <p className="mt-2 max-w-3xl text-[14px] leading-6 text-slate-400">
-                Start with a 35-day free trial. Then choose a plan that fits your portfolio size.
+                Start with a free trial. Then choose a plan that fits your portfolio size.
                 Every plan includes rent collection, maintenance, documents, and financial
                 visibility.
               </p>
@@ -1183,7 +1183,7 @@ export default async function HomePage() {
             </div>
 
             <p className="mt-3 text-[12px] leading-5 text-slate-400">
-              35-day free trial • No credit card required • Secure payments via Stripe • Built for
+              Free trial available • No credit card required • Secure payments via Stripe • Built for
               landlords across the U.S.
             </p>
           </div>
