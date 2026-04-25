@@ -63,7 +63,8 @@ export default function TermsPage() {
           <p>
             <span className="font-semibold">Subscription.</span> RentZentro
             offers landlord subscription plans currently priced at $19, $29.95,
-            and $59 per month. Pricing may change with notice.
+            and $59 per month, with custom pricing available for larger
+            portfolios. Pricing may change with notice.
           </p>
 
           <p>

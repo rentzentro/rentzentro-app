@@ -1,10 +1,33 @@
 # RentZentro
 
-RentZentro is a rental operations platform built for independent landlords and their tenants.
+RentZentro is a full-scale rental operations platform for landlords and their tenants.
 
-It is designed to run the full leasing lifecycle in one place:
+It is built to run the full leasing lifecycle in one place:
 
 **Attract renters → manage applications and onboarding → collect rent → handle maintenance, messaging, and records**
+
+---
+
+## Positioning
+
+RentZentro is not a “lightweight” tool. It is designed to be a strong, production-ready operating system for rental businesses that need reliability and scale.
+
+- Works for single-property landlords and expanding teams.
+- Supports large portfolios through the Growth plan and custom plan path for portfolios above the standard tier limits.
+- Centralizes payments, leasing workflows, maintenance, communication, and financial visibility in one platform.
+
+---
+
+## Current landlord pricing
+
+As of April 25, 2026, the landlord subscription plans are:
+
+- **Starter:** **$19/month** (up to 3 units)
+- **Core:** **$29.95/month** (up to 20 units)
+- **Growth:** **$59/month** (up to 75 units)
+- **Custom plan support:** for landlords managing more than 75 units
+
+These are the same plan prices reflected in the app pricing surfaces.
 
 ---
 

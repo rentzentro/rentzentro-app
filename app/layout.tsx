@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     template: '%s | RentZentro',
   },
   description:
-    'RentZentro is software for landlords (not a property management company). Collect rent online (ACH + card), send rent reminders, manage maintenance requests, share documents, publish rental listings, and send leases for e-signatures.',
+    'RentZentro is powerful landlord software (not a property management company) built for portfolios of any size. Collect rent online (ACH + card), manage maintenance and documents, publish listings, and run leasing workflows in one platform.',
   applicationName: 'RentZentro',
   keywords: [
     'rent collection',
@@ -53,13 +53,13 @@ export const metadata: Metadata = {
     siteName: 'RentZentro',
     title: 'RentZentro — Rent collection, listings & e-sign for landlords',
     description:
-      'Collect rent online (ACH + card), manage tenants & maintenance, share documents, publish listings, and e-sign leases — all in one clean landlord dashboard.',
+      'Powerful landlord software for portfolios of any size: collect rent online, manage tenants and maintenance, publish listings, and run leasing workflows in one dashboard.',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'RentZentro — Rent collection, listings & e-sign for landlords',
     description:
-      'Collect rent online, manage tenants & maintenance, publish listings, and e-sign leases — all in one clean landlord dashboard.',
+      'Powerful landlord software for portfolios of any size with rent collection, maintenance, listings, and leasing workflows in one platform.',
   },
   icons: {
     icon: '/favicon.png',
