@@ -158,6 +158,28 @@ const monthsBetween = (from: Date, to: Date) => {
   );
 };
 
+const sumPaymentsWithinCycle = (
+  payments: PaymentRow[],
+  cycleDueDateISO: string | null
+): number => {
+  const cycleDue = parseSupabaseDate(cycleDueDateISO);
+  if (!cycleDue) return 0;
+
+  const cycleStart = new Date(
+    cycleDue.getFullYear(),
+    cycleDue.getMonth() - 1,
+    cycleDue.getDate()
+  );
+
+  return payments.reduce((sum, p) => {
+    if (!p.amount || p.amount <= 0 || !p.paid_on) return sum;
+    const paidDate = parseSupabaseDate(p.paid_on);
+    if (!paidDate) return sum;
+    if (paidDate < cycleStart || paidDate > cycleDue) return sum;
+    return sum + p.amount;
+  }, 0);
+};
+
 const calculateRentStatus = (
   monthlyRent: number | null,
   firstDueDateISO: string | null,
@@ -655,8 +677,13 @@ export default function TenantPortalPage() {
       return;
     }
 
-    const amount =
-      rentStatus && rentStatus.outstanding > 0 ? rentStatus.outstanding : baseRent;
+    const cycleDueDateISO =
+      (rentStatus?.nextDueDate as string | null) || property?.next_due_date || null;
+    const paidTowardCurrentCycle = sumPaymentsWithinCycle(payments, cycleDueDateISO);
+    const cycleRemaining =
+      baseRent > 0 ? Math.max(0, baseRent - paidTowardCurrentCycle) : 0;
+
+    const amount = cycleRemaining > 0 ? cycleRemaining : 0;
 
     if (!amount || amount <= 0) {
       setError(
@@ -761,10 +788,17 @@ export default function TenantPortalPage() {
   const isTooEarlyToPay = isBeforeDue && !earlyAllowed;
 
   const amountToPayNow =
-    !isTooEarlyToPay && rentStatus && rentStatus.outstanding > 0
-      ? rentStatus.outstanding
-      : !isTooEarlyToPay
-      ? currentRent
+    !isTooEarlyToPay && currentRent && currentRent > 0
+      ? Math.max(
+          0,
+          currentRent -
+            sumPaymentsWithinCycle(
+              payments,
+              ((rentStatus?.nextDueDate as string | null) ||
+                property?.next_due_date ||
+                null) as string | null
+            )
+        )
       : null;
 
   const accountStatusLabel = isRentOverdue
