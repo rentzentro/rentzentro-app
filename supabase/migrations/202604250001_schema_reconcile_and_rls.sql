@@ -212,7 +212,9 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------
--- RLS and policy baseline (from provided policy snapshot; key tables)
+-- RLS and policy baseline (merge-resolved):
+-- use DROP POLICY IF EXISTS + CREATE POLICY for Postgres-compatible idempotency
+-- (intentionally no CREATE POLICY IF NOT EXISTS)
 -- ---------------------------------------------------------------------------
 
 alter table if exists public.landlords enable row level security;
