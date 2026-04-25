@@ -331,6 +331,26 @@ function TrustCard({
   );
 }
 
+
+function NationwideCoverageMap() {
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-cyan-400/30 bg-gradient-to-br from-slate-900/80 via-[#0b1f49] to-slate-950 p-4 shadow-[0_20px_45px_rgba(8,47,73,0.5)]">
+      <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-cyan-300/20 blur-3xl" />
+      <div className="absolute -bottom-16 -left-10 h-36 w-36 rounded-full bg-blue-500/20 blur-3xl" />
+
+      <div className="relative z-10 overflow-hidden rounded-2xl border border-cyan-200/20 bg-slate-950/45 p-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/us-network-map.png"
+          alt="United States coverage map with glowing network connections"
+          className="h-auto max-w-full object-contain"
+          loading="lazy"
+        />
+      </div>
+    </div>
+  );
+}
+
 function StepCard({
   number,
   title,
@@ -777,6 +797,28 @@ export default async function HomePage() {
                 </p>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="rz-fade-up rz-delay-4 pb-10">
+          <div className="grid gap-4 rounded-3xl border border-cyan-400/25 bg-gradient-to-br from-slate-900/80 via-slate-950 to-slate-950 p-4 shadow-[0_18px_60px_rgba(2,6,23,0.55)] sm:p-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200/80">
+                Nationwide footprint
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-50 sm:text-3xl">
+                Trusted by landlords nationwide
+              </h2>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
+                From single-unit owners to growing portfolios, landlords across the U.S. use
+                RentZentro to collect rent, track expenses, and keep operations in one place.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-cyan-100/90">
+                <span className="rounded-full border border-cyan-300/30 bg-cyan-500/10 px-3 py-1.5">All 50 states supported</span>
+                <span className="rounded-full border border-cyan-300/30 bg-cyan-500/10 px-3 py-1.5">Landlords and property managers</span>
+              </div>
+            </div>
+            <NationwideCoverageMap />
           </div>
         </section>
 
