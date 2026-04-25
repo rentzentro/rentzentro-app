@@ -1040,20 +1040,42 @@ export default async function HomePage() {
               New on RentZentro
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-              Location-based maintenance directory for trusted pros
+              Helpful day-to-day tools for landlords and tenants
             </h2>
-            <p className="mt-3 max-w-3xl text-[14px] leading-6 text-slate-400">
-              Need a plumber, electrician, HVAC tech, or general contractor? Landlords can browse
-              maintenance pros by location, save preferred vendors, and keep maintenance work
-              organized in one place.
-            </p>
-            <div className="mt-4">
-              <Link
-                href="/landlord/login?redirect=%2Flandlord%2Fmaintenance-directory"
-                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-5 py-2.5 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-sky-300/40 hover:bg-white/5 active:scale-95"
-              >
-                Explore maintenance directory
-              </Link>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-sky-300/20 bg-slate-950/60 p-4">
+                <p className="text-sm font-semibold text-slate-50">
+                  Location-based maintenance directory
+                </p>
+                <p className="mt-2 text-[13px] leading-6 text-slate-300">
+                  Find plumbers, electricians, HVAC pros, and more by location. Save preferred
+                  vendors to keep dispatch fast and organized.
+                </p>
+                <div className="mt-3">
+                  <Link
+                    href="/landlord/login?redirect=%2Flandlord%2Fmaintenance-directory"
+                    className="inline-flex min-h-[40px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-4 py-2 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-sky-300/40 hover:bg-white/5 active:scale-95"
+                  >
+                    Explore maintenance directory
+                  </Link>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-sky-300/20 bg-slate-950/60 p-4">
+                <p className="text-sm font-semibold text-slate-50">Tenant Explore Nearby</p>
+                <p className="mt-2 text-[13px] leading-6 text-slate-300">
+                  Tenants can discover nearby restaurants, parks, and essentials plus check local
+                  weekend events right from their portal.
+                </p>
+                <div className="mt-3">
+                  <Link
+                    href="/tenant/login"
+                    className="inline-flex min-h-[40px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-4 py-2 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-sky-300/40 hover:bg-white/5 active:scale-95"
+                  >
+                    See tenant portal features
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
 
