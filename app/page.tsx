@@ -828,9 +828,12 @@ export default async function HomePage() {
               <p className="text-[12px] leading-5 text-slate-400">
                 Watch the actual product flow before creating your account.
               </p>
-              <span className="inline-flex w-fit items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-3 py-1.5 text-[11px] font-medium text-slate-300">
-                2-minute demo
-              </span>
+              <Link
+                href="/landlord/signup"
+                className="inline-flex min-h-[40px] w-fit items-center justify-center rounded-full bg-gradient-to-r from-emerald-400 to-emerald-300 px-4 py-2 text-[11px] font-semibold text-slate-950 shadow-[0_10px_30px_rgba(16,185,129,0.25)] transition duration-200 hover:scale-[1.02] hover:from-emerald-300 hover:to-emerald-200 active:scale-95"
+              >
+                Create Free Account
+              </Link>
             </div>
           </div>
         </section>
