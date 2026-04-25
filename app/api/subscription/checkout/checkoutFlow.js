@@ -3,6 +3,16 @@ const DEFAULT_ERROR =
 
 const json = (status, body) => ({ status, body });
 
+const hasCancellableSubscription = (subscription) => {
+  const status = String(subscription?.status || '').toLowerCase();
+  return (
+    status === 'active' ||
+    status === 'trialing' ||
+    status === 'past_due' ||
+    status === 'unpaid'
+  );
+};
+
 async function createSubscriptionCheckout({
   stripe,
   supabaseAdmin,
@@ -97,6 +107,23 @@ async function createSubscriptionCheckout({
         .from('landlords')
         .update({ stripe_customer_id: customerId })
         .eq('id', landlord.id);
+    }
+
+    const existingSubscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'all',
+      limit: 10,
+    });
+
+    const alreadySubscribed = (existingSubscriptions?.data || []).some(
+      hasCancellableSubscription
+    );
+
+    if (alreadySubscribed) {
+      return json(409, {
+        error:
+          'An active subscription already exists for this account. Please use billing portal to manage your plan.',
+      });
     }
 
     const session = await stripe.checkout.sessions.create({
