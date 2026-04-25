@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '../../../supabaseAdminClient';
+import { trackProductEvent } from '../../../lib/productEventTracker';
 
 // Stripe client
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -12,12 +13,45 @@ const stripe = stripeSecretKey
     })
   : null;
 
-// Supabase admin (RLS bypass)
-const ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET as string;
-
 // Logging helper
 function log(...args: any[]) {
   console.log('[rent webhook]', ...args);
+}
+
+async function maybeTrackFirstRentPaymentSuccess(tenantId: number, propertyId: number | null) {
+  const { count, error: countError } = await supabaseAdmin
+    .from('payments')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId);
+
+  if (countError || (count || 0) !== 1) return;
+
+  const { data: tenant, error: tenantError } = await supabaseAdmin
+    .from('tenants')
+    .select('id, owner_id')
+    .eq('id', tenantId)
+    .maybeSingle();
+
+  if (tenantError || !tenant?.owner_id) return;
+
+  const { data: landlord, error: landlordError } = await supabaseAdmin
+    .from('landlords')
+    .select('id, user_id')
+    .eq('user_id', tenant.owner_id)
+    .maybeSingle();
+
+  if (landlordError || !landlord) return;
+
+  await trackProductEvent(supabaseAdmin, {
+    eventName: 'first_rent_payment_success',
+    landlordId: landlord.id,
+    landlordUserId: landlord.user_id,
+    metadata: {
+      tenantId,
+      propertyId,
+      source: 'stripe/webhook',
+    },
+  });
 }
 
 export async function POST(req: Request) {
@@ -28,7 +62,8 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!ENDPOINT_SECRET) {
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!endpointSecret) {
     console.error('Missing webhook secret');
     return NextResponse.json(
       { error: 'Webhook secret not configured.' },
@@ -48,7 +83,7 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
   try {
     const rawBody = await req.text();
-    event = stripe.webhooks.constructEvent(rawBody, sig, ENDPOINT_SECRET);
+    event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
   } catch (err: any) {
     console.error('Signature verification failed:', err);
     return NextResponse.json({ error: 'Bad signature.' }, { status: 400 });
@@ -180,6 +215,8 @@ export async function POST(req: Request) {
 
         if (rentInsertError) {
           console.error('[webhook] rent insert error:', rentInsertError);
+        } else {
+          await maybeTrackFirstRentPaymentSuccess(tenant_id, property_id);
         }
 
         break;
@@ -241,6 +278,8 @@ export async function POST(req: Request) {
             '[webhook] autopay insert error:',
             autopayInsertError
           );
+        } else {
+          await maybeTrackFirstRentPaymentSuccess(tenant_id, property_id);
         }
 
         break;

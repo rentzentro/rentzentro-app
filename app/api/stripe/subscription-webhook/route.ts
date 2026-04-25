@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '../../../supabaseAdminClient';
+import { trackProductEvent } from '../../../lib/productEventTracker';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -69,7 +70,7 @@ async function updateLandlordFromSubscription(
 
   const { data: landlord, error: landlordError } = await supabaseAdmin
     .from('landlords')
-    .select('id')
+    .select('id, user_id, subscription_status')
     .eq('stripe_customer_id', customerId)
     .maybeSingle();
 
@@ -116,6 +117,19 @@ async function updateLandlordFromSubscription(
       `[subscription webhook] (${contextLabel}) Error updating landlord:`,
       updateError
     );
+  }
+
+  if (subscriptionActive && landlord.subscription_status !== effectiveStatus) {
+    await trackProductEvent(supabaseAdmin, {
+      eventName: 'subscription_started',
+      landlordId: landlord.id,
+      landlordUserId: landlord.user_id,
+      metadata: {
+        status: effectiveStatus,
+        subscriptionId: subscription.id,
+        source: contextLabel,
+      },
+    });
   }
 }
 

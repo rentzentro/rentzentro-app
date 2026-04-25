@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from '../../lib/supabaseEnv';
+import { trackProductEvent } from '../../lib/productEventTracker';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -98,6 +99,22 @@ export async function POST(req: Request) {
           { error: 'Listing not found or not owned by authenticated user.' },
           { status: 404 }
         );
+      }
+
+      if (publish) {
+        const { count: publishedCount, error: publishedCountError } = await supabaseAdmin
+          .from('listings')
+          .select('id', { count: 'exact', head: true })
+          .eq('owner_id', user.id)
+          .eq('published', true);
+
+        if (!publishedCountError && (publishedCount || 0) === 1) {
+          await trackProductEvent(supabaseAdmin, {
+            eventName: 'first_listing_published',
+            landlordUserId: user.id,
+            metadata: { listingId: data.id },
+          });
+        }
       }
 
       return NextResponse.json({ ok: true, listing: data });

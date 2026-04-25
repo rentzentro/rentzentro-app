@@ -1,7 +1,9 @@
 // app/landlord/stripe-status/route.ts
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { isSupabaseAdminConfigured, supabaseAdmin } from '../../supabaseAdminClient';
+import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAnonKey, getSupabaseServiceRoleKey, getSupabaseUrl } from '../../lib/supabaseEnv';
+import { trackProductEvent } from '../../lib/productEventTracker';
 
 // Stripe client – no apiVersion so TS stops complaining
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || null;
@@ -9,18 +11,39 @@ const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 export async function POST(req: Request) {
   try {
-    if (!isSupabaseAdminConfigured()) {
+    const supabaseUrl = getSupabaseUrl();
+    const supabaseAnonKey = getSupabaseAnonKey();
+    const supabaseServiceRoleKey = getSupabaseServiceRoleKey();
+
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
       return NextResponse.json(
         { error: 'Server database configuration is missing.' },
         { status: 500 }
       );
     }
 
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+
     if (!stripe) {
       return NextResponse.json(
         { error: 'Stripe is not configured.' },
         { status: 500 }
       );
+    }
+
+    const authHeader = req.headers.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ')
+      ? authHeader.slice('Bearer '.length).trim()
+      : '';
+
+    if (!token) {
+      return NextResponse.json({ error: 'Missing bearer token.' }, { status: 401 });
+    }
+
+    const { data: authData, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !authData.user) {
+      return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 });
     }
 
     const { landlordId } = await req.json();
@@ -35,7 +58,7 @@ export async function POST(req: Request) {
     // 1) Get landlord with Stripe account id
     const { data: landlord, error: landlordError } = await supabaseAdmin
       .from('landlords')
-      .select('id, stripe_connect_account_id, stripe_connect_onboarded')
+      .select('id, user_id, stripe_connect_account_id, stripe_connect_onboarded')
       .eq('id', landlordId)
       .maybeSingle();
 
@@ -50,6 +73,13 @@ export async function POST(req: Request) {
     if (!landlord.stripe_connect_account_id) {
       // no account yet, definitely not onboarded
       return NextResponse.json({ onboarded: false }, { status: 200 });
+    }
+
+    if (landlord.user_id !== authData.user.id) {
+      return NextResponse.json(
+        { error: 'Forbidden: landlordId does not match authenticated user.' },
+        { status: 403 }
+      );
     }
 
     // 2) Check Stripe account status
@@ -71,6 +101,13 @@ export async function POST(req: Request) {
 
       if (updateError) {
         console.error('Stripe status update error:', updateError);
+      } else {
+        await trackProductEvent(supabaseAdmin, {
+          eventName: 'stripe_connect_onboarded',
+          landlordId: landlord.id,
+          landlordUserId: landlord.user_id,
+          metadata: { source: 'landlord/stripe-status' },
+        });
       }
     }
 
