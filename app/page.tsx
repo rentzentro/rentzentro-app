@@ -1043,8 +1043,6 @@ export default async function HomePage() {
               Helpful day-to-day tools for landlords and tenants
             </h2>
             <p className="mt-2 max-w-3xl text-[13px] leading-6 text-slate-300">
-              Manual or AI document and lease assistance is now highlighted on the home page so landlords can
-              draft cleaner lease language faster while still keeping full control of final terms.
             </p>
             <div className="mt-4 grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-sky-300/20 bg-slate-950/60 p-4">
