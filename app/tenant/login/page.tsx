@@ -40,8 +40,8 @@ export default function TenantLoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4 py-6">
-      <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950/80 p-6 shadow-xl shadow-black/40">
+    <main className="rz-auth-shell flex items-center justify-center">
+      <div className="rz-auth-card">
         <Link
           href="/"
           className="text-xs text-slate-400 hover:text-emerald-400"
@@ -71,15 +71,15 @@ export default function TenantLoginPage() {
             >
               Email address
             </label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-50 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              placeholder="you@example.com"
-            />
+              <input
+                id="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="rz-field"
+                placeholder="you@example.com"
+              />
           </div>
 
           <div className="space-y-1">
@@ -96,7 +96,7 @@ export default function TenantLoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 pr-10 text-sm text-slate-50 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                className="rz-field pr-12"
                 placeholder="Your password"
               />
               <button
@@ -112,7 +112,7 @@ export default function TenantLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/25 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-70"
+            className="rz-btn-primary shadow-lg shadow-emerald-500/25"
           >
             {loading ? 'Signing in…' : 'Log in'}
           </button>

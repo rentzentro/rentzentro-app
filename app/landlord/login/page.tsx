@@ -80,8 +80,8 @@ export default function LandlordLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/80 p-6 shadow-sm">
+    <div className="rz-auth-shell flex items-center justify-center">
+      <div className="rz-auth-card">
         <div className="mb-4">
           <Link
             href="/"
@@ -114,13 +114,13 @@ export default function LandlordLoginPage() {
             <label className="block text-[11px] text-slate-400 mb-1">
               Email
             </label>
-            <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-50 focus:ring-emerald-500"
-            />
+              <input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="rz-field"
+              />
           </div>
 
           <div>
@@ -133,7 +133,7 @@ export default function LandlordLoginPage() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 pr-16 text-sm text-slate-50 focus:ring-emerald-500"
+                className="rz-field pr-16"
               />
               <button
                 type="button"
@@ -159,7 +159,7 @@ export default function LandlordLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-3 w-full rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+            className="rz-btn-primary mt-3"
           >
             {loading ? 'Signing in…' : 'Sign in as landlord'}
           </button>

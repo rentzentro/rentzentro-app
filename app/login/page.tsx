@@ -23,8 +23,8 @@ function LoginCard({
 }) {
   const buttonClass =
     accent === 'emerald'
-      ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
-      : 'border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800';
+      ? 'rz-btn-primary'
+      : 'rz-btn-secondary';
 
   return (
     <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
@@ -33,7 +33,7 @@ function LoginCard({
 
       <Link
         href={href}
-        className={`mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition duration-200 active:scale-95 ${buttonClass}`}
+        className={`mt-5 ${buttonClass}`}
       >
         {buttonText}
       </Link>
@@ -99,14 +99,14 @@ export default function LoginChooserPage() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Link
               href="/landlord/signup"
-              className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 active:scale-95"
+              className="rz-btn-primary"
             >
               Create landlord account
             </Link>
 
             <Link
               href="/tenant/signup"
-              className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-800 active:scale-95"
+              className="rz-btn-secondary"
             >
               Create tenant account
             </Link>
