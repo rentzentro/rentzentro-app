@@ -101,18 +101,28 @@ export async function POST(req: Request) {
 
       const subs = await stripe.subscriptions.list({
         customer: customerId,
-        status: 'active',
-        limit: 1,
+        status: 'all',
+        limit: 10,
       });
 
-      if (subs.data.length === 0) {
+      const cancellable = subs.data.find((sub) => {
+        const status = (sub.status || '').toLowerCase();
+        return (
+          status === 'active' ||
+          status === 'trialing' ||
+          status === 'past_due' ||
+          status === 'unpaid'
+        );
+      });
+
+      if (!cancellable) {
         return NextResponse.json(
           { error: 'No active subscription to cancel.' },
           { status: 400 }
         );
       }
 
-      subscriptionId = subs.data[0].id;
+      subscriptionId = cancellable.id;
     }
 
     if (!subscriptionId) {
