@@ -1049,7 +1049,7 @@ export default async function HomePage() {
             </p>
             <div className="mt-4">
               <Link
-                href="/landlord/maintenance-directory"
+                href="/landlord/login?redirect=%2Flandlord%2Fmaintenance-directory"
                 className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-5 py-2.5 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-sky-300/40 hover:bg-white/5 active:scale-95"
               >
                 Explore maintenance directory
