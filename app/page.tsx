@@ -235,7 +235,7 @@ function LiveListingCard({
   return (
     <Link
       href={`/listings/${listing.slug}`}
-      className="group overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30 hover:bg-slate-900/70"
+      className="group overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70"
     >
       <div className="relative h-44 w-full overflow-hidden bg-slate-950/50 sm:h-48">
         {cover?.image_url ? (
@@ -262,19 +262,19 @@ function LiveListingCard({
         <p className="mt-1 text-[12px] text-slate-300">{loc || 'Location not specified'}</p>
 
         <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2.5">
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-2.5">
             <p className="text-slate-500">Beds / Baths</p>
             <p className="mt-0.5 font-semibold text-slate-100">
               {(listing.beds ?? '-') + ' / ' + (listing.baths ?? '-')}
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-2.5">
+          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-2.5">
             <p className="text-slate-500">Available</p>
             <p className="mt-0.5 font-semibold text-slate-100">{available}</p>
           </div>
         </div>
 
-        <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/40 p-2.5">
+        <div className="mt-3 rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-2.5">
           <p className="text-[11px] text-slate-500">Area / Address</p>
           <p className="mt-0.5 text-[12px] text-slate-200">{addressLine || 'Not provided'}</p>
           {listing.hide_exact_address && (
@@ -299,8 +299,8 @@ function StatCard({
 }) {
   const classes =
     tone === 'success'
-      ? 'border-emerald-500/40 bg-emerald-950/30'
-      : 'border-slate-800 bg-slate-900/80';
+      ? 'border-emerald-400/30 bg-emerald-950/25'
+      : 'border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950';
 
   return (
     <div className={`rounded-2xl border p-4 transition duration-300 hover:-translate-y-1 ${classes}`}>
@@ -324,7 +324,7 @@ function TrustCard({
   text: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
+    <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-4 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
       <p className="text-sm font-semibold text-slate-50">{title}</p>
       <p className="mt-2 text-[13px] leading-6 text-slate-400">{text}</p>
     </div>
@@ -335,7 +335,7 @@ function TrustCard({
 function NationwideCoverageMap() {
   return (
     <div className="relative w-full">
-      <div className="overflow-hidden rounded-2xl border border-blue-300/20 bg-slate-950/20 p-3 sm:p-4">
+      <div className="overflow-hidden rounded-2xl border border-[rgba(59,130,246,0.15)] bg-slate-950/20 p-3 sm:p-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/us-network-map.png"
@@ -358,7 +358,7 @@ function StepCard({
   text: string;
 }) {
   return (
-    <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
+    <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
       <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-300">
         {number}
       </div>
@@ -382,7 +382,7 @@ function Stars() {
 
 function TestimonialCard({ item }: { item: Testimonial }) {
   return (
-    <div className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30 hover:bg-slate-900/70">
+    <div className="group relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
       <div className="mb-4 flex items-center justify-between gap-3">
         <Stars />
@@ -420,8 +420,8 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
     <div
       className={`rounded-3xl border p-5 transition duration-300 hover:-translate-y-1 ${
         plan.featured
-          ? 'border-emerald-500/50 bg-emerald-500/10'
-          : 'border-slate-800 bg-slate-950/70 hover:border-emerald-500/20 hover:bg-slate-900/70'
+          ? 'border-emerald-400/30 bg-emerald-950/25'
+          : 'border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 hover:border-emerald-500/20 hover:bg-slate-900/70'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -432,7 +432,7 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
           </p>
         </div>
         {plan.featured && (
-          <span className="rounded-full border border-emerald-400/50 bg-emerald-500/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
+          <span className="rounded-full border border-emerald-400/50 bg-emerald-500/14 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-200">
             Most popular
           </span>
         )}
@@ -444,7 +444,7 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
       <ul className="mt-4 space-y-2.5">
         {plan.highlights.map((item) => (
           <li key={item} className="flex items-start gap-2 text-sm text-slate-200">
-            <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+            <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/14 text-[11px] text-emerald-300">
               ✓
             </span>
             <span>{item}</span>
@@ -524,9 +524,9 @@ export default async function HomePage() {
       />
 
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-28 top-16 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
-        <div className="absolute right-[-8rem] top-44 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" />
-        <div className="absolute bottom-24 left-1/3 h-56 w-56 rounded-full bg-violet-500/10 blur-3xl" />
+        <div className="absolute -left-28 top-16 h-72 w-72 rounded-full bg-emerald-500/14 blur-3xl" />
+        <div className="absolute right-[-8rem] top-44 h-80 w-80 rounded-full bg-emerald-500/7 blur-3xl" />
+        <div className="absolute bottom-24 left-1/3 h-56 w-56 rounded-full bg-emerald-500/7 blur-3xl" />
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-4 sm:px-5 sm:py-6 lg:px-6">
@@ -545,20 +545,20 @@ export default async function HomePage() {
           <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <Link
               href="/login"
-              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-2 text-center text-xs font-medium text-slate-100 transition duration-200 hover:scale-[1.02] hover:bg-slate-800 active:scale-95"
+              className="rounded-full border border-white/10 bg-slate-950/80 px-3 py-2 text-center text-xs font-medium text-slate-100 transition duration-200 hover:scale-[1.02] hover:border-emerald-400/40 hover:bg-white/5 active:scale-95"
             >
               Log in
             </Link>
           </div>
         </header>
 
-        <section className="grid gap-8 pb-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+        <section className="grid gap-8 pb-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="rz-fade-up rz-delay-2 order-1">
-            <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl lg:text-6xl">
+            <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight leading-[1.1] text-slate-50 sm:text-5xl lg:text-6xl">
               Run your entire rental business in one place
             </h1>
 
-            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">
               Stop chasing rent, juggling spreadsheets, and guessing your numbers. RentZentro
               brings listings, tenants, payments, expenses, and maintenance into one clean system
               — so you actually know what your properties are making.
@@ -567,13 +567,13 @@ export default async function HomePage() {
             <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap sm:items-center">
               <Link
                 href="/landlord/signup"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-gradient-to-r from-emerald-400 to-cyan-300 px-6 py-3 text-sm font-semibold text-slate-950 shadow-[0_10px_30px_rgba(16,185,129,0.35)] transition duration-200 hover:scale-[1.02] hover:from-emerald-300 hover:to-cyan-200 active:scale-95"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full bg-gradient-to-r from-emerald-400 to-emerald-300 px-6 py-3 text-sm font-semibold text-slate-950 shadow-[0_10px_30px_rgba(16,185,129,0.25)] transition duration-200 hover:scale-[1.02] hover:from-emerald-300 hover:to-emerald-200 active:scale-95"
               >
                 Create Free Account
               </Link>
               <Link
                 href="#demo"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-6 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-6 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-400/40 hover:bg-white/5 active:scale-95"
               >
                 Watch 2-Minute Demo
               </Link>
@@ -591,39 +591,39 @@ export default async function HomePage() {
 
             <div className="mt-5 grid max-w-xl gap-2.5 text-sm text-slate-200">
               <div className="flex items-start gap-2">
-                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/14 text-[11px] text-emerald-300">
                   ✓
                 </span>
                 <p>See exactly what each property is making</p>
               </div>
               <div className="flex items-start gap-2">
-                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/14 text-[11px] text-emerald-300">
                   ✓
                 </span>
                 <p>Know your real monthly profit instantly</p>
               </div>
               <div className="flex items-start gap-2">
-                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/14 text-[11px] text-emerald-300">
                   ✓
                 </span>
                 <p>Stop switching between tools</p>
               </div>
               <div className="flex items-start gap-2">
-                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/14 text-[11px] text-emerald-300">
                   ✓
                 </span>
                 <p>Use the location-based maintenance directory to find electricians, plumbers, and more</p>
               </div>
               <div className="flex items-start gap-2">
-                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/14 text-[11px] text-emerald-300">
                   ✓
                 </span>
                 <p>Order tenant screening through our TransUnion-powered partner flow</p>
               </div>
             </div>
 
-            <div className="mt-5 inline-flex w-fit items-center gap-3 rounded-2xl border border-sky-400/50 bg-sky-500/15 px-3 py-2 text-[11px] text-sky-100">
-              <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-sky-200/50 bg-[#00A6CE]">
+            <div className="mt-5 inline-flex w-fit items-center gap-3 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
+              <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg border border-emerald-400/30 bg-emerald-500/20">
                 <svg
                   aria-hidden="true"
                   viewBox="0 0 64 64"
@@ -658,16 +658,16 @@ export default async function HomePage() {
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
+              <span className="rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/20 hover:text-slate-300">
                 35-day free trial
               </span>
-              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
+              <span className="rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/20 hover:text-slate-300">
                 Plans: $19 / $29.95 / $59
               </span>
-              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
+              <span className="rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/20 hover:text-slate-300">
                 Clear unit-based tiers
               </span>
-              <span className="rounded-full border border-slate-800 bg-slate-900 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/30 hover:text-slate-300">
+              <span className="rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/20 hover:text-slate-300">
                 Secure payments via Stripe
               </span>
             </div>
@@ -695,26 +695,26 @@ export default async function HomePage() {
               <StatCard label="Monthly rent roll" value="$14,750" tone="success" />
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 transition duration-300 hover:border-emerald-500/20">
+            <div className="mt-4 rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/80 p-4 transition duration-300 hover:border-emerald-500/20">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-medium text-slate-100">Financial snapshot</p>
                 <span className="text-[10px] text-slate-500">This month</span>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-3">
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 transition duration-300 hover:-translate-y-0.5">
+                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-3 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-500/20 hover:bg-slate-900/70">
                   <p className="text-xs font-semibold text-slate-100">Income</p>
                   <p className="mt-1 text-xs text-slate-200">$10,100 collected</p>
                   <p className="mt-0.5 text-[10px] text-slate-500">Live payment view</p>
                 </div>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 transition duration-300 hover:-translate-y-0.5">
+                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-3 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-500/20 hover:bg-slate-900/70">
                   <p className="text-xs font-semibold text-slate-100">Expenses</p>
                   <p className="mt-1 text-xs text-slate-200">$2,240 logged</p>
                   <p className="mt-0.5 text-[10px] text-slate-500">Tracked by property</p>
                 </div>
 
-                <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-3 transition duration-300 hover:-translate-y-0.5">
+                <div className="rounded-2xl border border-emerald-400/30 bg-emerald-950/25 p-3 transition duration-300 hover:-translate-y-0.5">
                   <p className="text-xs font-semibold text-emerald-100">Net profit</p>
                   <p className="mt-1 text-xs text-emerald-100/90">$7,860</p>
                   <p className="mt-0.5 text-[10px] text-emerald-100/80">
@@ -725,7 +725,7 @@ export default async function HomePage() {
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 transition duration-300 hover:border-emerald-500/20">
+              <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/80 p-4 transition duration-300 hover:border-emerald-500/20">
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-sm font-medium text-slate-100">Recent payments</p>
                   <span className="text-[10px] text-slate-500">Last 3</span>
@@ -751,7 +751,7 @@ export default async function HomePage() {
                   ].map((p) => (
                     <div
                       key={p.name}
-                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2.5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70"
+                      className="flex items-center justify-between rounded-xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-3 py-2.5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70"
                     >
                       <div className="min-w-0 pr-3">
                         <p className="truncate text-[11px] font-medium text-slate-100">
@@ -767,7 +767,7 @@ export default async function HomePage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 transition duration-300 hover:border-emerald-500/20">
+              <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/80 p-4 transition duration-300 hover:border-emerald-500/20">
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-sm font-medium text-slate-100">Rent status</p>
                   <span className="text-[10px] text-slate-500">This month</span>
@@ -782,7 +782,7 @@ export default async function HomePage() {
                     <span className="text-[11px] text-amber-100">Due soon</span>
                     <span className="text-[11px] font-semibold text-amber-200">3 units</span>
                   </div>
-                  <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/30 px-3 py-2.5 transition duration-300 hover:-translate-y-0.5">
+                  <div className="flex items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-950/25 px-3 py-2.5 transition duration-300 hover:-translate-y-0.5">
                     <span className="text-[11px] text-emerald-100">Paid</span>
                     <span className="text-[11px] font-semibold text-emerald-200">8 units</span>
                   </div>
@@ -797,29 +797,29 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="rz-fade-up rz-delay-4 pb-10">
-          <div className="grid w-full gap-8 rounded-[30px] border border-blue-400/35 bg-gradient-to-br from-[#040b22] via-[#050f2f] to-[#020615] p-6 shadow-[0_24px_70px_rgba(2,8,30,0.7)] sm:p-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:gap-10">
+        <section className="rz-fade-up rz-delay-4 pb-14">
+          <div className="grid w-full gap-8 rounded-[30px] border border-[rgba(59,130,246,0.15)] bg-gradient-to-br from-slate-900/90 to-slate-950 p-6 shadow-[0_24px_70px_rgba(2,8,30,0.7)] sm:p-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:gap-10">
             <div className="max-w-2xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-300/90">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-300">
                 NATIONWIDE FOOTPRINT
               </p>
               <h2 className="mt-3 text-3xl font-semibold leading-tight text-slate-50 sm:text-4xl">
                 Built for landlords across the U.S.
               </h2>
-              <p className="mt-4 text-base leading-7 text-slate-300/95 sm:text-lg">
+              <p className="mt-4 text-base leading-7 text-slate-400/95 sm:text-lg">
                 Whether you manage one rental or a growing portfolio, RentZentro helps you
                 collect rent, track expenses, and keep your rental business organized in one
                 place.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3 text-sm text-sky-100/95">
-                <span className="inline-flex items-center gap-2 rounded-full border border-blue-300/30 bg-blue-500/12 px-4 py-2">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/25 text-[12px] text-blue-100">
+              <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-400">
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-[12px] text-emerald-100">
                     ✓
                   </span>
                   Works in all 50 states
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-blue-300/30 bg-blue-500/12 px-4 py-2">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-500/25 text-[12px] text-blue-100">
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-4 py-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-[12px] text-emerald-100">
                     👥
                   </span>
                   For DIY landlords and small portfolios
@@ -832,10 +832,10 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="rz-fade-up rz-delay-4 border-t border-slate-900 py-8">
-          <div className="mb-8 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 sm:p-6">
+        <section className="rz-fade-up rz-delay-4 border-t border-slate-900 py-14">
+          <div className="mb-8 rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-5 sm:p-6">
             <h2 className="text-2xl font-semibold text-slate-50">What most landlords deal with</h2>
-            <ul className="mt-4 space-y-3 text-sm text-slate-300">
+            <ul className="mt-4 space-y-3 text-sm text-slate-400">
               {[
                 'Tracking rent across apps, texts, and spreadsheets',
                 'No clear view of profit per property',
@@ -843,7 +843,7 @@ export default async function HomePage() {
                 'Scattered maintenance, documents, and communication',
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2">
-                  <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                  <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/14 text-[11px] text-emerald-300">
                     ✓
                   </span>
                   <span>{item}</span>
@@ -882,30 +882,30 @@ export default async function HomePage() {
           </p>
         </section>
 
-        <section className="rz-fade-up rz-delay-5 border-t border-slate-900 py-10">
-          <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-950 to-slate-950 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30 sm:p-6">
+        <section className="rz-fade-up rz-delay-5 border-t border-slate-900 py-14">
+          <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-950 to-slate-950 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90">
               Real property performance
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-emerald-300">
               Know what each property is actually making
             </h2>
-            <p className="mt-3 max-w-3xl text-[14px] leading-6 text-slate-300">
+            <p className="mt-3 max-w-3xl text-[14px] leading-6 text-slate-400">
               See income, expenses, and net profit together for each property — not in separate
               apps. RentZentro gives you a clear property-by-property view so you can make better
               decisions faster.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+              <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-3">
                 <p className="text-[10px] uppercase tracking-wide text-slate-500">Income</p>
                 <p className="mt-1 text-lg font-semibold text-slate-50">Tracked</p>
               </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+              <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-3">
                 <p className="text-[10px] uppercase tracking-wide text-slate-500">Expenses</p>
                 <p className="mt-1 text-lg font-semibold text-slate-50">Logged by property</p>
               </div>
-              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/30 p-3">
+              <div className="rounded-2xl border border-emerald-400/30 bg-emerald-950/25 p-3">
                 <p className="text-[10px] uppercase tracking-wide text-emerald-200/80">Net</p>
                 <p className="mt-1 text-lg font-semibold text-emerald-200">Visible instantly</p>
               </div>
@@ -913,7 +913,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section id="demo" className="rz-fade-up rz-delay-5 border-t border-slate-900 py-10">
+        <section id="demo" className="rz-fade-up rz-delay-5 border-t border-slate-900 py-14">
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -922,15 +922,15 @@ export default async function HomePage() {
               <h2 className="mt-2 text-2xl font-semibold text-slate-50">
                 See how RentZentro works in under 2 minutes
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                 Real walkthrough of the landlord dashboard, payments, expenses, and maintenance
                 flow.
               </p>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-950/70 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 sm:p-4">
-            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-slate-800 bg-black">
+          <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70 sm:p-4">
+            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
               <iframe
                 src="https://www.loom.com/embed/092d99c74b704644b8ae91fd76b5b60b"
                 frameBorder="0"
@@ -944,14 +944,14 @@ export default async function HomePage() {
               <p className="text-[12px] leading-5 text-slate-400">
                 Watch the actual product flow before creating your account.
               </p>
-              <span className="inline-flex w-fit items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-300">
+              <span className="inline-flex w-fit items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-3 py-1.5 text-[11px] font-medium text-slate-300">
                 2-minute demo
               </span>
             </div>
           </div>
         </section>
 
-        <section className="rz-fade-up rz-delay-6 border-t border-slate-900 py-10">
+        <section className="rz-fade-up rz-delay-6 border-t border-slate-900 py-14">
           <div className="mb-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Why landlords switch
@@ -966,9 +966,9 @@ export default async function HomePage() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
+            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70">
               <p className="text-sm font-semibold text-slate-50">Without RentZentro</p>
-              <div className="mt-4 space-y-3 text-[13px] text-slate-300">
+              <div className="mt-4 space-y-3 text-[13px] text-slate-400">
                 {[
                   'Rent tracked in one place',
                   'Expenses somewhere else',
@@ -976,7 +976,7 @@ export default async function HomePage() {
                   'Maintenance in your head',
                 ].map((item) => (
                   <div key={item} className="flex items-start gap-2">
-                    <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                    <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/14 text-[11px] text-emerald-300">
                       ✓
                     </span>
                     <p>{item}</p>
@@ -985,7 +985,7 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-950 to-slate-950 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/30">
+            <div className="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-slate-950 to-slate-950 p-5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20">
               <p className="text-sm font-semibold text-slate-50">With RentZentro</p>
               <div className="mt-4 space-y-3 text-[13px] text-slate-200">
                 {[
@@ -995,7 +995,7 @@ export default async function HomePage() {
                   'Maintenance fully tracked',
                 ].map((item) => (
                   <div key={item} className="flex items-start gap-2">
-                    <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-[11px] text-emerald-300">
+                    <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/14 text-[11px] text-emerald-300">
                       ✓
                     </span>
                     <p>{item}</p>
@@ -1006,7 +1006,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-10">
+        <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-14">
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -1015,7 +1015,7 @@ export default async function HomePage() {
               <h2 className="mt-2 text-2xl font-semibold text-slate-50">
                 Clear plans based on your number of units
               </h2>
-              <p className="mt-2 max-w-3xl text-[14px] leading-6 text-slate-300">
+              <p className="mt-2 max-w-3xl text-[14px] leading-6 text-slate-400">
                 Start with a 35-day free trial. Then choose a plan that fits your portfolio size.
                 Every plan includes rent collection, maintenance, documents, and financial
                 visibility.
@@ -1030,15 +1030,15 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-10">
-          <div className="mb-6 rounded-3xl border border-sky-500/30 bg-gradient-to-r from-sky-500/10 via-slate-950 to-slate-950 p-5 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-sky-200/90">
+        <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-14">
+          <div className="mb-6 rounded-3xl border border-emerald-400/30 bg-emerald-950/25 p-5 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-200/90">
               New on RentZentro
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-50">
               Location-based maintenance directory for trusted pros
             </h2>
-            <p className="mt-3 max-w-3xl text-[14px] leading-6 text-slate-300">
+            <p className="mt-3 max-w-3xl text-[14px] leading-6 text-slate-400">
               Need a plumber, electrician, HVAC tech, or general contractor? Landlords can browse
               maintenance pros by location, save preferred vendors, and keep maintenance work
               organized in one place.
@@ -1046,7 +1046,7 @@ export default async function HomePage() {
             <div className="mt-4">
               <Link
                 href="/landlord/maintenance-directory"
-                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-sky-400/40 bg-sky-500/10 px-5 py-2.5 text-sm font-semibold text-sky-100 transition duration-200 hover:scale-[1.02] hover:border-sky-300/60 hover:bg-sky-500/20 active:scale-95"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-full border border-white/10 bg-slate-950/80 px-5 py-2.5 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-400/40 hover:bg-white/5 active:scale-95"
               >
                 Explore maintenance directory
               </Link>
@@ -1081,7 +1081,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
+        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-14">
           <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -1109,7 +1109,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
+        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-14">
           <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -1132,7 +1132,7 @@ export default async function HomePage() {
           </div>
 
           {publicListings.length === 0 ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70">
+            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70">
               <p className="text-sm font-semibold text-slate-100">
                 Landlords can create listings and share them anywhere.
               </p>
@@ -1154,12 +1154,12 @@ export default async function HomePage() {
           )}
         </section>
 
-        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-10">
-          <div className="rounded-3xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-slate-950 p-5 transition duration-300 hover:border-emerald-500/40 hover:shadow-[0_18px_45px_rgba(0,0,0,0.4)] sm:p-6">
+        <section className="rz-fade-up rz-delay-8 border-t border-slate-900 py-14">
+          <div className="rounded-3xl border border-emerald-400/30 bg-emerald-950/25 p-5 transition duration-300 hover:border-emerald-500/20 hover:shadow-[0_18px_45px_rgba(0,0,0,0.4)] sm:p-6">
             <h2 className="text-2xl font-semibold text-slate-50">
               Start managing your rentals the right way
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
               Set up your first property in minutes and see your real numbers immediately.
             </p>
 
@@ -1172,7 +1172,7 @@ export default async function HomePage() {
               </Link>
               <Link
                 href="/login"
-                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-slate-800 bg-slate-950 px-6 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-500/60 hover:text-emerald-200 active:scale-95"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-full border border-white/10 bg-slate-950 px-6 py-3 text-sm font-semibold text-slate-200 transition duration-200 hover:scale-[1.02] hover:border-emerald-400/40 hover:bg-white/5 active:scale-95"
               >
                 Log in
               </Link>
