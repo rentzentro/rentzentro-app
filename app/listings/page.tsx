@@ -60,7 +60,7 @@ export default async function PublicListingsPage({
       <div className="mx-auto max-w-5xl px-4 py-10">
         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_20px_50px_rgba(2,6,23,0.45)] backdrop-blur-xl sm:p-8">
           <p className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
-            RentZentro Search
+            RENTAL SEARCH
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
             Where will you end up?
