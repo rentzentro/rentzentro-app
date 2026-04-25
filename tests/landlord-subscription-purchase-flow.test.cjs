@@ -132,6 +132,11 @@ test('blocks checkout when landlord already has an active subscription', async (
       subscriptions: {
         list: async () => ({ data: [{ id: 'sub_existing', status: 'active' }] }),
       },
+      billingPortal: {
+        sessions: {
+          create: async () => ({ url: 'https://billing.stripe.test/session-1' }),
+        },
+      },
       checkout: {
         sessions: {
           create: async () => ({ url: 'https://checkout.stripe.test/session-2' }),
@@ -156,6 +161,7 @@ test('blocks checkout when landlord already has an active subscription', async (
   assert.equal(result.status, 409);
   assert.equal(
     result.body.error,
-    'An active subscription already exists for this account. Please use billing portal to manage your plan.'
+    'You already have an active subscription. Manage it in billing.'
   );
+  assert.equal(result.body.portalUrl, 'https://billing.stripe.test/session-1');
 });

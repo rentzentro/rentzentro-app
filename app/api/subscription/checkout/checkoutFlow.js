@@ -120,9 +120,21 @@ async function createSubscriptionCheckout({
     );
 
     if (alreadySubscribed) {
+      let portalUrl = null;
+      try {
+        const session = await stripe.billingPortal.sessions.create({
+          customer: customerId,
+          return_url: `${appUrl}/landlord/subscription`,
+        });
+        portalUrl = session?.url || null;
+      } catch (_) {
+        portalUrl = null;
+      }
+
       return json(409, {
         error:
-          'An active subscription already exists for this account. Please use billing portal to manage your plan.',
+          'You already have an active subscription. Manage it in billing.',
+        portalUrl,
       });
     }
 
