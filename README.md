@@ -1,6 +1,6 @@
 # RentZentro
 
-RentZentro is a full-scale rental operations platform for landlords and their tenants.
+RentZentro is all-in-one rental operations software built for independent landlords and growing teams.
 
 It is built to run the full leasing lifecycle in one place:
 
@@ -10,7 +10,7 @@ It is built to run the full leasing lifecycle in one place:
 
 ## Positioning
 
-RentZentro is not a “lightweight” tool. It is designed to be a strong, production-ready operating system for rental businesses that need reliability and scale.
+RentZentro is designed to give landlords complete operational coverage without enterprise-level complexity.
 
 - Works for single-property landlords and expanding teams.
 - Supports large portfolios through the Growth plan and custom plan path for portfolios above the standard tier limits.
@@ -44,6 +44,7 @@ These are the same plan prices reflected in the app pricing surfaces.
 - **Stripe Connect onboarding** for payout routing.
 - **Property + tenant operations** covering residents, payment visibility, and daily management.
 - **Maintenance management** with ticket submission/tracking and notification endpoints.
+- **Maintenance worker directory** to quickly find nearby repair pros and save preferred vendors.
 - **In-app messaging** backed by email delivery for real-world communication.
 - **Document workflows** and landlord-facing document management screens.
 - **Expense and accounting surfaces** with accounting workflow endpoints and integrations entry points.
@@ -58,6 +59,7 @@ These are the same plan prices reflected in the app pricing surfaces.
 - **Maintenance request submission + status tracking**.
 - **Messaging with landlord/team**.
 - **Document access and day-to-day portal workflows**.
+- **Explore Nearby** links for local places and **weekend events near home** inside the tenant portal.
 
 ---
 
