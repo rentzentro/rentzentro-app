@@ -1,5 +1,6 @@
 // app/lib/getOwnerContext.ts
 import { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from './database.types';
 
 type LandlordRow = {
   id: number;
@@ -22,7 +23,7 @@ export type OwnerContext =
     };
 
 export async function getOwnerContext(
-  supabase: SupabaseClient
+  supabase: SupabaseClient<Database>
 ): Promise<OwnerContext> {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) {
