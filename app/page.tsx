@@ -797,6 +797,45 @@ export default async function HomePage() {
           </div>
         </section>
 
+        <section id="demo" className="rz-fade-up rz-delay-5 border-t border-slate-900 py-14">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Product walkthrough
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-50">
+                See how RentZentro works in under 2 minutes
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                Real walkthrough of the landlord dashboard, payments, expenses, and maintenance
+                flow.
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70 sm:p-4">
+            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
+              <iframe
+                src="https://www.youtube.com/embed/cRv_PzLZZAI"
+                frameBorder="0"
+                allowFullScreen
+                className="h-full w-full"
+                title="RentZentro product demo"
+              />
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[12px] leading-5 text-slate-400">
+                Watch the actual product flow before creating your account.
+              </p>
+              <span className="inline-flex w-fit items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-3 py-1.5 text-[11px] font-medium text-slate-300">
+                2-minute demo
+              </span>
+            </div>
+          </div>
+        </section>
+
+
         <section className="rz-fade-up rz-delay-4 pb-14">
           <div className="grid w-full gap-8 rounded-[30px] border border-[rgba(59,130,246,0.15)] bg-gradient-to-br from-slate-900/90 to-slate-950 p-6 shadow-[0_24px_70px_rgba(2,8,30,0.7)] sm:p-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:gap-10">
             <div className="max-w-2xl">
@@ -909,44 +948,6 @@ export default async function HomePage() {
                 <p className="text-[10px] uppercase tracking-wide text-emerald-200/80">Net</p>
                 <p className="mt-1 text-lg font-semibold text-emerald-200">Visible instantly</p>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="demo" className="rz-fade-up rz-delay-5 border-t border-slate-900 py-14">
-          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Product walkthrough
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-                See how RentZentro works in under 2 minutes
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                Real walkthrough of the landlord dashboard, payments, expenses, and maintenance
-                flow.
-              </p>
-            </div>
-          </div>
-
-          <div className="overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-3 shadow-[0_18px_45px_rgba(0,0,0,0.65)] transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 hover:bg-slate-900/70 sm:p-4">
-            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black">
-              <iframe
-                src="https://www.youtube.com/embed/cRv_PzLZZAI"
-                frameBorder="0"
-                allowFullScreen
-                className="h-full w-full"
-                title="RentZentro product demo"
-              />
-            </div>
-
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[12px] leading-5 text-slate-400">
-                Watch the actual product flow before creating your account.
-              </p>
-              <span className="inline-flex w-fit items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-3 py-1.5 text-[11px] font-medium text-slate-300">
-                2-minute demo
-              </span>
             </div>
           </div>
         </section>
