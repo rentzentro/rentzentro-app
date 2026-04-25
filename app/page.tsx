@@ -1061,14 +1061,13 @@ export default async function HomePage() {
           <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Public listings
+                Nationwide listings
               </p>
               <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-                Create a listing once. Share it anywhere.
+                Find your next rental faster.
               </h2>
               <p className="mt-2 text-[13px] leading-6 text-slate-400">
-                Post in Facebook groups, Marketplace, Craigslist, or text — then send everyone to
-                one clean listing page. Manage leads, tenants, and rent in the same place.
+                Search rentals across top platforms in seconds.
               </p>
             </div>
 
@@ -1076,14 +1075,14 @@ export default async function HomePage() {
               href="/listings"
               className="inline-flex min-h-[44px] w-full items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 transition duration-200 hover:scale-[1.02] hover:bg-emerald-400 active:scale-95 md:w-auto"
             >
-              View sample listing pages
+              Search rentals
             </Link>
           </div>
 
           {publicListings.length === 0 ? (
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70">
               <p className="text-sm font-semibold text-slate-100">
-                Landlords can create one listing page and share it anywhere.
+                Landlords can create listings and share them anywhere.
               </p>
               <p className="mt-1 text-[12px] leading-5 text-slate-400">
                 RentZentro does not auto-post to listing platforms. You stay in control of where
