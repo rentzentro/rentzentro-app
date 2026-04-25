@@ -331,6 +331,78 @@ function TrustCard({
   );
 }
 
+
+function NationwideCoverageMap() {
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-cyan-400/30 bg-gradient-to-br from-sky-500/20 via-blue-500/10 to-slate-950 p-4 shadow-[0_20px_45px_rgba(8,47,73,0.5)]">
+      <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-cyan-300/20 blur-3xl" />
+      <div className="absolute -bottom-16 -left-10 h-36 w-36 rounded-full bg-blue-500/20 blur-3xl" />
+      <svg viewBox="0 0 900 520" className="relative z-10 w-full" role="img" aria-label="Stylized United States coverage map with connection lines">
+        <defs>
+          <linearGradient id="usFill" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="#1d4ed8" stopOpacity="0.95" />
+          </linearGradient>
+          <filter id="rzGlow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="2.2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <path
+          d="M34 208l32-78 116-34 144 8 140-26 80 18 101 2 129 63-34 34-10 59-17 37-31 44-84 18-81 8-96 23-78-10-90 15-96-16-49 17-36-60-64-16z"
+          fill="url(#usFill)"
+          stroke="#bfdbfe"
+          strokeWidth="3"
+          opacity="0.92"
+        />
+
+        {[
+          [130, 170, 252, 150],
+          [220, 205, 358, 150],
+          [268, 240, 472, 148],
+          [340, 180, 548, 170],
+          [408, 228, 650, 178],
+          [500, 200, 736, 242],
+          [232, 268, 418, 220],
+          [330, 300, 540, 244],
+          [446, 280, 680, 290],
+          [552, 246, 748, 196],
+        ].map((line, i) => (
+          <path
+            key={i}
+            d={`M${line[0]} ${line[1]} Q ${(line[0] + line[2]) / 2} ${Math.min(line[1], line[3]) - 45} ${line[2]} ${line[3]}`}
+            fill="none"
+            stroke="#e0f2fe"
+            strokeWidth="2"
+            opacity="0.7"
+          />
+        ))}
+
+        {[
+          [106, 187],
+          [158, 246],
+          [226, 170],
+          [286, 276],
+          [350, 165],
+          [410, 250],
+          [476, 165],
+          [542, 258],
+          [608, 185],
+          [684, 279],
+          [742, 195],
+          [786, 250],
+        ].map((dot, i) => (
+          <circle key={i} cx={dot[0]} cy={dot[1]} r="5.2" fill="#f8fafc" filter="url(#rzGlow)" />
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 function StepCard({
   number,
   title,
@@ -777,6 +849,28 @@ export default async function HomePage() {
                 </p>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="rz-fade-up rz-delay-4 pb-10">
+          <div className="grid gap-4 rounded-3xl border border-cyan-400/25 bg-gradient-to-br from-slate-900/80 via-slate-950 to-slate-950 p-4 shadow-[0_18px_60px_rgba(2,6,23,0.55)] sm:p-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-200/80">
+                Nationwide footprint
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-50 sm:text-3xl">
+                Trusted by landlords nationwide
+              </h2>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300">
+                From single-unit owners to growing portfolios, landlords across the U.S. use
+                RentZentro to collect rent, track expenses, and keep operations in one place.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-cyan-100/90">
+                <span className="rounded-full border border-cyan-300/30 bg-cyan-500/10 px-3 py-1.5">All 50 states supported</span>
+                <span className="rounded-full border border-cyan-300/30 bg-cyan-500/10 px-3 py-1.5">Landlords and property managers</span>
+              </div>
+            </div>
+            <NationwideCoverageMap />
           </div>
         </section>
 
