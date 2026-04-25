@@ -59,6 +59,11 @@ export default function LandlordSettingsPage() {
         }
 
         const user = authData.user;
+        if (!user.email) {
+          router.push('/landlord/login');
+          return;
+        }
+        const userEmail: string = user.email;
 
         // Load landlord by user_id first
         let { data: landlordRow, error: landlordError } = await supabase
@@ -81,7 +86,7 @@ export default function LandlordSettingsPage() {
             .select(
               'id, email, name, stripe_connect_account_id, stripe_connect_onboarded, subscription_status, trial_active, trial_end'
             )
-            .eq('email', user.email)
+            .eq('email', userEmail)
             .maybeSingle();
 
           if (byEmail.error) {

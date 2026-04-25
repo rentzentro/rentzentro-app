@@ -1,10 +1,9 @@
 // app/supabaseClient.ts
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from './lib/database.types';
 import { getSupabaseAnonKey, getSupabaseUrl } from './lib/supabaseEnv';
 
-type BrowserSupabaseClient = SupabaseClient<Database>;
+type BrowserSupabaseClient = SupabaseClient<any, 'public', any>;
 
 let cachedClient: BrowserSupabaseClient | null = null;
 
@@ -31,7 +30,7 @@ export function getSupabaseBrowserClient(): BrowserSupabaseClient {
     throw new Error(`Supabase browser client is not configured: ${missingReason}`);
   }
 
-  cachedClient = createClient<Database>(
+  cachedClient = createClient(
     getSupabaseUrl() as string,
     getSupabaseAnonKey() as string,
   );

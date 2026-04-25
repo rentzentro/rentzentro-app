@@ -4,9 +4,9 @@ import type { Database } from './database.types';
 
 type LandlordRow = {
   id: number;
-  email: string;
+  email: string | null;
   name: string | null;
-  user_id: string | null;
+  user_id: string;
 };
 
 export type OwnerContext =
@@ -59,14 +59,14 @@ export async function getOwnerContext(
       throw new Error('Unable to load landlord account.');
     }
 
-    landlordRow = byEmail.data as LandlordRow | null;
+    landlordRow = byEmail.data;
   }
 
   if (landlordRow && landlordRow.user_id) {
     return {
       mode: 'landlord',
       ownerUserId: landlordRow.user_id,
-      landlord: landlordRow as LandlordRow,
+      landlord: landlordRow,
     };
   }
 
@@ -134,7 +134,7 @@ export async function getOwnerContext(
   return {
     mode: 'team',
     ownerUserId,
-    landlord: ownerLandlord as LandlordRow,
+    landlord: ownerLandlord,
     teamMemberId: teamRow.id as number,
   };
 }

@@ -35,6 +35,7 @@ export default function StripeConnectCompletePage() {
         }
 
         const user = authData.user;
+        const userEmail: string = user.email ?? "";
 
         // Load landlord row by user_id first
         let { data: landlordRow, error: landlordError } = await supabase
@@ -53,7 +54,7 @@ export default function StripeConnectCompletePage() {
           const byEmail = await supabase
             .from('landlords')
             .select('id, email, name')
-            .eq('email', user.email)
+            .eq('email', userEmail)
             .maybeSingle();
 
           if (byEmail.error) {
