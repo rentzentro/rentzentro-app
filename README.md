@@ -47,6 +47,7 @@ These are the same plan prices reflected in the app pricing surfaces.
 - **Maintenance worker directory** to quickly find nearby repair pros and save preferred vendors.
 - **In-app messaging** backed by email delivery for real-world communication.
 - **Document workflows** and landlord-facing document management screens.
+- **Manual or AI-generated lease assistance** to help draft stronger lease language while keeping final landlord control.
 - **Expense and accounting surfaces** with accounting workflow endpoints and integrations entry points.
 - **E-sign flow support** with purchasable e-sign credits and webhook handling.
 - **Owner metrics/dashboard endpoints** for performance visibility.
