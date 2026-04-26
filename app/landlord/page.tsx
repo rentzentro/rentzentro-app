@@ -993,7 +993,7 @@ export default function LandlordDashboardPage() {
     <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
       💰
     </span>
-    View report
+    Expense report
   </p>
   <p className="text-[11px] text-slate-400">
     Open your expense report and export it for Excel.
