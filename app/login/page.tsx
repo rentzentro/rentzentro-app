@@ -48,7 +48,7 @@ export default function LoginChooserPage() {
         <div className="mb-4">
           <Link
             href="/"
-            className="text-[11px] text-slate-500 transition hover:text-emerald-300"
+            className="rz-btn-nav"
           >
             ← Back to homepage
           </Link>

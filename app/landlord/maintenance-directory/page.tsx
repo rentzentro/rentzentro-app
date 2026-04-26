@@ -160,7 +160,7 @@ export default function MaintenanceDirectoryPage() {
 
           <Link
             href="/landlord"
-            className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-100 hover:bg-slate-800"
+            className="rz-btn-nav"
           >
             Back to dashboard
           </Link>

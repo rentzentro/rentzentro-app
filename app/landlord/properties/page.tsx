@@ -260,7 +260,7 @@ export default function LandlordPropertiesPage() {
           <div className="flex flex-wrap gap-2 md:justify-end">
             <Link
               href="/landlord"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+              className="rz-btn-nav"
             >
               Back to dashboard
             </Link>

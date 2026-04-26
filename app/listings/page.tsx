@@ -75,7 +75,7 @@ export default async function PublicListingsPage({
           <div className="mt-3 flex flex-wrap gap-3 pt-1">
             <Link
               href="/"
-              className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-5 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-slate-800"
+              className="rz-btn-nav"
             >
               Back to homepage
             </Link>

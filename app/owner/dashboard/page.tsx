@@ -154,13 +154,13 @@ export default function OwnerDashboardPage() {
           <div className="flex flex-wrap gap-2 justify-end text-xs">
             <Link
               href="/"
-              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-slate-100 hover:bg-slate-800"
+              className="rz-btn-nav"
             >
               Back to marketing site
             </Link>
             <Link
               href="/landlord"
-              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-slate-100 hover:bg-slate-800"
+              className="rz-btn-nav"
             >
               Landlord dashboard
             </Link>

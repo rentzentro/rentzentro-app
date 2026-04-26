@@ -44,7 +44,7 @@ export default function TenantLoginPage() {
       <div className="rz-auth-card">
         <Link
           href="/"
-          className="text-xs text-slate-400 hover:text-emerald-400"
+          className="rz-btn-nav"
         >
           ← Back to homepage
         </Link>
