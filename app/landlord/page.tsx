@@ -206,6 +206,7 @@ export default function LandlordDashboardPage() {
     useState<MaintenanceRow[]>([]);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const [actionsCollapsed, setActionsCollapsed] = useState(false);
 
   // Team member flags
   const [isTeamMember, setIsTeamMember] = useState(false);
@@ -486,20 +487,6 @@ export default function LandlordDashboardPage() {
     };
   });
 
-  const topExpenseCategories = Array.from(
-    expenses.reduce((map, exp) => {
-      if (!exp.expense_date || exp.expense_date.slice(0, 7) !== currentMonthKey) {
-        return map;
-      }
-      const key = exp.category?.trim() || 'Other';
-      map.set(key, (map.get(key) || 0) + (exp.amount || 0));
-      return map;
-    }, new Map<string, number>())
-  )
-    .map(([category, total]) => ({ category, total }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 4);
-
   const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const sevenDaysFromNow = new Date(
     todayOnly.getFullYear(),
@@ -534,6 +521,15 @@ export default function LandlordDashboardPage() {
   const newMaintenanceCount = maintenanceRequests.filter(
     (m) => m.status?.toLowerCase() === 'new'
   ).length;
+  const monthlyVolume = monthlyIncome + monthlyExpenses;
+  const incomeSharePct = monthlyVolume > 0 ? (monthlyIncome / monthlyVolume) * 100 : 0;
+  const expenseSharePct =
+    monthlyVolume > 0 ? (monthlyExpenses / monthlyVolume) * 100 : 0;
+
+  const performanceScale = Math.max(
+    ...propertyPerformance.map((p) => Math.max(p.income, p.expense, Math.abs(p.net))),
+    1
+  );
 
   // ---------- Overdue amount helper (match tenant portal math) ----------
 
@@ -708,470 +704,155 @@ export default function LandlordDashboardPage() {
   // If we're here: landlord is allowed → show full dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="mx-auto max-w-5xl px-4 py-8">
-        {/* Header / breadcrumb */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
-          <div>
-            <div className="text-xs text-slate-500 flex gap-2">
-              <Link href="/landlord" className="hover:text-emerald-400">
-                Landlord
-              </Link>
-              <span>/</span>
-              <span className="text-slate-300">Dashboard</span>
-            </div>
-            <h1 className="text-xl font-semibold mt-1 text-slate-50">
-              Landlord dashboard
-            </h1>
-            <p className="text-[13px] text-slate-400">
-              Overview of your units, rent status, and recent payments.
-            </p>
-            {isTeamMember && (
-              <p className="mt-1 text-[11px] text-emerald-300">
-                You&apos;re logged in as a{' '}
-                {teamRole === 'viewer'
-                  ? 'viewer (read-only)'
-                  : 'manager team member'}
-                .
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        <div className="mb-6 rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950/60 p-6 shadow-2xl">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-sm text-slate-400">
+                Welcome back, {landlord.name || 'Landlord'} 👋
               </p>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-2 md:justify-end">
+              <h1 className="mt-1 text-2xl font-semibold">Portfolio Command Center</h1>
+              <p className="mt-1 text-xs text-slate-400">
+                {today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} snapshot
+              </p>
+            </div>
             <button
               type="button"
               onClick={handleSignOut}
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+              className="rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-xs text-slate-200 hover:bg-slate-800"
             >
               Log out
             </button>
           </div>
+          {isTeamMember && (
+            <p className="mt-3 text-xs text-emerald-300">
+              Team mode: {teamRole === 'viewer' ? 'Viewer (read-only)' : 'Manager'}.
+            </p>
+          )}
         </div>
 
-        {error && (
-          <div className="mb-4 text-sm p-3 rounded-2xl bg-rose-950/40 border border-rose-500/40 text-rose-100">
-            {error}
-          </div>
-        )}
-
-        {/* ACH / Card info banner */}
-        <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-[12px] text-slate-300">
-          <p className="font-semibold text-slate-100">Payment timing note</p>
-          <p className="mt-1 text-slate-400">
-            <span className="text-slate-200 font-medium">Card</span> payments usually confirm quickly.
-            <span className="mx-1">•</span>
-            <span className="text-slate-200 font-medium">Bank transfer (ACH)</span> payments can take{' '}
-            <span className="text-slate-200 font-medium">1–5 business days</span> to fully clear.
-            During that time, the tenant may show as “paid” on their side while the payout is still processing.
-          </p>
-        </div>
-
-        {/* Summary cards */}
-        <div className="grid gap-4 md:grid-cols-3 mb-6">
-          <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
-            <p className="text-xs text-slate-500 uppercase tracking-wide">
-              Properties
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-slate-50">
-              {properties.length}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              Total units you&apos;re tracking in RentZentro.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
-            <p className="text-xs text-slate-500 uppercase tracking-wide">
-              Active tenants
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-slate-50">
-              {activeTenants}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              Tenants with current leases.
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
-            <p className="text-xs text-slate-500 uppercase tracking-wide">
-              Monthly rent roll
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-emerald-400">
-              {formatCurrency(monthlyRentRoll)}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              Rent for all current units this month.
-            </p>
-          </div>
-        </div>
-
-
-        {/* Financial summary */}
-        <section className="mb-6 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Financial summary
-              </p>
-              <p className="mt-1 text-sm text-slate-200">
-                Income, expenses, and net for {today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.
-              </p>
+        <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
+          <aside className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4 xl:sticky xl:top-6 xl:h-fit">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Actions</p>
+              <button
+                type="button"
+                onClick={() => setActionsCollapsed((prev) => !prev)}
+                className="rounded-md border border-slate-700 px-2 py-1 text-[10px] font-medium text-slate-300 hover:bg-slate-800"
+                aria-expanded={!actionsCollapsed}
+                aria-label={actionsCollapsed ? 'Expand actions menu' : 'Collapse actions menu'}
+              >
+                {actionsCollapsed ? 'Show' : 'Hide'}
+              </button>
             </div>
-            <Link
-              href="/landlord/expenses"
-              className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200"
-            >
-              View expense report
-            </Link>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3 mb-4">
-            <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Monthly income
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-emerald-400">
-                {formatCurrency(monthlyIncome)}
-              </p>
-              <p className="mt-1 text-xs text-slate-400">
-                Confirmed rent payments recorded this month.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Monthly expenses
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-rose-300">
-                {formatCurrency(monthlyExpenses)}
-              </p>
-              <p className="mt-1 text-xs text-slate-400">
-                Expenses logged to properties and general operations.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-900/80 to-slate-950/80 border border-slate-800 shadow-sm">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Net profit
-              </p>
-              <p className={`mt-2 text-2xl font-semibold ${monthlyNet >= 0 ? 'text-emerald-400' : 'text-rose-300'}`}>
-                {formatCurrency(monthlyNet)}
-              </p>
-              <p className="mt-1 text-xs text-slate-400">
-                Income minus expenses for the current month.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wide">
-                    Property performance
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-slate-50">
-                    This month by property
-                  </p>
-                </div>
+            {!actionsCollapsed && (
+              <div className="max-h-[72vh] space-y-2 overflow-y-auto pr-1 text-xs">
+              {[
+                ['🏠', 'Properties', '/landlord/properties'],
+                ['👥', 'Tenants', '/landlord/tenants'],
+                ['💰', 'Expense report', '/landlord/expenses'],
+                ['💳', 'Payments', '/landlord/payments'],
+                ['🛠️', 'Maintenance', '/landlord/maintenance'],
+                ['🔎', 'Maintenance directory', '/landlord/maintenance-directory'],
+                ['💬', 'Messages', '/landlord/messages'],
+                ['📄', 'Documents & e-sign', '/landlord/documents'],
+                ['🧾', 'Templates', '/landlord/templates'],
+                ['👤', 'Team access', '/landlord/team'],
+                ['⚙️', 'Account & billing', '/landlord/settings'],
+                ['📚', 'Accounting', '/landlord/accounting'],
+                ['🏷️', 'Listings', '/landlord/listings'],
+              ].map(([icon, label, href]) => (
+                <Link
+                  key={`${href}-${label}`}
+                  href={href}
+                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-200 hover:border-indigo-400/60 hover:bg-slate-900"
+                >
+                  <span className="flex items-center gap-2">
+                    <span>{icon}</span>
+                    {label}
+                  </span>
+                  {(label === 'Messages' && unreadMessagesCount > 0) || (label === 'Maintenance' && newMaintenanceCount > 0) ? (
+                    <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-slate-950">
+                      {label === 'Messages' ? unreadMessagesCount : newMaintenanceCount}
+                    </span>
+                  ) : null}
+                </Link>
+              ))}
               </div>
+            )}
+          </aside>
 
-              {propertyPerformance.length === 0 ? (
-                <p className="text-xs text-slate-500">
-                  No properties yet.
+          <main className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-4">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+                <p className="text-xs text-slate-400">Monthly income</p>
+                <p className="mt-2 text-3xl font-semibold text-emerald-300">{formatCurrency(monthlyIncome)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+                <p className="text-xs text-slate-400">Monthly expenses</p>
+                <p className="mt-2 text-3xl font-semibold text-rose-300">{formatCurrency(monthlyExpenses)}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+                <p className="text-xs text-slate-400">Net profit</p>
+                <p className={`mt-2 text-3xl font-semibold ${monthlyNet >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  {formatCurrency(monthlyNet)}
                 </p>
-              ) : (
-                <div className="space-y-2">
-                  {propertyPerformance.map((p) => (
-                    <div
-                      key={p.id}
-                      className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-slate-100">
-                            {p.name || 'Untitled property'}
-                            {p.unit_label ? ` · ${p.unit_label}` : ''}
-                          </p>
-                          <p className="text-[11px] text-slate-400">
-                            Income {formatCurrency(p.income)} • Expenses {formatCurrency(p.expense)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`font-semibold ${p.net >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                            {formatCurrency(p.net)}
-                          </p>
-                          <p className="text-[10px] text-slate-500">Net</p>
-                        </div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+                <p className="text-xs text-slate-400">Active portfolio</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-100">{totalProperties}</p>
+                <p className="text-xs text-slate-500">{activeTenants} active tenants</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+              <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-400">Property performance</p>
+                <div className="mt-3 space-y-3">
+                  {propertyPerformance.slice(0, 6).map((p) => (
+                    <div key={p.id} className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                      <div className="mb-2 flex items-center justify-between text-xs">
+                        <p className="font-medium text-slate-100">
+                          {p.name || 'Untitled property'}{p.unit_label ? ` · ${p.unit_label}` : ''}
+                        </p>
+                        <p className={p.net >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{formatCurrency(p.net)}</p>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded bg-slate-800">
+                        <div className="h-full bg-emerald-400" style={{ width: `${Math.min(100, (p.income / performanceScale) * 100)}%` }} />
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded bg-slate-800">
+                        <div className="h-full bg-rose-400" style={{ width: `${Math.min(100, (p.expense / performanceScale) * 100)}%` }} />
                       </div>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </section>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Expense categories
-              </p>
-              <p className="mt-1 text-sm font-medium text-slate-50">
-                Top spending this month
-              </p>
-
-              {topExpenseCategories.length === 0 ? (
-                <p className="mt-4 text-xs text-slate-500">
-                  No expense categories yet. Add your first expense to start seeing patterns.
-                </p>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  {topExpenseCategories.map((item) => (
-                    <div
-                      key={item.category}
-                      className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs"
-                    >
-                      <p className="text-slate-200">{item.category}</p>
-                      <p className="font-medium text-slate-50">{formatCurrency(item.total)}</p>
+              <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-400">Cash flow ratio</p>
+                <div className="mt-4 flex items-center justify-center">
+                  <div
+                    className="flex h-40 w-40 items-center justify-center rounded-full"
+                    style={{
+                      background: `conic-gradient(#34d399 0 ${incomeSharePct}%, #f87171 ${incomeSharePct}% ${incomeSharePct + expenseSharePct}%, #1e293b ${incomeSharePct + expenseSharePct}% 100%)`,
+                    }}
+                  >
+                    <div className="flex h-28 w-28 items-center justify-center rounded-full bg-slate-950 text-center text-xs text-slate-300">
+                      {formatCurrency(monthlyIncome)}
+                      <br />
+                      collected
                     </div>
-                  ))}
+                  </div>
                 </div>
-              )}
+                <div className="mt-4 space-y-2 text-xs">
+                  <p className="flex justify-between"><span className="text-slate-400">Income</span><span>{formatCurrency(monthlyIncome)}</span></p>
+                  <p className="flex justify-between"><span className="text-slate-400">Expenses</span><span>{formatCurrency(monthlyExpenses)}</span></p>
+                  <p className="flex justify-between"><span className="text-slate-400">Rent roll</span><span>{formatCurrency(monthlyRentRoll)}</span></p>
+                </div>
+              </section>
             </div>
-          </div>
-        </section>
 
-        {/* Quick actions */}
-        <section className="mb-6 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Quick actions
-              </p>
-              <p className="mt-1 text-sm text-slate-200">
-                Jump straight to the tools you use the most.
-              </p>
-            </div>
-            <span className="hidden text-[11px] text-slate-500 sm:inline">
-            </span>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Link
-              href="/landlord/properties"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  🏠
-                </span>
-                Manage properties
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Add units, update rent, and keep your portfolio organized.
-              </p>
-            </Link>
-
-            <Link
-              href="/landlord/tenants"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  👤
-                </span>
-                Manage tenants
-              </p>
-              <p className="text-[11px] text-slate-400">
-                View tenants, invite new ones, and keep contact details current.
-              </p>
-            </Link>
-
-            <Link
-  href="/landlord/expenses"
-  className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
->
-  <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-      💰
-    </span>
-    Expense report
-  </p>
-  <p className="text-[11px] text-slate-400">
-    Open your expense report and export it for Excel.
-  </p>
-</Link>
-
-            <Link
-              href="/landlord/payments"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  💳
-                </span>
-                Payments & rent
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Review recent payments and see who has paid or is still due.
-              </p>
-            </Link>
-
-            <Link
-              href="/landlord/maintenance"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  🛠️
-                </span>
-                <span className="flex items-center gap-2">
-                  <span>Maintenance requests</span>
-                  {newMaintenanceCount > 0 && (
-                    <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-slate-950">
-                      {newMaintenanceCount}
-                    </span>
-                  )}
-                </span>
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Track new, in-progress, and resolved issues across your units.
-              </p>
-            </Link>
-
-            <Link
-              href="/landlord/maintenance-directory"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  🔎
-                </span>
-                Maintenance worker directory
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Find nearby electricians, plumbers, contractors, and other service pros.
-              </p>
-            </Link>
-
-            <Link
-              href="/landlord/messages"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  💬
-                </span>
-                <span className="flex items-center gap-2">
-                  <span>Messages</span>
-                  {unreadMessagesCount > 0 && (
-                    <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-slate-950">
-                      {unreadMessagesCount}
-                    </span>
-                  )}
-                </span>
-              </p>
-              <p className="text-[11px] text-slate-400">
-                View and reply to portal messages from your tenants in one place.
-              </p>
-            </Link>
-
-            <Link
-              href="/landlord/documents"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  📄
-                </span>
-                <span className="flex items-center gap-1">
-                  <span>Documents &amp; e-sign</span>
-                  <span className="text-[13px]">✍️</span>
-                </span>
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Upload leases, share files, and send e-signature envelopes to tenants.
-              </p>
-            </Link>
-
-            <Link
-              href="/landlord/templates"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  🧾
-                </span>
-                Free printable templates
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Grab ready-to-print lease, checklist, and notice templates for your rentals.
-              </p>
-            </Link>
-
-            <Link
-              href="/landlord/team"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  👥
-                </span>
-                Team access
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Invite or manage teammates who help manage your rentals.
-              </p>
-            </Link>
-
-            <Link
-              href="/landlord/settings"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  ⚙️
-                </span>
-                Account & billing
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Update your account details, billing info, and subscription.
-              </p>
-            </Link>
-
-            <Link
-              href="/landlord/accounting"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  📚
-                </span>
-                Accounting workflows
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Generate accounting-grade invoice and payment journal payloads.
-              </p>
-            </Link>
-
-            <Link
-              href="/landlord/listings"
-              className="group rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-xs hover:border-emerald-500/70 hover:bg-slate-900/80 transition-colors"
-            >
-              <p className="mb-1 text-[11px] font-semibold text-slate-100 flex items-center gap-2">
-                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-[13px]">
-                  🏷️
-                </span>
-                Listings
-              </p>
-              <p className="text-[11px] text-slate-400">
-                Create a public listing page for each unit that you can share externally.
-              </p>
-            </Link>
-
-
-          </div>
-        </section>
-
-        {/* Rent status */}
-        <section className="mb-6 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm">
+            <section className="mb-6 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-xs text-slate-500 uppercase tracking-wide">
@@ -1453,6 +1134,8 @@ export default function LandlordDashboardPage() {
               Payments show here after Stripe confirms them. Bank transfer (ACH) payments may take 1–5 business days to clear.
             </p>
           </section>
+        </div>
+          </main>
         </div>
       </div>
     </div>
