@@ -1,35 +1,11 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
-import type { ChangeEvent } from 'react';
 
 const DEFAULT_PREVIEW = '/rentzentro-demo-thumbnail.png';
 
 export default function DashboardPreviewUpload() {
-  const [previewSrc, setPreviewSrc] = useState(DEFAULT_PREVIEW);
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [objectUrl]);
-
-  const onFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (objectUrl) {
-      URL.revokeObjectURL(objectUrl);
-    }
-
-    const nextUrl = URL.createObjectURL(file);
-    setObjectUrl(nextUrl);
-    setPreviewSrc(nextUrl);
-  };
+  const previewSrc = DEFAULT_PREVIEW;
 
   return (
     <div className="rz-fade-up rz-delay-3 order-2 h-full">
@@ -51,15 +27,6 @@ export default function DashboardPreviewUpload() {
         </div>
       </div>
 
-      <label className="mt-3 inline-flex w-fit cursor-pointer items-center gap-2 rounded-full border border-white/35 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800">
-        <input
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          onChange={onFileSelected}
-          className="hidden"
-        />
-        Upload preview image
-      </label>
     </div>
   );
 }
