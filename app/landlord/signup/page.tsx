@@ -91,7 +91,7 @@ export default function LandlordSignupPage() {
     <div className="rz-auth-shell flex items-center justify-center">
       <div className="rz-auth-card">
         <div className="mb-4">
-          <Link href="/" className="text-[11px] text-slate-500 hover:text-emerald-400">
+          <Link href="/" className="rz-btn-nav">
             ← Back to homepage
           </Link>
         </div>

@@ -205,7 +205,7 @@ export default function LandlordListingsPage() {
 
             <Link
               href="/landlord"
-              className="rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800"
+              className="rz-btn-nav"
             >
               Back to dashboard
             </Link>

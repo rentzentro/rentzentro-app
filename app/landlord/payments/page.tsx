@@ -699,7 +699,7 @@ export default function LandlordPaymentsPage() {
           <div className="flex items-center gap-2 self-stretch justify-end">
             <button
               onClick={handleBackToDashboard}
-              className="flex-1 md:flex-none text-xs px-3 py-1.5 rounded-full border border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+              className="rz-btn-nav"
             >
               ← Back to dashboard
             </button>

@@ -165,7 +165,7 @@ export default function StripeConnectCompletePage() {
           </button>
           <Link
             href="/landlord"
-            className="text-xs text-slate-400 hover:text-slate-200"
+            className="rz-btn-nav"
           >
             Back to dashboard
           </Link>

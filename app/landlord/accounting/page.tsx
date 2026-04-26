@@ -241,7 +241,7 @@ export default function LandlordAccountingPage() {
                 Generate accounting-grade invoice and payment journal payloads for your books.
               </p>
             </div>
-            <Link href="/landlord" className="text-sm text-emerald-300 hover:text-emerald-200">
+            <Link href="/landlord" className="rz-btn-nav">
               Back to dashboard
             </Link>
           </div>

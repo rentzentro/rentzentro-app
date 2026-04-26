@@ -481,21 +481,21 @@ export default function LandlordSubscriptionPage() {
             <button
               type="button"
               onClick={() => router.push('/')}
-              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+              className="rz-btn-nav"
             >
               Back to homepage
             </button>
             <button
               type="button"
               onClick={() => router.push('/landlord')}
-              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+              className="rz-btn-nav"
             >
               Back to dashboard
             </button>
             <button
               type="button"
               onClick={handleLogOut}
-              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+              className="rz-btn-nav"
             >
               Log out
             </button>

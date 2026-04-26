@@ -537,7 +537,7 @@ export default function LandlordTemplatesPage() {
 
           <Link
             href="/landlord"
-            className="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs font-medium text-slate-100 hover:border-emerald-500/70"
+            className="rz-btn-nav"
           >
             ← Back to dashboard
           </Link>
