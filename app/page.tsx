@@ -525,7 +525,7 @@ export default async function HomePage() {
           </div>
         </header>
 
-        <section className="grid gap-8 pb-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
+        <section className="grid gap-8 pb-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
           <div className="rz-fade-up rz-delay-2 order-1">
             <h1 className="max-w-3xl text-balance text-4xl font-semibold tracking-tight leading-[1.1] text-slate-50 sm:text-5xl lg:text-6xl">
               Run your entire rental business in one place
