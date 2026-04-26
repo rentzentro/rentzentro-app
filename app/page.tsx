@@ -1,6 +1,7 @@
 // app/page.tsx
 import Link from 'next/link';
 import BrandWordmark from './components/BrandWordmark';
+import DashboardPreviewUpload from './components/DashboardPreviewUpload';
 import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from './supabaseClient';
 
 export const runtime = 'nodejs';
@@ -645,144 +646,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <div className="rz-fade-up rz-delay-3 order-2 rounded-3xl border border-[#17315f] bg-[#020b2f] p-4 shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/5 transition duration-300 hover:-translate-y-1 hover:border-cyan-300/40 sm:p-5">
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">
-                  Sample landlord view
-                </p>
-                <p className="text-sm font-semibold text-slate-100">
-                  Dashboard preview styled like the live landlord product
-                </p>
-              </div>
-              <span className="inline-flex w-fit items-center gap-1 rounded-full border border-cyan-300/25 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium text-cyan-200">
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
-                Live look &amp; feel
-              </span>
-            </div>
-
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-              {[
-                { label: 'Monthly income', value: '$2,200.00', tone: 'text-emerald-300' },
-                { label: 'Monthly expenses', value: '$425.00', tone: 'text-rose-300' },
-                { label: 'Net profit', value: '$1,775.00', tone: 'text-emerald-300' },
-                { label: 'Active portfolio', value: '1', tone: 'text-slate-100', sub: '1 active tenants' },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className="rounded-2xl border border-[#20406f] bg-[#03113f] px-3 py-3"
-                >
-                  <p className="text-[11px] text-slate-300">{stat.label}</p>
-                  <p className={`mt-1 text-3xl font-medium leading-none xl:text-[42px] ${stat.tone}`}>{stat.value}</p>
-                  {stat.sub ? <p className="mt-1 text-[11px] text-slate-400">{stat.sub}</p> : null}
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 grid gap-2 xl:grid-cols-[1.45fr_1fr]">
-              <div className="rounded-2xl border border-[#20406f] bg-[#03113f] p-4">
-                <p className="text-[11px] uppercase tracking-wide text-slate-300">Property performance</p>
-                <div className="mt-3 rounded-xl border border-[#264574] bg-[#021038] p-3">
-                  <div className="mb-2 flex items-center justify-between text-[13px] font-semibold text-slate-100">
-                    <span>123 Main st · 2R</span>
-                    <span className="text-emerald-300">$1,775.00</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="h-2 overflow-hidden rounded-full bg-cyan-950">
-                      <div className="h-full w-full rounded-full bg-emerald-400" />
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-cyan-950">
-                      <div className="h-full w-1/4 rounded-full bg-rose-300" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[#20406f] bg-[#03113f] p-4">
-                <p className="text-[11px] uppercase tracking-wide text-slate-300">Cash flow ratio</p>
-                <div className="mt-3 flex justify-center">
-                  <div className="relative grid h-40 w-40 place-items-center rounded-full bg-[conic-gradient(#34d399_0_78%,#f87171_78%_100%)]">
-                    <div className="grid h-24 w-24 place-items-center rounded-full bg-[#020b2f] text-center">
-                      <p className="text-[10px] text-slate-300">$2,200.00</p>
-                      <p className="text-[10px] text-slate-200">collected</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-3 space-y-1 text-[12px] text-slate-200">
-                  <div className="flex items-center justify-between"><span>Income</span><span>$2,200.00</span></div>
-                  <div className="flex items-center justify-between"><span>Expenses</span><span>$425.00</span></div>
-                  <div className="flex items-center justify-between"><span>Rent roll</span><span>$2,200.00</span></div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-3 rounded-2xl border border-[#20406f] bg-[#03113f] p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] uppercase tracking-wide text-slate-300">Rent status</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">Overdue, upcoming, and future rent</p>
-                </div>
-                <div className="hidden gap-2 md:flex">
-                  <span className="rounded-full border border-[#32507a] bg-[#082352] px-3 py-1 text-[11px] text-slate-100">Manage properties</span>
-                  <span className="rounded-full border border-[#32507a] bg-[#082352] px-3 py-1 text-[11px] text-slate-100">Manage tenants</span>
-                </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                {[
-                  { title: 'Overdue', count: '0', tone: 'border-rose-500/40 bg-rose-950/20 text-rose-100', note: 'No units overdue right now.' },
-                  { title: 'Upcoming 7 days', count: '0', tone: 'border-amber-500/40 bg-amber-950/20 text-amber-100', note: 'No rent coming due in the next week.' },
-                  { title: 'Not due yet', count: '1', tone: 'border-emerald-400/40 bg-emerald-950/20 text-emerald-100', note: '123 Main st · 2R · Due June 1, 2026 · $2,200.00' },
-                ].map((item) => (
-                  <div key={item.title} className={`rounded-xl border px-3 py-2.5 ${item.tone}`}>
-                    <div
-                      className="mb-2 flex items-center justify-between text-[12px] font-semibold"
-                    >
-                      <span>{item.title}</span>
-                      <span>{item.count}</span>
-                    </div>
-                    <p className="text-[11px] leading-5 opacity-90">{item.note}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-3 grid gap-2 xl:grid-cols-2">
-              <div className="rounded-2xl border border-[#20406f] bg-[#03113f] p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-slate-300">Properties</p>
-                    <p className="text-sm font-semibold text-slate-100">Units &amp; rent</p>
-                  </div>
-                  <span className="rounded-full border border-[#32507a] bg-[#082352] px-3 py-1 text-[11px] text-slate-100">View all</span>
-                </div>
-                <div className="rounded-xl border border-[#264574] bg-[#021038] p-3 text-[12px] text-slate-200">
-                  <p className="font-semibold text-slate-100">123 Main st · 2R</p>
-                  <p>Rent: $2,200.00 • Status: Current</p>
-                  <p className="text-slate-400">Next due: June 1, 2026</p>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[#20406f] bg-[#03113f] p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-slate-300">Recent payments</p>
-                    <p className="text-sm font-semibold text-slate-100">Latest rent activity</p>
-                  </div>
-                  <span className="rounded-full border border-[#32507a] bg-[#082352] px-3 py-1 text-[11px] text-slate-100">View all</span>
-                </div>
-                <div className="rounded-xl border border-[#264574] bg-[#021038] p-3 text-[12px] text-slate-200">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-slate-100">$2,200.00</p>
-                    <p>Cash</p>
-                  </div>
-                  <p className="text-slate-300">April 26, 2026 • Wonda • 123 Main st · 2R</p>
-                </div>
-                <p className="mt-2 text-[11px] text-slate-400">
-                  Payments show here after Stripe confirms them. ACH may take 1–5 business days.
-                </p>
-              </div>
-            </div>
-          </div>
+          <DashboardPreviewUpload />
         </section>
 
         <section id="demo" className="rz-fade-up rz-delay-5 border-t border-slate-900 py-14">
