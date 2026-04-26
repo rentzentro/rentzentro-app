@@ -661,7 +661,7 @@ export default async function HomePage() {
               </span>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
               {[
                 { label: 'Monthly income', value: '$2,200.00', tone: 'text-emerald-300' },
                 { label: 'Monthly expenses', value: '$425.00', tone: 'text-rose-300' },
@@ -670,16 +670,16 @@ export default async function HomePage() {
               ].map((stat) => (
                 <div
                   key={stat.label}
-                  className="rounded-2xl border border-[#20406f] bg-[#03113f] px-4 py-3"
+                  className="rounded-2xl border border-[#20406f] bg-[#03113f] px-3 py-3"
                 >
                   <p className="text-[11px] text-slate-300">{stat.label}</p>
-                  <p className={`mt-1 text-4xl font-medium leading-none ${stat.tone}`}>{stat.value}</p>
+                  <p className={`mt-1 text-3xl font-medium leading-none xl:text-[42px] ${stat.tone}`}>{stat.value}</p>
                   {stat.sub ? <p className="mt-1 text-[11px] text-slate-400">{stat.sub}</p> : null}
                 </div>
               ))}
             </div>
 
-            <div className="mt-4 grid gap-3 xl:grid-cols-[1.45fr_1fr]">
+            <div className="mt-3 grid gap-2 xl:grid-cols-[1.45fr_1fr]">
               <div className="rounded-2xl border border-[#20406f] bg-[#03113f] p-4">
                 <p className="text-[11px] uppercase tracking-wide text-slate-300">Property performance</p>
                 <div className="mt-3 rounded-xl border border-[#264574] bg-[#021038] p-3">
@@ -716,7 +716,7 @@ export default async function HomePage() {
               </div>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-[#20406f] bg-[#03113f] p-4">
+            <div className="mt-3 rounded-2xl border border-[#20406f] bg-[#03113f] p-4">
               <div className="mb-2 flex items-center justify-between">
                 <div>
                   <p className="text-[11px] uppercase tracking-wide text-slate-300">Rent status</p>
@@ -743,6 +743,43 @@ export default async function HomePage() {
                     <p className="text-[11px] leading-5 opacity-90">{item.note}</p>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 xl:grid-cols-2">
+              <div className="rounded-2xl border border-[#20406f] bg-[#03113f] p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-300">Properties</p>
+                    <p className="text-sm font-semibold text-slate-100">Units &amp; rent</p>
+                  </div>
+                  <span className="rounded-full border border-[#32507a] bg-[#082352] px-3 py-1 text-[11px] text-slate-100">View all</span>
+                </div>
+                <div className="rounded-xl border border-[#264574] bg-[#021038] p-3 text-[12px] text-slate-200">
+                  <p className="font-semibold text-slate-100">123 Main st · 2R</p>
+                  <p>Rent: $2,200.00 • Status: Current</p>
+                  <p className="text-slate-400">Next due: June 1, 2026</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[#20406f] bg-[#03113f] p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-300">Recent payments</p>
+                    <p className="text-sm font-semibold text-slate-100">Latest rent activity</p>
+                  </div>
+                  <span className="rounded-full border border-[#32507a] bg-[#082352] px-3 py-1 text-[11px] text-slate-100">View all</span>
+                </div>
+                <div className="rounded-xl border border-[#264574] bg-[#021038] p-3 text-[12px] text-slate-200">
+                  <div className="flex items-center justify-between">
+                    <p className="font-semibold text-slate-100">$2,200.00</p>
+                    <p>Cash</p>
+                  </div>
+                  <p className="text-slate-300">April 26, 2026 • Wonda • 123 Main st · 2R</p>
+                </div>
+                <p className="mt-2 text-[11px] text-slate-400">
+                  Payments show here after Stripe confirms them. ACH may take 1–5 business days.
+                </p>
               </div>
             </div>
           </div>
