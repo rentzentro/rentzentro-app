@@ -371,7 +371,7 @@ export default function LandlordExpensesPage() {
             </button>
             <Link
               href="/landlord"
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+              className="rz-btn-nav"
             >
               Back to dashboard
             </Link>

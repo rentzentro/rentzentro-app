@@ -132,7 +132,7 @@ export default function TenantSignupPage() {
       <div className="rz-auth-card bg-slate-900/70">
         <Link
           href="/"
-          className="text-xs text-slate-400 hover:text-emerald-400"
+          className="rz-btn-nav"
         >
           ← Back to homepage
         </Link>

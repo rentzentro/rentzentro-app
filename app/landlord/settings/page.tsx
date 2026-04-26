@@ -227,7 +227,7 @@ export default function LandlordSettingsPage() {
           </p>
           <button
             onClick={handleBackToDashboard}
-            className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-slate-700 border border-slate-600"
+            className="rz-btn-nav"
           >
             Back to dashboard
           </button>
@@ -274,7 +274,7 @@ export default function LandlordSettingsPage() {
             <button
               type="button"
               onClick={handleBackToDashboard}
-              className="text-xs px-3 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+              className="rz-btn-nav"
             >
               Back to dashboard
             </button>

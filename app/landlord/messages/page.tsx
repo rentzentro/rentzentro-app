@@ -429,14 +429,14 @@ export default function LandlordMessagesPage() {
             )}
             <Link
               href="/landlord"
-              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
+              className="rz-btn-nav"
             >
               Back to dashboard
             </Link>
             <button
               type="button"
               onClick={handleSignOut}
-              className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800"
+              className="rz-btn-nav"
             >
               Log out
             </button>

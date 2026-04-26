@@ -130,7 +130,7 @@ export default function LandlordIntegrationsPage() {
                 accounting, screening, documents, and banking.
               </p>
             </div>
-            <Link href="/landlord" className="text-sm text-emerald-300 hover:text-emerald-200">
+            <Link href="/landlord" className="rz-btn-nav">
               Back to dashboard
             </Link>
           </div>

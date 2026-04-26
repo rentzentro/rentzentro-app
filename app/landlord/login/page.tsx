@@ -85,7 +85,7 @@ export default function LandlordLoginPage() {
         <div className="mb-4">
           <Link
             href="/"
-            className="text-[11px] text-slate-500 hover:text-emerald-400"
+            className="rz-btn-nav"
           >
             ← Back to homepage
           </Link>
