@@ -206,6 +206,7 @@ export default function LandlordDashboardPage() {
     useState<MaintenanceRow[]>([]);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const [actionsCollapsed, setActionsCollapsed] = useState(false);
 
   // Team member flags
   const [isTeamMember, setIsTeamMember] = useState(false);
@@ -732,8 +733,20 @@ export default function LandlordDashboardPage() {
 
         <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
           <aside className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4 xl:sticky xl:top-6 xl:h-fit">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Actions</p>
-            <div className="max-h-[72vh] space-y-2 overflow-y-auto pr-1 text-xs">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Actions</p>
+              <button
+                type="button"
+                onClick={() => setActionsCollapsed((prev) => !prev)}
+                className="rounded-md border border-slate-700 px-2 py-1 text-[10px] font-medium text-slate-300 hover:bg-slate-800"
+                aria-expanded={!actionsCollapsed}
+                aria-label={actionsCollapsed ? 'Expand actions menu' : 'Collapse actions menu'}
+              >
+                {actionsCollapsed ? 'Show' : 'Hide'}
+              </button>
+            </div>
+            {!actionsCollapsed && (
+              <div className="max-h-[72vh] space-y-2 overflow-y-auto pr-1 text-xs">
               {[
                 ['🏠', 'Properties', '/landlord/properties'],
                 ['👥', 'Tenants', '/landlord/tenants'],
@@ -765,7 +778,8 @@ export default function LandlordDashboardPage() {
                   ) : null}
                 </Link>
               ))}
-            </div>
+              </div>
+            )}
           </aside>
 
           <main className="space-y-6">
