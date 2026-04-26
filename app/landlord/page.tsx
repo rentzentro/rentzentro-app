@@ -950,7 +950,6 @@ export default function LandlordDashboardPage() {
               </p>
             </div>
             <span className="hidden text-[11px] text-slate-500 sm:inline">
-              Drag & drop coming in a future update.
             </span>
           </div>
 
