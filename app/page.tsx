@@ -1,6 +1,7 @@
 // app/page.tsx
 import Link from 'next/link';
 import BrandWordmark from './components/BrandWordmark';
+import DashboardPreviewUpload from './components/DashboardPreviewUpload';
 import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from './supabaseClient';
 
 export const runtime = 'nodejs';
@@ -285,34 +286,6 @@ function LiveListingCard({
         </div>
       </div>
     </Link>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  tone = 'default',
-}: {
-  label: string;
-  value: string;
-  tone?: 'default' | 'success';
-}) {
-  const classes =
-    tone === 'success'
-      ? 'border-emerald-400/30 bg-emerald-950/25'
-      : 'border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950';
-
-  return (
-    <div className={`rounded-2xl border p-4 transition duration-300 hover:-translate-y-1 ${classes}`}>
-      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
-      <p
-        className={`mt-1 text-xl font-semibold sm:text-2xl ${
-          tone === 'success' ? 'text-emerald-300' : 'text-slate-50'
-        }`}
-      >
-        {value}
-      </p>
-    </div>
   );
 }
 
@@ -673,128 +646,7 @@ export default async function HomePage() {
             </div>
           </div>
 
-          <div className="rz-fade-up rz-delay-3 order-2 rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 via-slate-950/90 to-slate-950 p-4 shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/5 transition duration-300 hover:-translate-y-1 hover:border-emerald-500/20 sm:p-5">
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                  Sample landlord view
-                </p>
-                <p className="text-sm font-semibold text-slate-50">
-                  A cleaner way to see rent, expenses, and property performance
-                </p>
-              </div>
-              <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                Built for landlords
-              </span>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <StatCard label="Properties" value="12" />
-              <StatCard label="Active tenants" value="11" />
-              <StatCard label="Monthly rent roll" value="$14,750" tone="success" />
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/80 p-4 transition duration-300 hover:border-emerald-500/20">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-sm font-medium text-slate-100">Financial snapshot</p>
-                <span className="text-[10px] text-slate-500">This month</span>
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-3 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-500/20 hover:bg-slate-900/70">
-                  <p className="text-xs font-semibold text-slate-100">Income</p>
-                  <p className="mt-1 text-xs text-slate-200">$10,100 collected</p>
-                  <p className="mt-0.5 text-[10px] text-slate-500">Live payment view</p>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-3 transition duration-300 hover:-translate-y-0.5 hover:border-emerald-500/20 hover:bg-slate-900/70">
-                  <p className="text-xs font-semibold text-slate-100">Expenses</p>
-                  <p className="mt-1 text-xs text-slate-200">$2,240 logged</p>
-                  <p className="mt-0.5 text-[10px] text-slate-500">Tracked by property</p>
-                </div>
-
-                <div className="rounded-2xl border border-emerald-400/30 bg-emerald-950/25 p-3 transition duration-300 hover:-translate-y-0.5">
-                  <p className="text-xs font-semibold text-emerald-100">Net profit</p>
-                  <p className="mt-1 text-xs text-emerald-100/90">$7,860</p>
-                  <p className="mt-0.5 text-[10px] text-emerald-100/80">
-                    Real performance view
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/80 p-4 transition duration-300 hover:border-emerald-500/20">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-100">Recent payments</p>
-                  <span className="text-[10px] text-slate-500">Last 3</span>
-                </div>
-
-                <div className="space-y-2">
-                  {[
-                    {
-                      name: 'J. Smith · 10 Oak · 1A',
-                      amount: '$1,050',
-                      meta: 'Card • Today · 9:14 AM',
-                    },
-                    {
-                      name: 'L. Rivera · 22 Pine · 3C',
-                      amount: '$1,250',
-                      meta: 'ACH • Yesterday · 4:27 PM',
-                    },
-                    {
-                      name: 'D. Chen · 7 Spruce · 2F',
-                      amount: '$975',
-                      meta: 'Card • 2 days ago',
-                    },
-                  ].map((p) => (
-                    <div
-                      key={p.name}
-                      className="flex items-center justify-between rounded-xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-3 py-2.5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70"
-                    >
-                      <div className="min-w-0 pr-3">
-                        <p className="truncate text-[11px] font-medium text-slate-100">
-                          {p.name}
-                        </p>
-                        <p className="text-[10px] text-slate-500">{p.meta}</p>
-                      </div>
-                      <p className="shrink-0 text-[11px] font-semibold text-emerald-300">
-                        {p.amount}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950/80 p-4 transition duration-300 hover:border-emerald-500/20">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-100">Rent status</p>
-                  <span className="text-[10px] text-slate-500">This month</span>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between rounded-xl border border-rose-500/30 bg-rose-950/30 px-3 py-2.5 transition duration-300 hover:-translate-y-0.5">
-                    <span className="text-[11px] text-rose-100">Overdue</span>
-                    <span className="text-[11px] font-semibold text-rose-200">1 unit</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-950/30 px-3 py-2.5 transition duration-300 hover:-translate-y-0.5">
-                    <span className="text-[11px] text-amber-100">Due soon</span>
-                    <span className="text-[11px] font-semibold text-amber-200">3 units</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-950/25 px-3 py-2.5 transition duration-300 hover:-translate-y-0.5">
-                    <span className="text-[11px] text-emerald-100">Paid</span>
-                    <span className="text-[11px] font-semibold text-emerald-200">8 units</span>
-                  </div>
-                </div>
-
-                <p className="mt-3 text-[10px] leading-5 text-slate-500">
-                  See collected rent, logged expenses, and payment status in one place instead of
-                  bouncing between tools.
-                </p>
-              </div>
-            </div>
-          </div>
+          <DashboardPreviewUpload />
         </section>
 
         <section id="demo" className="rz-fade-up rz-delay-5 border-t border-slate-900 py-14">
