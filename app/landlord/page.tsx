@@ -738,7 +738,7 @@ export default function LandlordDashboardPage() {
               <button
                 type="button"
                 onClick={() => setActionsCollapsed((prev) => !prev)}
-                className="rounded-md border border-slate-700 px-2 py-1 text-[10px] font-medium text-slate-300 hover:bg-slate-800"
+                className="rounded-full border border-slate-700 px-2 py-1 text-[10px] font-medium text-slate-300 hover:bg-slate-800"
                 aria-expanded={!actionsCollapsed}
                 aria-label={actionsCollapsed ? 'Expand actions menu' : 'Collapse actions menu'}
               >
