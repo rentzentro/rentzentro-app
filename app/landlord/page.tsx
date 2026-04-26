@@ -733,18 +733,25 @@ export default function LandlordDashboardPage() {
         <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
           <aside className="rounded-3xl border border-slate-800 bg-slate-900/40 p-4 xl:sticky xl:top-6 xl:h-fit">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Actions</p>
-            <div className="space-y-2 text-xs">
+            <p className="mb-3 text-[11px] text-slate-500">13 quick links</p>
+            <div className="max-h-[72vh] space-y-2 overflow-y-auto pr-1 text-xs">
               {[
                 ['🏠', 'Properties', '/landlord/properties'],
                 ['👥', 'Tenants', '/landlord/tenants'],
+                ['💰', 'Expense report', '/landlord/expenses'],
                 ['💳', 'Payments', '/landlord/payments'],
                 ['🛠️', 'Maintenance', '/landlord/maintenance'],
+                ['🔎', 'Maintenance directory', '/landlord/maintenance-directory'],
                 ['💬', 'Messages', '/landlord/messages'],
-                ['📄', 'Documents', '/landlord/documents'],
-                ['⚙️', 'Settings', '/landlord/settings'],
+                ['📄', 'Documents & e-sign', '/landlord/documents'],
+                ['🧾', 'Templates', '/landlord/templates'],
+                ['👤', 'Team access', '/landlord/team'],
+                ['⚙️', 'Account & billing', '/landlord/settings'],
+                ['📚', 'Accounting', '/landlord/accounting'],
+                ['🏷️', 'Listings', '/landlord/listings'],
               ].map(([icon, label, href]) => (
                 <Link
-                  key={href}
+                  key={`${href}-${label}`}
                   href={href}
                   className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-200 hover:border-indigo-400/60 hover:bg-slate-900"
                 >
