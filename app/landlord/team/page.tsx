@@ -422,17 +422,17 @@ export default function LandlordTeamAccessPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 md:justify-end">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
             <Link
               href="/landlord"
-              className="rz-btn-nav"
+              className="rz-btn-nav rz-btn-nav-block"
             >
               Back to dashboard
             </Link>
             <button
               type="button"
               onClick={handleSignOut}
-              className="text-xs px-4 py-2 rounded-full border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+              className="rz-btn-nav rz-btn-nav-block"
             >
               Log out
             </button>

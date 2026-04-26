@@ -195,19 +195,18 @@ export default function LandlordListingsPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/landlord/listings/new"
-              className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400"
-            >
-              + New listing
-            </Link>
-
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
             <Link
               href="/landlord"
-              className="rz-btn-nav"
+              className="rz-btn-nav rz-btn-nav-block"
             >
               Back to dashboard
+            </Link>
+            <Link
+              href="/landlord/listings/new"
+              className="rz-btn-primary sm:w-auto"
+            >
+              + New listing
             </Link>
           </div>
         </div>

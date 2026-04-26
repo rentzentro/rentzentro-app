@@ -234,14 +234,14 @@ export default function LandlordAccountingPage() {
     <main className="min-h-screen bg-slate-950 text-slate-100 px-4 py-8">
       <div className="mx-auto w-full max-w-5xl space-y-6">
         <header className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold">Accounting Workflows</h1>
               <p className="mt-2 text-sm text-slate-300">
                 Generate accounting-grade invoice and payment journal payloads for your books.
               </p>
             </div>
-            <Link href="/landlord" className="rz-btn-nav">
+            <Link href="/landlord" className="rz-btn-nav rz-btn-nav-block">
               Back to dashboard
             </Link>
           </div>
@@ -268,7 +268,7 @@ export default function LandlordAccountingPage() {
             <input className="w-full rounded bg-slate-950 border border-slate-700 px-3 py-2" value={rentAmount} onChange={(e) => setRentAmount(e.target.value)} placeholder="Rent amount" />
             <input className="w-full rounded bg-slate-950 border border-slate-700 px-3 py-2" value={feeAmount} onChange={(e) => setFeeAmount(e.target.value)} placeholder="Fee amount" />
             <input className="w-full rounded bg-slate-950 border border-slate-700 px-3 py-2" value={unitLabel} onChange={(e) => setUnitLabel(e.target.value)} placeholder="Unit label" />
-            <button type="submit" disabled={submitting || loading || !landlord} className="rounded bg-emerald-500 px-4 py-2 text-slate-950 font-semibold disabled:opacity-50">
+            <button type="submit" disabled={submitting || loading || !landlord} className="rz-btn-primary">
               {submitting ? 'Running...' : 'Run invoice workflow'}
             </button>
           </form>
@@ -280,7 +280,7 @@ export default function LandlordAccountingPage() {
             <input className="w-full rounded bg-slate-950 border border-slate-700 px-3 py-2" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} placeholder="Method" />
             <input className="w-full rounded bg-slate-950 border border-slate-700 px-3 py-2" value={receivedAmount} onChange={(e) => setReceivedAmount(e.target.value)} placeholder="Received amount" />
             <input className="w-full rounded bg-slate-950 border border-slate-700 px-3 py-2" value={processorFeeAmount} onChange={(e) => setProcessorFeeAmount(e.target.value)} placeholder="Processor fee amount" />
-            <button type="submit" disabled={submitting || loading || !landlord} className="rounded bg-emerald-500 px-4 py-2 text-slate-950 font-semibold disabled:opacity-50">
+            <button type="submit" disabled={submitting || loading || !landlord} className="rz-btn-primary">
               {submitting ? 'Running...' : 'Run payment workflow'}
             </button>
           </form>
