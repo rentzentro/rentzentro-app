@@ -32,41 +32,34 @@ export default function DashboardPreviewUpload() {
   };
 
   return (
-    <div className="rz-fade-up rz-delay-3 order-2 rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-4 shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/5 sm:p-5">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[11px] uppercase tracking-wide text-slate-400">Sample landlord view</p>
-          <p className="text-sm font-semibold text-slate-100">Upload a real dashboard screenshot</p>
-        </div>
+    <div className="rz-fade-up rz-delay-3 order-2 h-full">
+      <div className="flex h-full flex-col rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-4 shadow-[0_30px_80px_rgba(0,0,0,0.6)] ring-1 ring-white/5 sm:p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-300">
+          Command center preview
+        </p>
 
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/35 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800">
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={onFileSelected}
-            className="hidden"
-          />
-          Upload preview image
-        </label>
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/70">
-        <div className="relative aspect-[16/10] w-full bg-slate-950">
+        <div className="relative mt-3 min-h-[430px] w-full flex-1 overflow-hidden rounded-2xl sm:min-h-[520px]">
           <Image
             src={previewSrc}
             alt="Landlord dashboard preview"
             fill
             sizes="(min-width: 1280px) 620px, (min-width: 768px) 48vw, 100vw"
-            className="object-contain p-1"
+            className="object-contain"
             unoptimized={previewSrc.startsWith('blob:')}
             priority
           />
         </div>
       </div>
 
-      <p className="mt-2 text-[11px] text-slate-400">
-        Tip: upload a current dashboard screenshot to make this homepage preview match the real product exactly.
-      </p>
+      <label className="mt-3 inline-flex w-fit cursor-pointer items-center gap-2 rounded-full border border-white/35 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800">
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={onFileSelected}
+          className="hidden"
+        />
+        Upload preview image
+      </label>
     </div>
   );
 }
