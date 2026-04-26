@@ -938,6 +938,147 @@ export default function LandlordDashboardPage() {
           </div>
         </section>
 
+        {/* Rent status */}
+        <section className="mb-6 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">
+                Rent status
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-50">
+                Overdue, upcoming, and future rent
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Tip: If a tenant pays by bank transfer (ACH), it may take 1–5 business days to clear.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/landlord/properties"
+                className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              >
+                Manage properties
+              </Link>
+              <Link
+                href="/landlord/tenants"
+                className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              >
+                Manage tenants
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3 text-xs">
+            {/* Overdue */}
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-semibold text-rose-200">Overdue</p>
+                <span className="text-[11px] text-rose-200/80">
+                  {overdue.length}
+                </span>
+              </div>
+              {overdue.length === 0 ? (
+                <p className="text-[11px] text-rose-100/70">
+                  No units overdue right now.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {overdue.map((p) => {
+                    const amountDue = computeOverdueAmountForProperty(p);
+                    return (
+                      <div
+                        key={p.id}
+                        className="rounded-xl bg-rose-950/40 border border-rose-500/40 px-2 py-1.5"
+                      >
+                        <p className="text-[11px] text-rose-50 font-medium">
+                          {p.name || 'Property'}{' '}
+                          {p.unit_label ? `· ${p.unit_label}` : ''}
+                        </p>
+                        <p className="text-[11px] text-rose-100/80">
+                          Due {formatDate(p.next_due_date)} •{' '}
+                          {formatCurrency(
+                            amountDue != null ? amountDue : p.monthly_rent
+                          )}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Upcoming 7 days */}
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-semibold text-amber-200">Upcoming 7 days</p>
+                <span className="text-[11px] text-amber-200/80">
+                  {upcoming7.length}
+                </span>
+              </div>
+              {upcoming7.length === 0 ? (
+                <p className="text-[11px] text-amber-100/80">
+                  No rent coming due in the next week.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {upcoming7.map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-xl bg-amber-950/40 border border-amber-500/40 px-2 py-1.5"
+                    >
+                      <p className="text-[11px] text-amber-50 font-medium">
+                        {p.name || 'Property'}{' '}
+                        {p.unit_label ? `· ${p.unit_label}` : ''}
+                      </p>
+                      <p className="text-[11px] text-amber-100/90">
+                        Due {formatDate(p.next_due_date)} •{' '}
+                        {formatCurrency(p.monthly_rent)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Not due yet */}
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-semibold text-emerald-200">Not due yet</p>
+                <span className="text-[11px] text-emerald-200/80">
+                  {notDueYet.length}
+                </span>
+              </div>
+              {notDueYet.length === 0 ? (
+                <p className="text-[11px] text-emerald-100/80">
+                  No units in &quot;not due yet&quot; status.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {notDueYet.map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-xl bg-emerald-950/40 border border-emerald-500/40 px-2 py-1.5"
+                    >
+                      <p className="text-[11px] text-emerald-50 font-medium">
+                        {p.name || 'Property'}{' '}
+                        {p.unit_label ? `· ${p.unit_label}` : ''}
+                      </p>
+                      <p className="text-[11px] text-emerald-100/90">
+                        {p.next_due_date
+                          ? `Due ${formatDate(p.next_due_date)}`
+                          : 'No due date set'}
+                        {' • '}
+                        {formatCurrency(p.monthly_rent)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* Quick actions */}
         <section className="mb-6 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -1167,147 +1308,6 @@ export default function LandlordDashboardPage() {
             </Link>
 
 
-          </div>
-        </section>
-
-        {/* Rent status */}
-        <section className="mb-6 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wide">
-                Rent status
-              </p>
-              <p className="mt-1 text-sm font-medium text-slate-50">
-                Overdue, upcoming, and future rent
-              </p>
-              <p className="mt-1 text-[11px] text-slate-500">
-                Tip: If a tenant pays by bank transfer (ACH), it may take 1–5 business days to clear.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href="/landlord/properties"
-                className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
-              >
-                Manage properties
-              </Link>
-              <Link
-                href="/landlord/tenants"
-                className="text-[11px] px-3 py-1 rounded-full border border-slate-700 bg-slate-900 hover:bg-slate-800"
-              >
-                Manage tenants
-              </Link>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3 text-xs">
-            {/* Overdue */}
-            <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold text-rose-200">Overdue</p>
-                <span className="text-[11px] text-rose-200/80">
-                  {overdue.length}
-                </span>
-              </div>
-              {overdue.length === 0 ? (
-                <p className="text-[11px] text-rose-100/70">
-                  No units overdue right now.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {overdue.map((p) => {
-                    const amountDue = computeOverdueAmountForProperty(p);
-                    return (
-                      <div
-                        key={p.id}
-                        className="rounded-xl bg-rose-950/40 border border-rose-500/40 px-2 py-1.5"
-                      >
-                        <p className="text-[11px] text-rose-50 font-medium">
-                          {p.name || 'Property'}{' '}
-                          {p.unit_label ? `· ${p.unit_label}` : ''}
-                        </p>
-                        <p className="text-[11px] text-rose-100/80">
-                          Due {formatDate(p.next_due_date)} •{' '}
-                          {formatCurrency(
-                            amountDue != null ? amountDue : p.monthly_rent
-                          )}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Upcoming 7 days */}
-            <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold text-amber-200">Upcoming 7 days</p>
-                <span className="text-[11px] text-amber-200/80">
-                  {upcoming7.length}
-                </span>
-              </div>
-              {upcoming7.length === 0 ? (
-                <p className="text-[11px] text-amber-100/80">
-                  No rent coming due in the next week.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {upcoming7.map((p) => (
-                    <div
-                      key={p.id}
-                      className="rounded-xl bg-amber-950/40 border border-amber-500/40 px-2 py-1.5"
-                    >
-                      <p className="text-[11px] text-amber-50 font-medium">
-                        {p.name || 'Property'}{' '}
-                        {p.unit_label ? `· ${p.unit_label}` : ''}
-                      </p>
-                      <p className="text-[11px] text-amber-100/90">
-                        Due {formatDate(p.next_due_date)} •{' '}
-                        {formatCurrency(p.monthly_rent)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Not due yet */}
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-semibold text-emerald-200">Not due yet</p>
-                <span className="text-[11px] text-emerald-200/80">
-                  {notDueYet.length}
-                </span>
-              </div>
-              {notDueYet.length === 0 ? (
-                <p className="text-[11px] text-emerald-100/80">
-                  No units in &quot;not due yet&quot; status.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {notDueYet.map((p) => (
-                    <div
-                      key={p.id}
-                      className="rounded-xl bg-emerald-950/40 border border-emerald-500/40 px-2 py-1.5"
-                    >
-                      <p className="text-[11px] text-emerald-50 font-medium">
-                        {p.name || 'Property'}{' '}
-                        {p.unit_label ? `· ${p.unit_label}` : ''}
-                      </p>
-                      <p className="text-[11px] text-emerald-100/90">
-                        {p.next_due_date
-                          ? `Due ${formatDate(p.next_due_date)}`
-                          : 'No due date set'}
-                        {' • '}
-                        {formatCurrency(p.monthly_rent)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </section>
 
