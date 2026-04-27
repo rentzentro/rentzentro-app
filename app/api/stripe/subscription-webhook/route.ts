@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '../../../supabaseAdminClient';
 import { trackProductEvent } from '../../../lib/productEventTracker';
+import {
+  syncReferralEligibilityForLandlord,
+  flagReferralRewardRiskForLandlord,
+} from '../../../lib/referralRewards';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -117,6 +121,35 @@ async function updateLandlordFromSubscription(
       `[subscription webhook] (${contextLabel}) Error updating landlord:`,
       updateError
     );
+  }
+
+
+  if (subscriptionActive) {
+    const referralEligibility = await syncReferralEligibilityForLandlord({
+      supabaseAdmin,
+      landlordId: landlord.id,
+      reason: `stripe_${contextLabel}`,
+    });
+
+    if (!referralEligibility.ok) {
+      console.error(
+        `[subscription webhook] (${contextLabel}) Referral eligibility sync failed:`,
+        referralEligibility.error
+      );
+    }
+  } else {
+    const riskFlag = await flagReferralRewardRiskForLandlord({
+      supabaseAdmin,
+      landlordId: landlord.id,
+      reason: `stripe_${contextLabel}_${effectiveStatus}`,
+    });
+
+    if (!riskFlag.ok) {
+      console.error(
+        `[subscription webhook] (${contextLabel}) Referral risk-flag sync failed:`,
+        riskFlag.error
+      );
+    }
   }
 
   if (subscriptionActive && landlord.subscription_status !== effectiveStatus) {

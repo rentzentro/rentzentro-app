@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../supabaseClient';
+import referralUtils from '../../lib/referrals';
 
 type LandlordRow = {
   id: number;
@@ -43,6 +44,7 @@ export default function LandlordSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [connectingStripe, setConnectingStripe] = useState(false);
+  const [copiedReferral, setCopiedReferral] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -157,6 +159,38 @@ export default function LandlordSettingsPage() {
       message,
     };
   }, [landlord]);
+
+
+  const referralLink = useMemo(() => {
+    if (!landlord) return null;
+
+    const { buildLandlordReferralLink } = referralUtils as {
+      buildLandlordReferralLink: (origin: string, landlordId: number) => string | null;
+    };
+
+    const origin =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'https://www.rentzentro.com';
+
+    return buildLandlordReferralLink(origin, landlord.id);
+  }, [landlord]);
+
+  const handleCopyReferralLink = async () => {
+    if (!referralLink || typeof navigator === 'undefined' || !navigator.clipboard) {
+      setError('Unable to copy referral link right now. Please copy it manually.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(referralLink);
+      setCopiedReferral(true);
+      setTimeout(() => setCopiedReferral(false), 1800);
+    } catch (err) {
+      console.error('Copy referral link failed:', err);
+      setError('Unable to copy referral link right now. Please copy it manually.');
+    }
+  };
 
   const handleStripeConnect = async () => {
     if (!landlord) return;
@@ -424,6 +458,46 @@ export default function LandlordSettingsPage() {
             >
               Open subscription &amp; billing
             </Link>
+          </div>
+        </section>
+
+
+        <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Referrals</p>
+              <h2 className="mt-1 text-sm font-semibold text-slate-50">
+                Invite another landlord and earn rewards later
+              </h2>
+            </div>
+
+            <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium border border-emerald-500/40 bg-emerald-500/15 text-emerald-200">
+              Beta referral links
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-400">
+            Share this link with other landlords. If they sign up through your link, we save the
+            referral code to their account metadata so rewards can be applied as this program expands.
+          </p>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2">
+            <p className="text-[11px] text-slate-500 mb-1">Your referral link</p>
+            <p className="text-xs text-slate-200 break-all">{referralLink || 'Generating…'}</p>
+          </div>
+
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={handleCopyReferralLink}
+              disabled={!referralLink}
+              className="inline-flex items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-100 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {copiedReferral ? 'Copied referral link' : 'Copy referral link'}
+            </button>
+            <p className="text-[11px] text-slate-500 sm:flex-1">
+              Today this only tracks attribution. Reward logic can be layered on with no signup UX changes.
+            </p>
           </div>
         </section>
 
