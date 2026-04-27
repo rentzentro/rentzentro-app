@@ -72,21 +72,40 @@ export default function LandlordSignupPage() {
       const trialEndYMD = getTrialEndYMD();
 
       // 2) Insert landlord row
-      const { error: insertError } = await supabase.from('landlords').insert([
-        {
-          email: normalizedEmail,
-          user_id: user.id,
-          trial_active: true,
-          trial_end: trialEndYMD,
-          subscription_active: false,
-        },
-      ]);
+      const { data: insertedLandlord, error: insertError } = await supabase
+        .from('landlords')
+        .insert([
+          {
+            email: normalizedEmail,
+            user_id: user.id,
+            trial_active: true,
+            trial_end: trialEndYMD,
+            subscription_active: false,
+          },
+        ])
+        .select('id')
+        .single();
 
-      if (insertError) {
+      if (insertError || !insertedLandlord?.id) {
         console.error('Error inserting landlord row:', insertError);
         throw new Error(
           'Your account was created, but we could not finish landlord setup. Please contact support.'
         );
+      }
+
+      if (referralCode) {
+        fetch('/api/referrals/attribution', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            landlordId: insertedLandlord.id,
+            userId: user.id,
+            referralCode,
+            source: 'landlord_signup_referral',
+          }),
+        }).catch((referralErr) => {
+          console.warn('Referral attribution was not recorded:', referralErr);
+        });
       }
 
       // 3) Redirect to dashboard (always — trial handles access)
