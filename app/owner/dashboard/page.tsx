@@ -80,16 +80,12 @@ export default function OwnerDashboardPage() {
       setError(null);
 
       try {
-        const headers = OWNER_API_TOKEN ? { 'x-owner-api-key': OWNER_API_TOKEN } : undefined;
-
         const [metricsRes, referralsRes] = await Promise.all([
           fetch('/api/owner/metrics', {
             cache: 'no-store',
-            headers,
           }),
           fetch('/api/owner/referrals', {
             cache: 'no-store',
-            headers,
           }),
         ]);
 
