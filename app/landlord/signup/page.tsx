@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '../../supabaseClient';
 import signupValidation from './signupValidation';
+import referralUtils from '../../lib/referrals';
 
 export default function LandlordSignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,6 +21,12 @@ export default function LandlordSignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  const { sanitizeReferralCode } = referralUtils as {
+    sanitizeReferralCode: (value: string | null) => string | null;
+  };
+
+  const referralCode = sanitizeReferralCode(searchParams.get('ref'));
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +50,14 @@ export default function LandlordSignupPage() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
+        options: {
+          data: referralCode
+            ? {
+                referral_code_used: referralCode,
+                referral_source: 'landlord_referral_link',
+              }
+            : undefined,
+        },
       });
 
       if (signUpError) throw signUpError;
@@ -56,21 +72,40 @@ export default function LandlordSignupPage() {
       const trialEndYMD = getTrialEndYMD();
 
       // 2) Insert landlord row
-      const { error: insertError } = await supabase.from('landlords').insert([
-        {
-          email: normalizedEmail,
-          user_id: user.id,
-          trial_active: true,
-          trial_end: trialEndYMD,
-          subscription_active: false,
-        },
-      ]);
+      const { data: insertedLandlord, error: insertError } = await supabase
+        .from('landlords')
+        .insert([
+          {
+            email: normalizedEmail,
+            user_id: user.id,
+            trial_active: true,
+            trial_end: trialEndYMD,
+            subscription_active: false,
+          },
+        ])
+        .select('id')
+        .single();
 
-      if (insertError) {
+      if (insertError || !insertedLandlord?.id) {
         console.error('Error inserting landlord row:', insertError);
         throw new Error(
           'Your account was created, but we could not finish landlord setup. Please contact support.'
         );
+      }
+
+      if (referralCode) {
+        fetch('/api/referrals/attribution', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            landlordId: insertedLandlord.id,
+            userId: user.id,
+            referralCode,
+            source: 'landlord_signup_referral',
+          }),
+        }).catch((referralErr) => {
+          console.warn('Referral attribution was not recorded:', referralErr);
+        });
       }
 
       // 3) Redirect to dashboard (always — trial handles access)
@@ -81,7 +116,8 @@ export default function LandlordSignupPage() {
       router.push('/landlord?signup=1');
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || 'Unable to create your landlord account. Please try again.');
+      const { mapSignupErrorMessage } = signupValidation;
+      setError(mapSignupErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -108,6 +144,12 @@ export default function LandlordSignupPage() {
         <p className="text-[11px] text-emerald-300 mb-4">
           First month free (35 days). No card required.
         </p>
+
+        {referralCode && (
+          <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-950/30 px-3 py-2 text-[11px] text-emerald-100">
+            Referral applied: <span className="font-semibold">{referralCode}</span>
+          </div>
+        )}
 
         {error && (
           <div className="mb-3 rounded-xl bg-rose-950/40 border border-rose-500/40 px-3 py-2 text-xs text-rose-100">
