@@ -8,6 +8,7 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+const ALLOWED_EXPORT_STATUSES = new Set(['approved', 'paid', 'pending', 'void']);
 
 const csvEscape = (value: unknown) => {
   const str = String(value ?? '');
@@ -36,6 +37,12 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const status = (searchParams.get('status') || 'approved').toLowerCase();
+  if (!ALLOWED_EXPORT_STATUSES.has(status)) {
+    return NextResponse.json(
+      { error: 'Invalid export status. Use one of: approved, paid, pending, void.' },
+      { status: 400 }
+    );
+  }
 
   const { data, error } = await supabaseAdmin
     .from('referral_rewards')
