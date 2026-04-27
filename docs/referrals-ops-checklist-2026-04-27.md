@@ -6,7 +6,7 @@ Date: 2026-04-27
 
 - Set `OWNER_API_TOKEN` for owner-only API token access.
 - Optionally set `OWNER_ADMIN_EMAILS` (comma-separated) to require Supabase-authenticated owner identities.
-- Optionally set `NEXT_PUBLIC_OWNER_API_TOKEN` in trusted owner admin deployments for browser-side owner dashboard calls.
+- Optionally set `OWNER_API_ALLOW_OPEN_MODE=true` only for temporary diagnostics in trusted environments.
 - Set `REFERRAL_REWARD_CENTS` if reward amount differs from default 5000 cents.
 
 ## Deployment checks
