@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { enforceOwnerApiAccess } = require('../app/lib/ownerApiAuth.js');
+const {
+  constantTimeTokenEquals,
+  enforceOwnerApiAccess,
+} = require('../app/lib/ownerApiAuth.js');
 
 function makeReq({ authorization = '', ownerKey = '' } = {}) {
   return {
@@ -51,6 +54,32 @@ test('enforceOwnerApiAccess accepts OWNER_API_TOKEN when configured', async () =
   assert.equal(result.mode, 'owner_api_token');
 });
 
+test('enforceOwnerApiAccess accepts bearer OWNER_API_TOKEN when configured', async () => {
+  process.env.OWNER_API_TOKEN = 'secret-owner-token';
+  delete process.env.OWNER_ADMIN_EMAILS;
+
+  const result = await enforceOwnerApiAccess({
+    req: makeReq({ authorization: 'Bearer secret-owner-token' }),
+    supabaseAdmin: makeSupabaseAdmin(),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'owner_api_token');
+});
+
+test('enforceOwnerApiAccess rejects near-match OWNER_API_TOKEN values', async () => {
+  process.env.OWNER_API_TOKEN = 'secret-owner-token';
+  delete process.env.OWNER_ADMIN_EMAILS;
+
+  const result = await enforceOwnerApiAccess({
+    req: makeReq({ ownerKey: 'secret-owner-token-typo' }),
+    supabaseAdmin: makeSupabaseAdmin(),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 401);
+});
+
 test('enforceOwnerApiAccess validates bearer token user email against OWNER_ADMIN_EMAILS', async () => {
   delete process.env.OWNER_API_TOKEN;
   process.env.OWNER_ADMIN_EMAILS = 'owner@example.com,admin@example.com';
@@ -62,4 +91,11 @@ test('enforceOwnerApiAccess validates bearer token user email against OWNER_ADMI
 
   assert.equal(result.ok, true);
   assert.equal(result.mode, 'owner_admin_email');
+});
+
+test('constantTimeTokenEquals returns false for empty or mismatched lengths', () => {
+  assert.equal(constantTimeTokenEquals('', 'a'), false);
+  assert.equal(constantTimeTokenEquals('abc', 'ab'), false);
+  assert.equal(constantTimeTokenEquals('abc', 'xyz'), false);
+  assert.equal(constantTimeTokenEquals('abc', 'abc'), true);
 });

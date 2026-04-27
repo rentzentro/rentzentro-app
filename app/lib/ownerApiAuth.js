@@ -1,7 +1,20 @@
+const crypto = require('node:crypto');
+
 function getBearerToken(authHeader) {
   if (typeof authHeader !== 'string') return '';
   if (!authHeader.toLowerCase().startsWith('bearer ')) return '';
   return authHeader.slice('Bearer '.length).trim();
+}
+
+function constantTimeTokenEquals(a, b) {
+  const left = Buffer.from(String(a || ''));
+  const right = Buffer.from(String(b || ''));
+
+  if (!left.length || !right.length || left.length !== right.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(left, right);
 }
 
 function parseOwnerAdminEmails(raw) {
@@ -19,7 +32,7 @@ async function enforceOwnerApiAccess({ req, supabaseAdmin }) {
 
   if (configuredToken) {
     const providedToken = headerToken || bearerToken;
-    if (providedToken === configuredToken) {
+    if (constantTimeTokenEquals(providedToken, configuredToken)) {
       return { ok: true, mode: 'owner_api_token' };
     }
   }
@@ -94,6 +107,7 @@ async function enforceOwnerApiAccess({ req, supabaseAdmin }) {
 }
 
 module.exports = {
+  constantTimeTokenEquals,
   enforceOwnerApiAccess,
   parseOwnerAdminEmails,
 };
