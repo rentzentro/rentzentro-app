@@ -5,6 +5,7 @@ const {
   getTrialEndYMD,
   normalizeEmail,
   validateLandlordSignupInput,
+  mapSignupErrorMessage,
 } = require('../app/landlord/signup/signupValidation.js');
 
 test('normalizeEmail trims and lowercases email', () => {
@@ -50,4 +51,18 @@ test('validation accepts valid values and returns normalized email', () => {
 test('trial end date is 35 days from now by default', () => {
   const mockNow = new Date('2026-04-21T00:00:00.000Z');
   assert.equal(getTrialEndYMD(35, mockNow), '2026-05-26');
+});
+
+
+test('mapSignupErrorMessage translates user already registered errors', () => {
+  const message = mapSignupErrorMessage({ message: 'User already registered' });
+  assert.equal(
+    message,
+    'This email is already registered. Please sign in instead, or use Forgot password if needed.'
+  );
+});
+
+test('mapSignupErrorMessage falls back to original message when unknown', () => {
+  const message = mapSignupErrorMessage({ message: 'Temporary outage' });
+  assert.equal(message, 'Temporary outage');
 });
