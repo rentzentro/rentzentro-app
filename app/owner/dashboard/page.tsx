@@ -159,6 +159,12 @@ export default function OwnerDashboardPage() {
               Back to marketing site
             </Link>
             <Link
+              href="/owner/referrals"
+              className="rz-btn-nav"
+            >
+              Referral rewards
+            </Link>
+            <Link
               href="/landlord"
               className="rz-btn-nav"
             >
