@@ -1033,7 +1033,7 @@ export default async function HomePage() {
           {publicListings.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 p-5 transition duration-300 hover:border-emerald-500/20 hover:bg-slate-900/70">
               <p className="text-sm font-semibold text-slate-100">
-                Landlords cn create listings and share them anywhere.
+                Landlords can create listings and share them anywhere.
               </p>
               <p className="mt-1 text-[12px] leading-5 text-slate-400">
                 RentZentro does not auto-post to listing platforms. You stay in control of where
