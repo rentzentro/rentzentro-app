@@ -47,6 +47,12 @@ function getRateLimitClientIp(req) {
     return firstForwardedIp;
   }
 
+  const cfConnectingIp = req?.headers?.get?.('cf-connecting-ip') || '';
+  const normalizedCfConnectingIp = String(cfConnectingIp).trim();
+  if (normalizedCfConnectingIp) {
+    return normalizedCfConnectingIp;
+  }
+
   const realIp = req?.headers?.get?.('x-real-ip') || '';
   const normalizedRealIp = String(realIp).trim();
   return normalizedRealIp || 'unknown';

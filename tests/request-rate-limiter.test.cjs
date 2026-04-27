@@ -36,9 +36,19 @@ test('getRateLimitClientIp uses first forwarded IP and falls back safely', () =>
     },
   };
 
+  const reqWithCloudflareIp = {
+    headers: {
+      get(header) {
+        if (header === 'cf-connecting-ip') return '192.0.2.77';
+        return null;
+      },
+    },
+  };
+
   const reqWithoutIp = { headers: { get() { return null; } } };
 
   assert.equal(getRateLimitClientIp(reqWithForwarded), '198.51.100.20');
+  assert.equal(getRateLimitClientIp(reqWithCloudflareIp), '192.0.2.77');
   assert.equal(getRateLimitClientIp(reqWithRealIpOnly), '203.0.113.8');
   assert.equal(getRateLimitClientIp(reqWithoutIp), 'unknown');
 });
