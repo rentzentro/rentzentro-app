@@ -26,8 +26,28 @@ function getTrialEndYMD(days = 35, now = new Date()) {
   return trialEnd.toISOString().split('T')[0];
 }
 
+
+function mapSignupErrorMessage(err) {
+  const raw = String(err?.message || err?.error_description || '').toLowerCase();
+  const code = String(err?.code || '').toLowerCase();
+  const status = Number(err?.status || 0);
+
+  const alreadyRegistered =
+    raw.includes('user already registered') ||
+    raw.includes('already registered') ||
+    code === 'user_already_exists' ||
+    (status === 422 && raw.includes('email'));
+
+  if (alreadyRegistered) {
+    return 'This email is already registered. Please sign in instead, or use Forgot password if needed.';
+  }
+
+  return err?.message || 'Unable to create your landlord account. Please try again.';
+}
+
 module.exports = {
   getTrialEndYMD,
   normalizeEmail,
   validateLandlordSignupInput,
+  mapSignupErrorMessage,
 };
