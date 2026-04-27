@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin, isSupabaseAdminConfigured } from '../../../supabaseAdminClient';
 import { attributeReferral } from './attributionFlow';
-import { takeRateLimitToken } from '../../../lib/requestRateLimiter';
+import { getRateLimitClientIp, takeRateLimitToken } from '../../../lib/requestRateLimiter';
 
 export async function POST(req: Request) {
-  const ip = req.headers.get('x-forwarded-for') || 'unknown';
+  const ip = getRateLimitClientIp(req);
   const rate = takeRateLimitToken({
-    key: `referral-attribution:${ip}` ,
+    key: `referral-attribution:${ip}`,
     limit: 45,
     windowMs: 60 * 1000,
   });

@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../supabaseAdminClient';
 import { enforceOwnerApiAccess } from '../../../lib/ownerApiAuth';
-import { takeRateLimitToken } from '../../../lib/requestRateLimiter';
+import { getRateLimitClientIp, takeRateLimitToken } from '../../../lib/requestRateLimiter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -105,9 +105,9 @@ const loadLandlords = async (): Promise<LandlordRow[]> => {
 };
 
 export async function GET(req: Request) {
-  const ip = req.headers.get('x-forwarded-for') || 'unknown';
+  const ip = getRateLimitClientIp(req);
   const rate = takeRateLimitToken({
-    key: `owner-metrics:${ip}` ,
+    key: `owner-metrics:${ip}`,
     limit: 90,
     windowMs: 60 * 1000,
   });

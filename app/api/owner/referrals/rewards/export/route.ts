@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../../supabaseAdminClient';
 import { enforceOwnerApiAccess } from '../../../../../lib/ownerApiAuth';
-import { takeRateLimitToken } from '../../../../../lib/requestRateLimiter';
+import {
+  getRateLimitClientIp,
+  takeRateLimitToken,
+} from '../../../../../lib/requestRateLimiter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,9 +18,9 @@ const csvEscape = (value: unknown) => {
 };
 
 export async function GET(req: Request) {
-  const ip = req.headers.get('x-forwarded-for') || 'unknown';
+  const ip = getRateLimitClientIp(req);
   const rate = takeRateLimitToken({
-    key: `owner-referrals-export:${ip}` ,
+    key: `owner-referrals-export:${ip}`,
     limit: 20,
     windowMs: 60 * 1000,
   });

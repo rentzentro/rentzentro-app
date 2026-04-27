@@ -37,6 +37,22 @@ function takeRateLimitToken({ key, limit = DEFAULT_LIMIT, windowMs = DEFAULT_WIN
   return { ok: true, remaining: Math.max(0, limit - existing.count), resetMs: windowMs };
 }
 
+function getRateLimitClientIp(req) {
+  const xForwardedFor = req?.headers?.get?.('x-forwarded-for') || '';
+  const firstForwardedIp = String(xForwardedFor)
+    .split(',')[0]
+    .trim();
+
+  if (firstForwardedIp) {
+    return firstForwardedIp;
+  }
+
+  const realIp = req?.headers?.get?.('x-real-ip') || '';
+  const normalizedRealIp = String(realIp).trim();
+  return normalizedRealIp || 'unknown';
+}
+
 module.exports = {
+  getRateLimitClientIp,
   takeRateLimitToken,
 };

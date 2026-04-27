@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../supabaseAdminClient';
 import { enforceOwnerApiAccess } from '../../../../lib/ownerApiAuth';
-import { takeRateLimitToken } from '../../../../lib/requestRateLimiter';
+import { getRateLimitClientIp, takeRateLimitToken } from '../../../../lib/requestRateLimiter';
 import { applyReferralRewardAction, listReferralRewards } from './rewardAdminFlow';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  const ip = req.headers.get('x-forwarded-for') || 'unknown';
+  const ip = getRateLimitClientIp(req);
   const rate = takeRateLimitToken({
-    key: `owner-referrals-rewards:get:${ip}` ,
+    key: `owner-referrals-rewards:get:${ip}`,
     limit: 120,
     windowMs: 60 * 1000,
   });
@@ -36,9 +36,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const ip = req.headers.get('x-forwarded-for') || 'unknown';
+  const ip = getRateLimitClientIp(req);
   const rate = takeRateLimitToken({
-    key: `owner-referrals-rewards:post:${ip}` ,
+    key: `owner-referrals-rewards:post:${ip}`,
     limit: 60,
     windowMs: 60 * 1000,
   });
