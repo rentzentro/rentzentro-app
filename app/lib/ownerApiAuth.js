@@ -24,6 +24,11 @@ function parseOwnerAdminEmails(raw) {
     .filter(Boolean);
 }
 
+function isOwnerApiOpenModeAllowed() {
+  const value = String(process.env.OWNER_API_ALLOW_OPEN_MODE || '').trim().toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes';
+}
+
 async function enforceOwnerApiAccess({ req, supabaseAdmin }) {
   const configuredToken = String(process.env.OWNER_API_TOKEN || '').trim();
   const authHeader = req.headers.get('authorization') || '';
@@ -38,9 +43,21 @@ async function enforceOwnerApiAccess({ req, supabaseAdmin }) {
   }
 
   const adminEmails = parseOwnerAdminEmails(process.env.OWNER_ADMIN_EMAILS);
+  const allowOpenMode = isOwnerApiOpenModeAllowed();
 
   if (!configuredToken && !adminEmails.length) {
-    return { ok: true, mode: 'open' };
+    if (allowOpenMode) {
+      return { ok: true, mode: 'open' };
+    }
+
+    return {
+      ok: false,
+      status: 500,
+      body: {
+        error:
+          'Owner API auth is not configured. Set OWNER_API_TOKEN or OWNER_ADMIN_EMAILS, or explicitly allow open mode.',
+      },
+    };
   }
 
   if (!supabaseAdmin) {
@@ -109,5 +126,6 @@ async function enforceOwnerApiAccess({ req, supabaseAdmin }) {
 module.exports = {
   constantTimeTokenEquals,
   enforceOwnerApiAccess,
+  isOwnerApiOpenModeAllowed,
   parseOwnerAdminEmails,
 };

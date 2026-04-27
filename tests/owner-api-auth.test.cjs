@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   constantTimeTokenEquals,
   enforceOwnerApiAccess,
+  isOwnerApiOpenModeAllowed,
 } = require('../app/lib/ownerApiAuth.js');
 
 function makeReq({ authorization = '', ownerKey = '' } = {}) {
@@ -29,9 +30,10 @@ function makeSupabaseAdmin({ email = 'owner@example.com', error = null } = {}) {
   };
 }
 
-test('enforceOwnerApiAccess allows open mode when no token and no admin emails are configured', async () => {
+test('enforceOwnerApiAccess allows open mode only when explicitly enabled', async () => {
   delete process.env.OWNER_API_TOKEN;
   delete process.env.OWNER_ADMIN_EMAILS;
+  process.env.OWNER_API_ALLOW_OPEN_MODE = 'true';
 
   const result = await enforceOwnerApiAccess({
     req: makeReq(),
@@ -40,6 +42,20 @@ test('enforceOwnerApiAccess allows open mode when no token and no admin emails a
 
   assert.equal(result.ok, true);
   assert.equal(result.mode, 'open');
+});
+
+test('enforceOwnerApiAccess rejects unconfigured owner auth by default', async () => {
+  delete process.env.OWNER_API_TOKEN;
+  delete process.env.OWNER_ADMIN_EMAILS;
+  delete process.env.OWNER_API_ALLOW_OPEN_MODE;
+
+  const result = await enforceOwnerApiAccess({
+    req: makeReq(),
+    supabaseAdmin: makeSupabaseAdmin(),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 500);
 });
 
 test('enforceOwnerApiAccess accepts OWNER_API_TOKEN when configured', async () => {
@@ -98,4 +114,15 @@ test('constantTimeTokenEquals returns false for empty or mismatched lengths', ()
   assert.equal(constantTimeTokenEquals('abc', 'ab'), false);
   assert.equal(constantTimeTokenEquals('abc', 'xyz'), false);
   assert.equal(constantTimeTokenEquals('abc', 'abc'), true);
+});
+
+test('isOwnerApiOpenModeAllowed parses common truthy variants', () => {
+  process.env.OWNER_API_ALLOW_OPEN_MODE = 'yes';
+  assert.equal(isOwnerApiOpenModeAllowed(), true);
+
+  process.env.OWNER_API_ALLOW_OPEN_MODE = '1';
+  assert.equal(isOwnerApiOpenModeAllowed(), true);
+
+  process.env.OWNER_API_ALLOW_OPEN_MODE = 'false';
+  assert.equal(isOwnerApiOpenModeAllowed(), false);
 });
