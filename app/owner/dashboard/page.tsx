@@ -4,6 +4,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
+const OWNER_API_TOKEN = process.env.NEXT_PUBLIC_OWNER_API_TOKEN || '';
+
 type OwnerMetrics = {
   totalLandlords: number;
   totalProperties: number;
