@@ -52,3 +52,37 @@ test('getRateLimitClientIp uses first forwarded IP and falls back safely', () =>
   assert.equal(getRateLimitClientIp(reqWithRealIpOnly), '203.0.113.8');
   assert.equal(getRateLimitClientIp(reqWithoutIp), 'unknown');
 });
+
+test('getRateLimitClientIp normalizes common proxy IP formats', () => {
+  const reqWithIpv4Port = {
+    headers: {
+      get(header) {
+        if (header === 'x-forwarded-for') return '198.51.100.20:443';
+        return null;
+      },
+    },
+  };
+
+  const reqWithIpv6MappedIpv4 = {
+    headers: {
+      get(header) {
+        if (header === 'x-forwarded-for') return '::ffff:203.0.113.22';
+        return null;
+      },
+    },
+  };
+
+  const reqWithBracketedIpv6 = {
+    headers: {
+      get(header) {
+        if (header === 'x-real-ip') return '[2001:db8::1]:8443';
+        if (header === 'x-forwarded-for') return 'unknown';
+        return null;
+      },
+    },
+  };
+
+  assert.equal(getRateLimitClientIp(reqWithIpv4Port), '198.51.100.20');
+  assert.equal(getRateLimitClientIp(reqWithIpv6MappedIpv4), '203.0.113.22');
+  assert.equal(getRateLimitClientIp(reqWithBracketedIpv6), '2001:db8::1');
+});
