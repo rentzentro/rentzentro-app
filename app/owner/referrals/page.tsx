@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
+const OWNER_API_TOKEN = process.env.NEXT_PUBLIC_OWNER_API_TOKEN || '';
+
 type RewardRow = {
   id: string;
   status: string | null;
@@ -23,6 +25,7 @@ export default function OwnerReferralRewardsPage() {
   const [rewards, setRewards] = useState<RewardRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [processingRewardId, setProcessingRewardId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const pendingCount = useMemo(
     () => rewards.filter((reward) => String(reward.status || '').toLowerCase() === 'pending').length,
@@ -34,7 +37,10 @@ export default function OwnerReferralRewardsPage() {
     setError(null);
 
     try {
-      const res = await fetch('/api/owner/referrals/rewards?limit=250', { cache: 'no-store' });
+      const res = await fetch('/api/owner/referrals/rewards?limit=250', {
+        cache: 'no-store',
+        headers: OWNER_API_TOKEN ? { 'x-owner-api-key': OWNER_API_TOKEN } : undefined,
+      });
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
@@ -53,6 +59,38 @@ export default function OwnerReferralRewardsPage() {
     loadRewards();
   }, []);
 
+
+  const handleExportApproved = async () => {
+    setExporting(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/owner/referrals/rewards/export?status=approved', {
+        headers: OWNER_API_TOKEN ? { 'x-owner-api-key': OWNER_API_TOKEN } : undefined,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || 'Failed to export approved rewards.');
+      }
+
+      const csv = await res.text();
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'referral-rewards-approved.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to export approved rewards.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const applyAction = async (rewardId: string, action: 'approve' | 'mark_paid' | 'void') => {
     setProcessingRewardId(rewardId);
     setError(null);
@@ -60,7 +98,10 @@ export default function OwnerReferralRewardsPage() {
     try {
       const res = await fetch('/api/owner/referrals/rewards', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(OWNER_API_TOKEN ? { 'x-owner-api-key': OWNER_API_TOKEN } : {}),
+        },
         body: JSON.stringify({
           rewardId,
           action,
@@ -99,8 +140,18 @@ export default function OwnerReferralRewardsPage() {
             </p>
           </div>
 
-          <div className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-xs font-medium text-emerald-100">
-            Pending rewards: {pendingCount}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExportApproved}
+              disabled={exporting}
+              className="rz-btn-nav text-xs disabled:opacity-50"
+            >
+              {exporting ? 'Exporting…' : 'Export approved CSV'}
+            </button>
+            <div className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-4 py-2 text-xs font-medium text-emerald-100">
+              Pending rewards: {pendingCount}
+            </div>
           </div>
         </header>
 

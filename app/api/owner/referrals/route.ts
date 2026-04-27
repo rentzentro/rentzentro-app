@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../supabaseAdminClient';
+import { enforceOwnerApiAccess } from '../../../lib/ownerApiAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,12 @@ type ReferralRewardRow = {
   referrer_landlord_id: number;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = enforceOwnerApiAccess(req);
+  if (!auth.ok) {
+    return NextResponse.json(auth.body, { status: auth.status });
+  }
+
   try {
     const [eventsRes, rewardsRes] = await Promise.all([
       supabaseAdmin

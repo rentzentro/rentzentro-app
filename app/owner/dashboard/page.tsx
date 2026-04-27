@@ -4,6 +4,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
+const OWNER_API_TOKEN = process.env.NEXT_PUBLIC_OWNER_API_TOKEN || '';
+
 type OwnerMetrics = {
   totalLandlords: number;
   totalProperties: number;
@@ -37,6 +39,14 @@ type OwnerMetrics = {
   };
 };
 
+
+type ReferralSummary = {
+  totalReferralEvents: number;
+  totalRewards: number;
+  pendingRewards: number;
+  pendingRewardAmountCents: number;
+};
+
 const formatCurrency = (value: number | null | undefined) => {
   if (value == null || isNaN(value)) return '-';
   return value.toLocaleString('en-US', {
@@ -62,6 +72,7 @@ export default function OwnerDashboardPage() {
   const [metrics, setMetrics] = useState<OwnerMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -69,14 +80,34 @@ export default function OwnerDashboardPage() {
       setError(null);
 
       try {
-        const res = await fetch('/api/owner/metrics', {
-          cache: 'no-store', // always pull fresh data
-        });
+        const headers = OWNER_API_TOKEN ? { 'x-owner-api-key': OWNER_API_TOKEN } : undefined;
 
-        const raw = await res.json().catch(() => ({}));
+        const [metricsRes, referralsRes] = await Promise.all([
+          fetch('/api/owner/metrics', {
+            cache: 'no-store',
+            headers,
+          }),
+          fetch('/api/owner/referrals', {
+            cache: 'no-store',
+            headers,
+          }),
+        ]);
 
-        if (!res.ok) {
+        const raw = await metricsRes.json().catch(() => ({}));
+
+        if (!metricsRes.ok) {
           throw new Error(raw?.error || 'Failed to load owner metrics.');
+        }
+
+        const referralRaw = await referralsRes.json().catch(() => ({}));
+
+        if (referralsRes.ok) {
+          setReferralSummary({
+            totalReferralEvents: Number(referralRaw?.summary?.totalReferralEvents ?? 0),
+            totalRewards: Number(referralRaw?.summary?.totalRewards ?? 0),
+            pendingRewards: Number(referralRaw?.summary?.rewardStatus?.pending ?? 0),
+            pendingRewardAmountCents: Number(referralRaw?.summary?.pendingRewardAmountCents ?? 0),
+          });
         }
 
         // Allow either { metrics: {...} } or {...}
@@ -237,6 +268,38 @@ export default function OwnerDashboardPage() {
                 <p className="mt-1 text-[11px] text-emerald-100/80">
                   Sum of current units&apos; monthly rent.
                 </p>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[11px] text-slate-500 uppercase tracking-wide">Referral program</p>
+                  <h2 className="mt-1 text-sm font-semibold text-slate-50">Reward pipeline snapshot</h2>
+                </div>
+                <Link href="/owner/referrals" className="rz-btn-nav text-xs">
+                  Open referral queue
+                </Link>
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-4 text-xs">
+                <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+                  <p className="text-slate-500">Events</p>
+                  <p className="mt-1 text-slate-100 font-semibold">{referralSummary?.totalReferralEvents ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+                  <p className="text-slate-500">Rewards</p>
+                  <p className="mt-1 text-slate-100 font-semibold">{referralSummary?.totalRewards ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+                  <p className="text-slate-500">Pending rewards</p>
+                  <p className="mt-1 text-amber-300 font-semibold">{referralSummary?.pendingRewards ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+                  <p className="text-slate-500">Pending payout</p>
+                  <p className="mt-1 text-emerald-300 font-semibold">
+                    {formatCurrency((referralSummary?.pendingRewardAmountCents ?? 0) / 100)}
+                  </p>
+                </div>
               </div>
             </section>
 

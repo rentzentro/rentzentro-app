@@ -9,6 +9,12 @@ const {
 function makeSupabaseAdmin({ reward }) {
   return {
     from(table) {
+      if (table === 'referral_reward_audit_logs') {
+        return {
+          insert: async () => ({ error: null }),
+        };
+      }
+
       assert.equal(table, 'referral_rewards');
       return {
         select() {

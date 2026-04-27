@@ -143,6 +143,23 @@ async function applyReferralRewardAction({ supabaseAdmin, payload }) {
     return json(500, { error: 'Failed to update reward record.' });
   }
 
+  const { error: auditError } = await supabaseAdmin
+    .from('referral_reward_audit_logs')
+    .insert([
+      {
+        reward_id: reward.id,
+        action,
+        previous_status: reward.status,
+        next_status: updated.status,
+        processed_by: processedBy || null,
+        note: note || null,
+      },
+    ]);
+
+  if (auditError) {
+    return json(500, { error: 'Reward updated, but audit log write failed.' });
+  }
+
   return json(200, {
     reward: updated,
   });
