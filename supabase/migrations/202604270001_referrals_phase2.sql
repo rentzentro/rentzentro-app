@@ -105,46 +105,82 @@ do update set
 alter table public.referral_codes enable row level security;
 alter table public.referral_events enable row level security;
 
-create policy if not exists referral_codes_owner_select
-on public.referral_codes for select
-to authenticated
-using (
-  exists (
+do $$
+begin
+  if not exists (
     select 1
-    from public.landlords l
-    where l.id = referral_codes.landlord_id
-      and l.user_id = auth.uid()
-  )
-);
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'referral_codes'
+      and policyname = 'referral_codes_owner_select'
+  ) then
+    create policy referral_codes_owner_select
+    on public.referral_codes for select
+    to authenticated
+    using (
+      exists (
+        select 1
+        from public.landlords l
+        where l.id = referral_codes.landlord_id
+          and l.user_id = auth.uid()
+      )
+    );
+  end if;
+end
+$$;
 
-create policy if not exists referral_codes_owner_update
-on public.referral_codes for update
-to authenticated
-using (
-  exists (
+do $$
+begin
+  if not exists (
     select 1
-    from public.landlords l
-    where l.id = referral_codes.landlord_id
-      and l.user_id = auth.uid()
-  )
-)
-with check (
-  exists (
-    select 1
-    from public.landlords l
-    where l.id = referral_codes.landlord_id
-      and l.user_id = auth.uid()
-  )
-);
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'referral_codes'
+      and policyname = 'referral_codes_owner_update'
+  ) then
+    create policy referral_codes_owner_update
+    on public.referral_codes for update
+    to authenticated
+    using (
+      exists (
+        select 1
+        from public.landlords l
+        where l.id = referral_codes.landlord_id
+          and l.user_id = auth.uid()
+      )
+    )
+    with check (
+      exists (
+        select 1
+        from public.landlords l
+        where l.id = referral_codes.landlord_id
+          and l.user_id = auth.uid()
+      )
+    );
+  end if;
+end
+$$;
 
-create policy if not exists referral_events_owner_select
-on public.referral_events for select
-to authenticated
-using (
-  exists (
+do $$
+begin
+  if not exists (
     select 1
-    from public.landlords l
-    where (l.id = referral_events.referrer_landlord_id or l.id = referral_events.referred_landlord_id)
-      and l.user_id = auth.uid()
-  )
-);
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'referral_events'
+      and policyname = 'referral_events_owner_select'
+  ) then
+    create policy referral_events_owner_select
+    on public.referral_events for select
+    to authenticated
+    using (
+      exists (
+        select 1
+        from public.landlords l
+        where (l.id = referral_events.referrer_landlord_id or l.id = referral_events.referred_landlord_id)
+          and l.user_id = auth.uid()
+      )
+    );
+  end if;
+end
+$$;
