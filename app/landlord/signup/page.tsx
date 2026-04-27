@@ -116,7 +116,8 @@ export default function LandlordSignupPage() {
       router.push('/landlord?signup=1');
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || 'Unable to create your landlord account. Please try again.');
+      const { mapSignupErrorMessage } = signupValidation;
+      setError(mapSignupErrorMessage(err));
     } finally {
       setLoading(false);
     }
