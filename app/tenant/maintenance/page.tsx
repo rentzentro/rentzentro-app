@@ -47,6 +47,13 @@ type FormState = {
   accessNotes: string;
 };
 
+type UploadKind = 'photo' | 'video';
+
+type UploadItem = {
+  file: File;
+  kind: UploadKind;
+};
+
 // ---------- Component ----------
 
 const emptyForm: FormState = {
@@ -57,6 +64,12 @@ const emptyForm: FormState = {
   location: '',
   accessNotes: '',
 };
+
+const MAX_PHOTOS = 6;
+const MAX_VIDEOS = 1;
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024; // 8MB
+const MAX_VIDEO_BYTES = 30 * 1024 * 1024; // 30MB
+const MAINTENANCE_MEDIA_BUCKET = 'maintenance-media';
 
 const timelineLabels: Record<string, string> = {
   new: 'Submitted',
@@ -75,6 +88,7 @@ export default function TenantMaintenancePage() {
   const [property, setProperty] = useState<PropertyRow | null>(null);
   const [requests, setRequests] = useState<MaintenanceRow[]>([]);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -206,10 +220,50 @@ export default function TenantMaintenancePage() {
 
       if (insertError) throw insertError;
 
-      // Optimistically update list in UI
-      setRequests((prev) => [insertData as MaintenanceRow, ...prev]);
+      // 2) Upload media files (optional)
+      const attachmentRefs: string[] = [];
+      for (const item of uploads) {
+        const safeName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `${tenant.id}/${insertData.id}/${Date.now()}-${safeName}`;
+        const { error: uploadErr } = await supabase.storage
+          .from(MAINTENANCE_MEDIA_BUCKET)
+          .upload(path, item.file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: item.file.type || undefined,
+          });
 
-      // 2) Email to landlord (let backend decide final "to" address)
+        if (uploadErr) {
+          throw new Error(
+            `Request was created, but uploading ${item.file.name} failed: ${uploadErr.message}`
+          );
+        }
+
+        attachmentRefs.push(`Attachment (${item.kind}): ${path}`);
+      }
+
+      const fullDescription = attachmentRefs.length
+        ? `${enrichedDescription}\n\nAttachments:\n${attachmentRefs.join('\n')}`
+        : enrichedDescription;
+
+      if (attachmentRefs.length) {
+        const { error: updateErr } = await supabase
+          .from('maintenance_requests')
+          .update({ description: fullDescription })
+          .eq('id', insertData.id);
+        if (updateErr) throw updateErr;
+      }
+
+      // Optimistically update list in UI
+      setRequests((prev) => [
+        {
+          ...(insertData as MaintenanceRow),
+          description: fullDescription,
+        },
+        ...prev,
+      ]);
+
+      // 3) Email to landlord (let backend decide final "to" address)
       fetch('/api/maintenance-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -221,7 +275,7 @@ export default function TenantMaintenancePage() {
           propertyName: property?.name,
           unitLabel: property?.unit_label,
           title: form.title,
-          description: enrichedDescription,
+          description: fullDescription,
           priority: form.priority,
         }),
       }).catch((err) => {
@@ -229,6 +283,7 @@ export default function TenantMaintenancePage() {
       });
 
       setForm(emptyForm);
+      setUploads([]);
       setSuccess('Your maintenance request has been submitted.');
     } catch (err: any) {
       console.error(err);
@@ -239,6 +294,57 @@ export default function TenantMaintenancePage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const appendFilesByKind = (selected: File[], kind: UploadKind) => {
+    if (!selected.length) return;
+
+    let next = [...uploads];
+    for (const file of selected) {
+      const kindValid =
+        kind === 'photo'
+          ? file.type.startsWith('image/')
+          : file.type.startsWith('video/');
+      if (!kindValid) continue;
+
+      if (kind === 'photo' && file.size > MAX_PHOTO_BYTES) {
+        setError(`"${file.name}" is too large. Photos must be under 8MB.`);
+        continue;
+      }
+      if (kind === 'video' && file.size > MAX_VIDEO_BYTES) {
+        setError(`"${file.name}" is too large. Videos must be under 30MB.`);
+        continue;
+      }
+
+      const photoCount = next.filter((u) => u.kind === 'photo').length;
+      const videoCount = next.filter((u) => u.kind === 'video').length;
+      if (kind === 'photo' && photoCount >= MAX_PHOTOS) {
+        setError(`You can upload up to ${MAX_PHOTOS} photos per request.`);
+        break;
+      }
+      if (kind === 'video' && videoCount >= MAX_VIDEOS) {
+        setError('Only 1 video is allowed per request.');
+        break;
+      }
+
+      next.push({ file, kind });
+    }
+
+    setUploads(next);
+  };
+
+  const handleUploadSelect = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    kind: UploadKind
+  ) => {
+    setError(null);
+    const files = Array.from(e.target.files || []);
+    appendFilesByKind(files, kind);
+    e.target.value = '';
+  };
+
+  const removeUpload = (index: number) => {
+    setUploads((prev) => prev.filter((_, i) => i !== index));
   };
 
   // ---------- UI ----------
@@ -344,6 +450,84 @@ export default function TenantMaintenancePage() {
                   className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-50 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   placeholder="Describe what’s happening, how long it’s been an issue, and any access notes for your landlord."
                 />
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
+                <label className="block text-xs text-slate-300">
+                  Photos / video (optional)
+                </label>
+                <p className="text-[11px] text-slate-400">
+                  Add up to {MAX_PHOTOS} photos and {MAX_VIDEOS} video.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800">
+                    Take photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(e) => handleUploadSelect(e, 'photo')}
+                      disabled={submitting}
+                      className="hidden"
+                    />
+                  </label>
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800">
+                    Record video
+                    <input
+                      type="file"
+                      accept="video/*"
+                      capture="environment"
+                      onChange={(e) => handleUploadSelect(e, 'video')}
+                      disabled={submitting}
+                      className="hidden"
+                    />
+                  </label>
+                  <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-slate-800">
+                    Upload from device
+                    <input
+                      type="file"
+                      accept="image/*,video/*"
+                      multiple
+                      disabled={submitting}
+                      className="hidden"
+                      onChange={(e) => {
+                        setError(null);
+                        const files = Array.from(e.target.files || []);
+                        appendFilesByKind(
+                          files.filter((f) => f.type.startsWith('image/')),
+                          'photo'
+                        );
+                        appendFilesByKind(
+                          files.filter((f) => f.type.startsWith('video/')),
+                          'video'
+                        );
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {uploads.length > 0 && (
+                  <ul className="space-y-1">
+                    {uploads.map((item, index) => (
+                      <li
+                        key={`${item.file.name}-${index}`}
+                        className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[11px] text-slate-300"
+                      >
+                        <span className="truncate pr-2">
+                          {item.kind === 'video' ? '🎥' : '📷'} {item.file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeUpload(index)}
+                          className="text-slate-400 hover:text-red-300"
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
