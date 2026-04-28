@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
+const OWNER_API_TOKEN = process.env.NEXT_PUBLIC_OWNER_API_TOKEN || '';
+
 type RewardRow = {
   id: string;
   status: string | null;
@@ -37,6 +39,7 @@ export default function OwnerReferralRewardsPage() {
     try {
       const res = await fetch('/api/owner/referrals/rewards?limit=250', {
         cache: 'no-store',
+        headers: OWNER_API_TOKEN ? { 'x-owner-api-key': OWNER_API_TOKEN } : undefined,
       });
       const data = await res.json().catch(() => ({}));
 
@@ -62,7 +65,9 @@ export default function OwnerReferralRewardsPage() {
     setError(null);
 
     try {
-      const res = await fetch('/api/owner/referrals/rewards/export?status=approved');
+      const res = await fetch('/api/owner/referrals/rewards/export?status=approved', {
+        headers: OWNER_API_TOKEN ? { 'x-owner-api-key': OWNER_API_TOKEN } : undefined,
+      });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -95,6 +100,7 @@ export default function OwnerReferralRewardsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(OWNER_API_TOKEN ? { 'x-owner-api-key': OWNER_API_TOKEN } : {}),
         },
         body: JSON.stringify({
           rewardId,
