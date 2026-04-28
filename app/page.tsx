@@ -889,12 +889,14 @@ export default async function HomePage() {
         <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-14">
           <div className="mb-6 rounded-3xl border border-sky-300/40 bg-gradient-to-br from-sky-500/20 via-slate-950 to-slate-950 p-5 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-sky-100">
-              New on RentZentro
+              Featured capabilities
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-              Helpful day-to-day tools for landlords and the tenant experiance
+              Day-to-day tools for both landlord and tenant workflows
             </h2>
             <p className="mt-2 max-w-3xl text-[13px] leading-6 text-slate-300">
+              RentZentro combines leasing, payments, maintenance, messaging, documents, and
+              operations in one connected workflow.
             </p>
             <div className="mt-4 grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-sky-300/20 bg-slate-950/60 p-4">
@@ -914,8 +916,6 @@ export default async function HomePage() {
                   </Link>
                 </div>
               </div>
-
-
               <div className="rounded-2xl border border-sky-300/35 bg-gradient-to-br from-sky-500/20 to-slate-950 p-4 shadow-[0_0_0_1px_rgba(125,211,252,0.2)]">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-100">
                   Highlighted feature
@@ -937,8 +937,9 @@ export default async function HomePage() {
               <div className="rounded-2xl border border-sky-300/20 bg-slate-950/60 p-4">
                 <p className="text-sm font-semibold text-slate-50">Tenant Explore Nearby</p>
                 <p className="mt-2 text-[13px] leading-6 text-slate-300">
-                Give your tenants a better living experience with local recommendations like restaurants, parks, essentials,
-                  weekend events and farmers markets right from their portal.
+                  Give tenants a better living experience with local recommendations like
+                  restaurants, parks, essentials, weekend events, and farmers markets right from
+                  their portal.
                 </p>
                 <div className="mt-3">
                   <Link
@@ -949,6 +950,24 @@ export default async function HomePage() {
                   </Link>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 grid gap-2 text-[13px] text-slate-200 md:grid-cols-2">
+              {[
+                'Autopay support for recurring rent collection',
+                'Team access controls for owners and staff',
+                'Stripe Connect payouts routed directly to your account',
+                'Messaging + document workflows in one dashboard',
+                'Tenant maintenance tracking and status visibility',
+                'E-sign flow support with purchasable e-sign credits',
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-2 rounded-xl border border-sky-300/20 bg-slate-950/45 px-3 py-2.5">
+                  <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-sky-400/20 text-[11px] text-sky-200">
+                    ✓
+                  </span>
+                  <p>{item}</p>
+                </div>
+              ))}
             </div>
           </div>
 
