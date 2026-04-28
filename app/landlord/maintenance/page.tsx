@@ -52,6 +52,51 @@ const formatDateTime = (iso: string | null | undefined) => {
   });
 };
 
+type ParsedAttachment = { kind: 'photo' | 'video' | 'file'; path: string };
+
+const ATTACHMENT_LINE_RE = /^Attachment \((photo|video)\):\s+(.+)$/i;
+
+const parseDescription = (text: string | null | undefined) => {
+  const raw = (text || '').split('\n');
+  const attachmentPaths: ParsedAttachment[] = [];
+  const bodyLines: string[] = [];
+
+  for (const line of raw) {
+    const match = line.match(ATTACHMENT_LINE_RE);
+    if (match) {
+      const kind = (match[1].toLowerCase() as 'photo' | 'video') || 'file';
+      attachmentPaths.push({ kind, path: match[2].trim() });
+    } else if (line.trim() !== 'Attachments:') {
+      bodyLines.push(line);
+    }
+  }
+
+  return {
+    body: bodyLines.join('\n').trim() || 'No description provided.',
+    attachmentPaths,
+  };
+};
+
+const renderTextWithLinks = (text: string) => {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return parts.map((part, index) => {
+    if (/^https?:\/\/[^\s]+$/.test(part)) {
+      return (
+        <a
+          key={`${part}-${index}`}
+          href={part}
+          target="_blank"
+          rel="noreferrer"
+          className="text-emerald-300 underline break-all"
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={`${part}-${index}`}>{part}</span>;
+  });
+};
+
 // ---------- Component ----------
 
 export default function LandlordMaintenancePage() {
@@ -68,6 +113,9 @@ export default function LandlordMaintenancePage() {
   // Local drafts for the resolution text so typing feels normal
   const [resolutionDrafts, setResolutionDrafts] = useState<
     Record<number, string>
+  >({});
+  const [signedAttachmentUrls, setSignedAttachmentUrls] = useState<
+    Record<string, string>
   >({});
 
   const tenantById = new Map<number, TenantRow>();
@@ -133,6 +181,44 @@ export default function LandlordMaintenancePage() {
 
     load();
   }, []);
+
+  useEffect(() => {
+    const loadSignedAttachmentUrls = async () => {
+      const uniquePaths = new Set<string>();
+      requests.forEach((r) => {
+        const parsed = parseDescription(r.description);
+        parsed.attachmentPaths.forEach((a) => uniquePaths.add(a.path));
+      });
+
+      if (!uniquePaths.size) {
+        setSignedAttachmentUrls({});
+        return;
+      }
+
+      const entries = await Promise.all(
+        Array.from(uniquePaths).map(async (path) => {
+          const { data, error } = await supabase.storage
+            .from('maintenance-media')
+            .createSignedUrl(path, 60 * 30);
+
+          if (error || !data?.signedUrl) {
+            console.error('Failed to create signed media URL:', path, error);
+            return [path, ''] as const;
+          }
+
+          return [path, data.signedUrl] as const;
+        })
+      );
+
+      const next: Record<string, string> = {};
+      entries.forEach(([path, url]) => {
+        if (url) next[path] = url;
+      });
+      setSignedAttachmentUrls(next);
+    };
+
+    loadSignedAttachmentUrls();
+  }, [requests]);
 
   // ---------- Actions ----------
 
@@ -308,6 +394,7 @@ export default function LandlordMaintenancePage() {
                 const t = r.tenant_id ? tenantById.get(r.tenant_id) : null;
                 const p = r.property_id ? propertyById.get(r.property_id) : null;
                 const saving = savingId === r.id;
+                const parsed = parseDescription(r.description);
 
                 return (
                   <div
@@ -368,8 +455,47 @@ export default function LandlordMaintenancePage() {
                         {r.title || 'Maintenance request'}
                       </p>
                       <p className="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap">
-                        {r.description || 'No description provided.'}
+                        {renderTextWithLinks(
+                          parsed.body
+                        )}
                       </p>
+
+                      {parsed.attachmentPaths.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-[10px] uppercase tracking-wide text-slate-500">
+                            Attachments
+                          </p>
+                          <div className="space-y-1">
+                            {parsed.attachmentPaths.map((attachment, idx) => {
+                              const signedUrl =
+                                signedAttachmentUrls[attachment.path];
+                              return (
+                                <div
+                                  key={`${r.id}-${attachment.path}-${idx}`}
+                                  className="text-[11px]"
+                                >
+                                  {signedUrl ? (
+                                    <a
+                                      href={signedUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-emerald-300 underline break-all"
+                                    >
+                                      {attachment.kind === 'video'
+                                        ? `Open video ${idx + 1}`
+                                        : `Open photo ${idx + 1}`}
+                                    </a>
+                                  ) : (
+                                    <span className="text-slate-500">
+                                      Preparing secure link…
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Property / tenant line */}
