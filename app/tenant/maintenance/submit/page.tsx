@@ -306,7 +306,7 @@ export default function TenantMaintenanceSubmitPage() {
       console.log('Maintenance request created:', insertData);
 
       // 2) Upload media files (optional)
-      const attachmentLinks: string[] = [];
+      const attachmentRefs: string[] = [];
       for (const item of uploads) {
         const safeName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const path = `${tenant.id}/${insertData.id}/${Date.now()}-${safeName}`;
@@ -324,22 +324,14 @@ export default function TenantMaintenanceSubmitPage() {
           );
         }
 
-        const { data: publicUrlData } = supabase.storage
-          .from(MAINTENANCE_MEDIA_BUCKET)
-          .getPublicUrl(path);
-
-        if (publicUrlData?.publicUrl) {
-          attachmentLinks.push(
-            `${item.kind === 'video' ? 'Video' : 'Photo'}: ${publicUrlData.publicUrl}`
-          );
-        }
+        attachmentRefs.push(`Attachment (${item.kind}): ${path}`);
       }
 
-      const fullDescription = attachmentLinks.length
-        ? `${enrichedDescription}\n\nAttachments:\n${attachmentLinks.join('\n')}`
+      const fullDescription = attachmentRefs.length
+        ? `${enrichedDescription}\n\nAttachments:\n${attachmentRefs.join('\n')}`
         : enrichedDescription;
 
-      if (attachmentLinks.length) {
+      if (attachmentRefs.length) {
         const { error: updateErr } = await supabase
           .from('maintenance_requests')
           .update({ description: fullDescription })
