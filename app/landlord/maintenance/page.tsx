@@ -52,6 +52,26 @@ const formatDateTime = (iso: string | null | undefined) => {
   });
 };
 
+const renderTextWithLinks = (text: string) => {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return parts.map((part, index) => {
+    if (/^https?:\/\/[^\s]+$/.test(part)) {
+      return (
+        <a
+          key={`${part}-${index}`}
+          href={part}
+          target="_blank"
+          rel="noreferrer"
+          className="text-emerald-300 underline break-all"
+        >
+          {part}
+        </a>
+      );
+    }
+    return <span key={`${part}-${index}`}>{part}</span>;
+  });
+};
+
 // ---------- Component ----------
 
 export default function LandlordMaintenancePage() {
@@ -368,7 +388,9 @@ export default function LandlordMaintenancePage() {
                         {r.title || 'Maintenance request'}
                       </p>
                       <p className="mt-1 text-[11px] text-slate-400 whitespace-pre-wrap">
-                        {r.description || 'No description provided.'}
+                        {renderTextWithLinks(
+                          r.description || 'No description provided.'
+                        )}
                       </p>
                     </div>
 
