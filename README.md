@@ -20,7 +20,7 @@ RentZentro is designed to give landlords complete operational coverage without e
 
 ## Current landlord pricing
 
-As of April 25, 2026, the landlord subscription plans are:
+As of April 28, 2026, the landlord subscription plans are:
 
 - **Starter:** **$19/month** (up to 3 units)
 - **Core:** **$29.95/month** (up to 20 units)
@@ -61,6 +61,19 @@ These are the same plan prices reflected in the app pricing surfaces.
 - **Messaging with landlord/team**.
 - **Document access and day-to-day portal workflows**.
 - **Explore Nearby** links for local places and **weekend events near home** inside the tenant portal.
+
+---
+
+## Homepage feature alignment (marketing + product)
+
+The homepage currently highlights and should stay aligned with these production feature areas:
+
+- **Rent collection + payouts:** Stripe-powered ACH/card checkout, autopay support, and Stripe Connect payout routing.
+- **Portfolio operations:** property, tenant, expense, and profitability visibility in one dashboard.
+- **Maintenance + vendors:** maintenance request tracking and the location-based maintenance directory.
+- **Leasing + documents:** listing workflows, document handling, and lease drafting support (manual or AI-assisted).
+- **Communication + collaboration:** landlord/tenant messaging plus owner/team account access.
+- **Tenant portal value:** self-service rent payments, maintenance, messaging, and Explore Nearby experiences.
 
 ---
 
