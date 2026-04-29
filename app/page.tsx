@@ -508,17 +508,18 @@ export default async function HomePage() {
           card required.
         </div>
 
-        <header className="rz-fade-up rz-delay-1 mb-8 flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[0_12px_40px_rgba(2,6,23,0.55)] backdrop-blur-xl sm:mb-10 sm:flex-row sm:items-center sm:justify-between">
+        <header className="rz-fade-up rz-delay-1 mb-4 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-2.5 shadow-[0_12px_40px_rgba(2,6,23,0.55)] backdrop-blur-xl sm:mb-10 sm:p-3">
           <BrandWordmark
             subtitle="You stay in control. RentZentro is software — not a property manager."
-            iconClassName="h-10 w-10 rounded-xl text-lg transition duration-300 hover:scale-105"
+            iconClassName="h-9 w-9 rounded-xl text-base transition duration-300 hover:scale-105 sm:h-10 sm:w-10 sm:text-lg"
             titleClassName="text-sm"
+            subtitleClassName="hidden text-[11px] text-slate-400 sm:block"
           />
 
-          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <div className="flex items-center">
             <Link
               href="/login"
-              className="rounded-full border border-white/10 bg-slate-950/80 px-3 py-2 text-center text-xs font-medium text-slate-100 transition duration-200 hover:scale-[1.02] hover:border-emerald-400/40 hover:bg-white/5 active:scale-95"
+              className="rounded-full border border-white/10 bg-slate-950/80 px-3 py-1.5 text-center text-xs font-medium text-slate-100 transition duration-200 hover:scale-[1.02] hover:border-emerald-400/40 hover:bg-white/5 active:scale-95"
             >
               Log in
             </Link>
