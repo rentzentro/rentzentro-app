@@ -93,6 +93,16 @@ export default function LandlordSignupPage() {
         );
       }
 
+      fetch('/api/welcome-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: normalizedEmail,
+        }),
+      }).catch((welcomeEmailErr) => {
+        console.warn('Welcome email was not sent:', welcomeEmailErr);
+      });
+
       if (referralCode) {
         fetch('/api/referrals/attribution', {
           method: 'POST',
