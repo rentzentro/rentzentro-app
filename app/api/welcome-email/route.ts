@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
-import { resend, isResendConfigured, getResendFromAddress } from '../../lib/resend';
+import {
+  resend,
+  isResendConfigured,
+  RENTZENTRO_FROM_EMAIL,
+  RENTZENTRO_REPLY_TO,
+} from '../../lib/resend';
 
-const SUPPORT_EMAIL = 'support@rentzentro.com';
+const SUPPORT_EMAIL = RENTZENTRO_REPLY_TO || 'support@rentzentro.com';
 
 type Body = {
   email?: string;
@@ -47,7 +52,7 @@ export async function POST(req: Request) {
     const message = buildWelcomeEmail({ firstName });
 
     const sendResult = await resend.emails.send({
-      from: getResendFromAddress(),
+      from: RENTZENTRO_FROM_EMAIL,
       to: email,
       replyTo: SUPPORT_EMAIL,
       subject: message.subject,
