@@ -90,8 +90,8 @@ async function createCheckoutSession({
       return json(400, { error: 'Invalid amount.' });
     }
 
-    if (!tenantId) {
-      return json(400, { error: 'Missing tenantId.' });
+    if (!tenantId && !tenantUserId && !tenantEmail && !authUserId && !authEmail) {
+      return json(400, { error: 'Missing tenant identifier.' });
     }
 
     const requestedMethod = paymentMethodType || paymentMethod || method || 'card';
@@ -125,6 +125,10 @@ async function createCheckoutSession({
       return { data, error };
     };
 
+    const isInvalidSyntaxError = (err) =>
+      typeof err?.message === 'string' &&
+      err.message.toLowerCase().includes('invalid input syntax');
+
     let tenantResult = isNumericTenantId
       ? await findTenantByColumn('id', tenantIdentifier)
       : await findTenantByColumn('user_id', tenantIdentifier);
@@ -133,9 +137,13 @@ async function createCheckoutSession({
       const fallback = isNumericTenantId
         ? await findTenantByColumn('user_id', tenantIdentifier)
         : await findTenantByColumn('id', tenantIdentifier);
-      if (fallback?.data || fallback?.error) {
+      if (fallback?.data || (fallback?.error && !isInvalidSyntaxError(fallback.error))) {
         tenantResult = fallback;
       }
+    }
+
+    if (tenantResult?.error && isInvalidSyntaxError(tenantResult.error)) {
+      tenantResult = { data: null, error: null };
     }
 
     if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {
