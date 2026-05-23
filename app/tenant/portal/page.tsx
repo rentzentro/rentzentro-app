@@ -702,7 +702,11 @@ export default function TenantPortalPage() {
         const verificationRes = await fetch('/api/tenant-payment-method', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenantId: tenant.id }),
+          body: JSON.stringify({
+            tenantId: tenant.id,
+            tenantUserId: tenant.user_id ?? null,
+            tenantEmail: tenant.email,
+          }),
         });
 
         const verificationData = await verificationRes.json().catch(() => ({}));
@@ -727,6 +731,8 @@ export default function TenantPortalPage() {
             property?.unit_label ? ` · ${property.unit_label}` : ''
           }`,
           tenantId: tenant.id,
+          tenantUserId: tenant.user_id ?? null,
+          tenantEmail: tenant.email,
           propertyId: property?.id ?? null,
           paymentMethodType,
         }),
