@@ -8,6 +8,8 @@ import BackButton from './BackButton';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const PAGE_SIZE = 50;
+
 type SearchParams = {
   source?: string | string[];
   location?: string | string[];
@@ -15,8 +17,8 @@ type SearchParams = {
   baths?: string | string[];
   minRent?: string | string[];
   maxRent?: string | string[];
+  page?: string | string[];
 };
-
 
 const pickFirst = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 const pickLast = (value?: string | string[]) => (Array.isArray(value) ? value[value.length - 1] : value);
@@ -44,6 +46,12 @@ const toNumber = (value?: string | string[]) => {
 const hasAnyCriteria = (params: SearchParams) =>
   Boolean(params.location || params.beds || params.baths || params.minRent || params.maxRent);
 
+const toPositiveInt = (value?: string | string[]) => {
+  const raw = normalize(value);
+  const numeric = Number(raw);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : 1;
+};
+
 const buildGoogleQuery = (params: SearchParams) => {
   const location = normalize(params.location);
   const beds = normalize(params.beds);
@@ -68,8 +76,11 @@ const buildGoogleQuery = (params: SearchParams) => {
   return parts.join(' ');
 };
 
-async function searchRentzentroListings(params: SearchParams): Promise<Listing[]> {
-  if (!hasAnyCriteria(params) || !isSupabaseBrowserConfigured()) return [];
+async function searchRentzentroListings(
+  params: SearchParams,
+  page: number
+): Promise<{ listings: Listing[]; hasNextPage: boolean }> {
+  if (!isSupabaseBrowserConfigured()) return { listings: [], hasNextPage: false };
 
   const supabase = getSupabaseBrowserClient();
   const location = normalize(params.location).toLowerCase();
@@ -78,12 +89,15 @@ async function searchRentzentroListings(params: SearchParams): Promise<Listing[]
   const minRent = toNumber(params.minRent);
   const maxRent = toNumber(params.maxRent);
 
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE;
+
   let query = supabase
     .from('listings')
     .select('id,title,slug,city,state,neighborhood,rent_amount,beds,baths')
     .eq('published', true)
     .order('published_at', { ascending: false })
-    .limit(60);
+    .range(from, to);
 
   if (beds !== null) query = query.gte('beds', beds);
   if (baths !== null) query = query.gte('baths', baths);
@@ -95,15 +109,34 @@ async function searchRentzentroListings(params: SearchParams): Promise<Listing[]
 
   const rows = (data || []) as Listing[];
   const dedupedRows = Array.from(new Map(rows.map((listing) => [listing.id, listing])).values());
-  if (!location) return dedupedRows;
+  const filteredRows = !location
+    ? dedupedRows
+    : dedupedRows.filter((listing) => {
+        const haystack = [listing.neighborhood, listing.city, listing.state]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(location);
+      });
 
-  return dedupedRows.filter((listing) => {
-    const haystack = [listing.neighborhood, listing.city, listing.state]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-    return haystack.includes(location);
-  });
+  return {
+    listings: filteredRows.slice(0, PAGE_SIZE),
+    hasNextPage: filteredRows.length > PAGE_SIZE,
+  };
+}
+
+function buildPageHref(params: SearchParams, page: number) {
+  const qs = new URLSearchParams();
+  qs.set('source', 'rentzentro');
+
+  const fields: (keyof SearchParams)[] = ['location', 'beds', 'baths', 'minRent', 'maxRent'];
+  for (const field of fields) {
+    const value = normalize(params[field]);
+    if (value) qs.set(field, value);
+  }
+
+  if (page > 1) qs.set('page', String(page));
+  return `/listings?${qs.toString()}`;
 }
 
 export default async function PublicListingsPage({
@@ -114,13 +147,14 @@ export default async function PublicListingsPage({
   const params = ((await searchParams) || {}) as SearchParams;
   const sourceParam = pickLast(params.source);
   const source = sourceParam === 'web' ? 'web' : 'rentzentro';
+  const page = toPositiveInt(params.page);
 
   if (source === 'web') {
     const query = hasAnyCriteria(params) ? buildGoogleQuery(params) : 'apartments for rent near me';
     redirect(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
   }
 
-  const listings = await searchRentzentroListings(params);
+  const { listings, hasNextPage } = await searchRentzentroListings(params, page);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
@@ -136,13 +170,17 @@ export default async function PublicListingsPage({
 
           <ListingsSearchForm defaultLocation={pickFirst(params.location)} />
 
-          {hasAnyCriteria(params) ? (
-            <div className="mt-8 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
+          <div className="mt-8 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
+            <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-slate-100">RentZentro results</h2>
-              {listings.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-300">No matching RentZentro listings yet. Try broadening your filters or search the web.</p>
-              ) : (
-                <ul className="mt-4 space-y-3">
+              <span className="text-xs text-slate-400">Showing up to {PAGE_SIZE} per page</span>
+            </div>
+
+            {listings.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-300">No matching RentZentro listings yet. Try broadening your filters or search the web.</p>
+            ) : (
+              <>
+                <ul className="mt-4 space-y-3 max-h-[70vh] overflow-y-auto pr-1">
                   {listings.map((listing) => (
                     <li key={listing.id} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
                       <Link href={`/listings/${listing.slug}`} className="text-base font-semibold text-emerald-300 hover:text-emerald-200">
@@ -154,9 +192,24 @@ export default async function PublicListingsPage({
                     </li>
                   ))}
                 </ul>
-              )}
-            </div>
-          ) : null}
+
+                <div className="mt-5 flex items-center justify-between">
+                  {page > 1 ? (
+                    <Link href={buildPageHref(params, page - 1)} className="rz-btn-nav">
+                      Previous page
+                    </Link>
+                  ) : (
+                    <span />
+                  )}
+                  {hasNextPage ? (
+                    <Link href={buildPageHref(params, page + 1)} className="rz-btn-nav">
+                      Next page
+                    </Link>
+                  ) : null}
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="mt-3 flex flex-wrap gap-3 pt-1">
             <BackButton />
