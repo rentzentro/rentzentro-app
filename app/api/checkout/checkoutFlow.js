@@ -5,6 +5,7 @@ const CARD_FEE_PERCENT = 0.035;
 const CARD_FEE_FLAT_CENTS = 50;
 const MAX_FEE_CENTS = 999999;
 const ACH_FEE_CENTS = 500;
+const MIN_RENT_CENTS = 5000;
 
 const toCents = (dollars) => Math.max(0, Math.round(dollars * 100));
 
@@ -97,7 +98,7 @@ async function createCheckoutSession({
 
     const { data: tenant, error: tenantError } = await supabaseAdmin
       .from('tenants')
-      .select('id, email, property_id, owner_id')
+      .select('id, email, property_id, owner_id, stripe_customer_id')
       .eq('id', tenantId)
       .maybeSingle();
 
@@ -172,7 +173,37 @@ async function createCheckoutSession({
       });
     }
 
+    if (requestedMethod === 'card') {
+      if (!tenant.stripe_customer_id) {
+        return json(400, {
+          error:
+            'Card verification is required before paying rent. Please verify your payment method first.',
+          code: 'CARD_VERIFICATION_REQUIRED',
+        });
+      }
+
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: tenant.stripe_customer_id,
+        type: 'card',
+        limit: 1,
+      });
+
+      if (!paymentMethods?.data?.length) {
+        return json(400, {
+          error:
+            'No verified card found. Please complete card verification before paying rent.',
+          code: 'CARD_VERIFICATION_REQUIRED',
+        });
+      }
+    }
+
     const rentCents = toCents(amount);
+
+    if (rentCents < MIN_RENT_CENTS) {
+      return json(400, {
+        error: 'Minimum payment amount is $50.00.',
+      });
+    }
 
     const cardFeeRaw =
       Math.round(rentCents * CARD_FEE_PERCENT) + CARD_FEE_FLAT_CENTS;
@@ -237,6 +268,10 @@ async function createCheckoutSession({
         total_cents: String(totalCents),
       },
       payment_intent_data: {
+        metadata: {
+          tenant_id: String(tenant.id),
+          payment_kind: 'rent',
+        },
         transfer_data: {
           destination: landlord.stripe_connect_account_id,
           amount: rentCents,
@@ -248,6 +283,12 @@ async function createCheckoutSession({
       sessionParams.payment_method_options = {
         us_bank_account: {
           verification_method: 'automatic',
+        },
+      };
+    } else {
+      sessionParams.payment_method_options = {
+        card: {
+          request_three_d_secure: 'any',
         },
       };
     }

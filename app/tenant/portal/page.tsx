@@ -698,6 +698,26 @@ export default function TenantPortalPage() {
     setSuccess(null);
 
     try {
+      if (paymentMethodType === 'card') {
+        const verificationRes = await fetch('/api/tenant-payment-method', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tenantId: tenant.id }),
+        });
+
+        const verificationData = await verificationRes.json().catch(() => ({}));
+        if (!verificationRes.ok) {
+          throw new Error(
+            verificationData?.error || 'Failed to start card verification.'
+          );
+        }
+
+        if (!verificationData?.verified && verificationData?.url) {
+          window.location.href = verificationData.url as string;
+          return;
+        }
+      }
+
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
