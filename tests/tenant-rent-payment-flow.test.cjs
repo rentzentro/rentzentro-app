@@ -20,10 +20,6 @@ function makeSupabaseAdmin({ tenant, property, landlordById, landlordByUserId })
                     return { data: value === tenant?.user_id ? tenant : null, error: null };
                   }
 
-                  if (table === 'tenants' && column === 'user_id') {
-                    return { data: value === tenant?.user_id ? tenant : null, error: null };
-                  }
-
                   if (table === 'properties' && column === 'id') {
                     return { data: value === property?.id ? property : null, error: null };
                   }

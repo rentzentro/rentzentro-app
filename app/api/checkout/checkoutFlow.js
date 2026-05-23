@@ -76,6 +76,8 @@ async function createCheckoutSession({
       amount,
       description,
       tenantId,
+      tenantUserId,
+      tenantEmail,
       propertyId,
       paymentMethodType,
       paymentMethod,
@@ -98,6 +100,12 @@ async function createCheckoutSession({
 
     const tenantIdentifier =
       tenantId === undefined || tenantId === null ? '' : String(tenantId).trim();
+    const tenantUserIdentifier =
+      tenantUserId === undefined || tenantUserId === null
+        ? ''
+        : String(tenantUserId).trim();
+    const tenantEmailIdentifier =
+      tenantEmail === undefined || tenantEmail === null ? '' : String(tenantEmail).trim();
     const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
 
     const tenantSelect = 'id, email, property_id, owner_id, stripe_customer_id';
@@ -124,12 +132,22 @@ async function createCheckoutSession({
       }
     }
 
-    const tenant = tenantResult?.data;
-    const tenantError = tenantResult?.error;
+    if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {
+      tenantResult = await findTenantByColumn('user_id', tenantUserIdentifier);
+    }
 
-    if (tenantError || !tenant) {
+    if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
+      tenantResult = await findTenantByColumn('email', tenantEmailIdentifier.toLowerCase());
+    }
+
+    const resolvedTenant = tenantResult?.data;
+    const resolvedTenantError = tenantResult?.error;
+
+    if (resolvedTenantError || !resolvedTenant) {
       return json(400, { error: 'Tenant not found.' });
     }
+
+    const tenant = resolvedTenant;
 
     const effectivePropertyId = propertyId ?? tenant.property_id;
     if (!effectivePropertyId) {

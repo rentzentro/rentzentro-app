@@ -17,6 +17,8 @@ export async function POST(req: Request) {
 
     const body = await req.json().catch(() => ({}));
     const tenantIdentifier = String(body?.tenantId ?? '').trim();
+    const tenantUserIdentifier = String(body?.tenantUserId ?? '').trim();
+    const tenantEmailIdentifier = String(body?.tenantEmail ?? '').trim().toLowerCase();
     if (!tenantIdentifier) {
       return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
     }
@@ -25,7 +27,10 @@ export async function POST(req: Request) {
 
     const tenantSelect = 'id, email, name, stripe_customer_id';
 
-    const findTenantByColumn = async (column: 'id' | 'user_id', value: string) => {
+    const findTenantByColumn = async (
+      column: 'id' | 'user_id' | 'email',
+      value: string
+    ) => {
       const { data, error } = await supabaseAdmin
         .from('tenants')
         .select(tenantSelect)
@@ -45,6 +50,14 @@ export async function POST(req: Request) {
       if (fallback?.data || fallback?.error) {
         tenantResult = fallback;
       }
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {
+      tenantResult = await findTenantByColumn('user_id', tenantUserIdentifier);
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
+      tenantResult = await findTenantByColumn('email', tenantEmailIdentifier);
     }
 
     const tenant = tenantResult?.data;
