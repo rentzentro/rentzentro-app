@@ -19,6 +19,7 @@ type SearchParams = {
 
 
 const pickFirst = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
+const pickLast = (value?: string | string[]) => (Array.isArray(value) ? value[value.length - 1] : value);
 
 type Listing = {
   id: number;
@@ -111,7 +112,7 @@ export default async function PublicListingsPage({
   searchParams?: Promise<SearchParams>;
 }) {
   const params = ((await searchParams) || {}) as SearchParams;
-  const sourceParam = pickFirst(params.source);
+  const sourceParam = pickLast(params.source);
   const source = sourceParam === 'web' ? 'web' : 'rentzentro';
 
   if (source === 'web') {
