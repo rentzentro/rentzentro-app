@@ -16,16 +16,23 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const tenantId = Number(body?.tenantId || 0);
-    if (!tenantId) {
+    const tenantIdentifier = String(body?.tenantId ?? '').trim();
+    if (!tenantIdentifier) {
       return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
     }
 
-    const { data: tenant, error: tenantError } = await supabaseAdmin
+    const tenantIdAsNumber = Number(tenantIdentifier);
+    const isNumericTenantId = Number.isFinite(tenantIdAsNumber);
+
+    let tenantQuery = supabaseAdmin
       .from('tenants')
-      .select('id, email, name, stripe_customer_id')
-      .eq('id', tenantId)
-      .maybeSingle();
+      .select('id, email, name, stripe_customer_id');
+
+    tenantQuery = isNumericTenantId
+      ? tenantQuery.eq('id', tenantIdAsNumber)
+      : tenantQuery.eq('user_id', tenantIdentifier);
+
+    const { data: tenant, error: tenantError } = await tenantQuery.maybeSingle();
 
     if (tenantError || !tenant) {
       return NextResponse.json({ error: 'Tenant not found.' }, { status: 404 });

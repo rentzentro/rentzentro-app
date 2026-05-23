@@ -96,11 +96,21 @@ async function createCheckoutSession({
       return json(400, { error: 'Invalid payment method.' });
     }
 
-    const { data: tenant, error: tenantError } = await supabaseAdmin
+    const tenantIdentifier =
+      tenantId === undefined || tenantId === null ? '' : String(tenantId).trim();
+    const tenantIdAsNumber = Number(tenantIdentifier);
+    const isNumericTenantId =
+      tenantIdentifier.length > 0 && Number.isFinite(tenantIdAsNumber);
+
+    let tenantQuery = supabaseAdmin
       .from('tenants')
-      .select('id, email, property_id, owner_id, stripe_customer_id')
-      .eq('id', tenantId)
-      .maybeSingle();
+      .select('id, email, property_id, owner_id, stripe_customer_id');
+
+    tenantQuery = isNumericTenantId
+      ? tenantQuery.eq('id', tenantIdAsNumber)
+      : tenantQuery.eq('user_id', tenantIdentifier);
+
+    const { data: tenant, error: tenantError } = await tenantQuery.maybeSingle();
 
     if (tenantError || !tenant) {
       return json(400, { error: 'Tenant not found.' });
