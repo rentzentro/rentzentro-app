@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../../supabaseClient';
+import { validateListingForPublish } from '../listingFlowValidation';
 
 const slugify = (input: string) =>
   input
@@ -393,6 +394,15 @@ export default function ListingCreateEditPage() {
 
     // Publishing requires a "share" mindset
     if (!listing.published) {
+      const publishValidationError = validateListingForPublish({
+        title,
+        contactEmail,
+        contactPhone,
+      });
+      if (publishValidationError) {
+        setError(publishValidationError);
+        return;
+      }
       // Optional premium guardrails: require at least 1 photo
       if (photos.length === 0) {
         const ok = window.confirm(
