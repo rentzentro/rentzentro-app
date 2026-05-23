@@ -57,6 +57,9 @@ test('createCheckoutSession builds card rent payment with fee and transfer', asy
 
   const result = await createCheckoutSession({
     stripe: {
+      paymentMethods: {
+        list: async () => ({ data: [{ id: 'pm_1' }] }),
+      },
       checkout: {
         sessions: {
           create: async (params) => {
@@ -67,7 +70,7 @@ test('createCheckoutSession builds card rent payment with fee and transfer', asy
       },
     },
     supabaseAdmin: makeSupabaseAdmin({
-      tenant: { id: 10, property_id: 22, owner_id: 5 },
+      tenant: { id: 10, property_id: 22, owner_id: 5, stripe_customer_id: 'cus_123' },
       property: { id: 22, name: 'Sunset Villas', unit_label: 'Unit 4', owner_id: 5 },
       landlordById: {
         id: 5,
@@ -104,6 +107,9 @@ test('createCheckoutSession builds ACH rent payment with fixed fee and verificat
 
   const result = await createCheckoutSession({
     stripe: {
+      paymentMethods: {
+        list: async () => ({ data: [{ id: 'pm_1' }] }),
+      },
       checkout: {
         sessions: {
           create: async (params) => {
@@ -144,9 +150,14 @@ test('createCheckoutSession builds ACH rent payment with fixed fee and verificat
 
 test('createCheckoutSession rejects very small rent payments used in card testing', async () => {
   const result = await createCheckoutSession({
-    stripe: { checkout: { sessions: { create: async () => ({}) } } },
+    stripe: {
+      paymentMethods: {
+        list: async () => ({ data: [{ id: 'pm_1' }] }),
+      },
+      checkout: { sessions: { create: async () => ({}) } },
+    },
     supabaseAdmin: makeSupabaseAdmin({
-      tenant: { id: 10, property_id: 22, owner_id: 5 },
+      tenant: { id: 10, property_id: 22, owner_id: 5, stripe_customer_id: 'cus_123' },
       property: { id: 22, name: 'Sunset Villas', unit_label: 'Unit 4', owner_id: 5 },
       landlordById: {
         id: 5,
@@ -161,4 +172,30 @@ test('createCheckoutSession rejects very small rent payments used in card testin
 
   assert.equal(result.status, 400);
   assert.equal(result.body.error, 'Minimum payment amount is $50.00.');
+});
+
+test('createCheckoutSession requires pre-verified card before card checkout', async () => {
+  const result = await createCheckoutSession({
+    stripe: {
+      paymentMethods: {
+        list: async () => ({ data: [] }),
+      },
+      checkout: { sessions: { create: async () => ({ url: 'https://stripe.test/checkout/card' }) } },
+    },
+    supabaseAdmin: makeSupabaseAdmin({
+      tenant: { id: 10, property_id: 22, owner_id: 5, stripe_customer_id: 'cus_123' },
+      property: { id: 22, name: 'Sunset Villas', unit_label: 'Unit 4', owner_id: 5 },
+      landlordById: {
+        id: 5,
+        stripe_connect_account_id: 'acct_123',
+        stripe_connect_onboarded: true,
+      },
+    }),
+    appUrl: 'https://www.rentzentro.com',
+    esignPriceId: 'price_123',
+    body: { amount: 1500, tenantId: 10, paymentMethodType: 'card' },
+  });
+
+  assert.equal(result.status, 400);
+  assert.equal(result.body.code, 'CARD_VERIFICATION_REQUIRED');
 });

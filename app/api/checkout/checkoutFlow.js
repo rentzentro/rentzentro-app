@@ -98,7 +98,7 @@ async function createCheckoutSession({
 
     const { data: tenant, error: tenantError } = await supabaseAdmin
       .from('tenants')
-      .select('id, email, property_id, owner_id')
+      .select('id, email, property_id, owner_id, stripe_customer_id')
       .eq('id', tenantId)
       .maybeSingle();
 
@@ -171,6 +171,30 @@ async function createCheckoutSession({
         error:
           'Your landlord’s payout setup is still in progress. Please try again later or contact them directly.',
       });
+    }
+
+    if (requestedMethod === 'card') {
+      if (!tenant.stripe_customer_id) {
+        return json(400, {
+          error:
+            'Card verification is required before paying rent. Please verify your payment method first.',
+          code: 'CARD_VERIFICATION_REQUIRED',
+        });
+      }
+
+      const paymentMethods = await stripe.paymentMethods.list({
+        customer: tenant.stripe_customer_id,
+        type: 'card',
+        limit: 1,
+      });
+
+      if (!paymentMethods?.data?.length) {
+        return json(400, {
+          error:
+            'No verified card found. Please complete card verification before paying rent.',
+          code: 'CARD_VERIFICATION_REQUIRED',
+        });
+      }
     }
 
     const rentCents = toCents(amount);
