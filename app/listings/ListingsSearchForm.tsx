@@ -40,6 +40,8 @@ export default function ListingsSearchForm({ defaultLocation = '' }: Props) {
 
   return (
     <form method="GET" className="mt-7 grid gap-3 md:grid-cols-2 lg:grid-cols-6">
+      <input type="hidden" name="source" value="rentzentro" />
+
       <label className="lg:col-span-2">
         <span className="mb-1 block text-xs font-medium text-slate-300">Location</span>
         <div className="flex gap-2">
