@@ -98,9 +98,7 @@ async function createCheckoutSession({
 
     const tenantIdentifier =
       tenantId === undefined || tenantId === null ? '' : String(tenantId).trim();
-    const tenantIdAsNumber = Number(tenantIdentifier);
-    const isNumericTenantId =
-      tenantIdentifier.length > 0 && Number.isFinite(tenantIdAsNumber);
+    const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
 
     const tenantSelect = 'id, email, property_id, owner_id, stripe_customer_id';
 
@@ -114,13 +112,13 @@ async function createCheckoutSession({
     };
 
     let tenantResult = isNumericTenantId
-      ? await findTenantByColumn('id', tenantIdAsNumber)
+      ? await findTenantByColumn('id', tenantIdentifier)
       : await findTenantByColumn('user_id', tenantIdentifier);
 
     if (!tenantResult?.data && tenantIdentifier.length > 0) {
       const fallback = isNumericTenantId
         ? await findTenantByColumn('user_id', tenantIdentifier)
-        : await findTenantByColumn('id', tenantIdAsNumber);
+        : await findTenantByColumn('id', tenantIdentifier);
       if (fallback?.data || fallback?.error) {
         tenantResult = fallback;
       }

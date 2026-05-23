@@ -21,12 +21,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
     }
 
-    const tenantIdAsNumber = Number(tenantIdentifier);
-    const isNumericTenantId = Number.isFinite(tenantIdAsNumber);
+    const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
 
     const tenantSelect = 'id, email, name, stripe_customer_id';
 
-    const findTenantByColumn = async (column: 'id' | 'user_id', value: number | string) => {
+    const findTenantByColumn = async (column: 'id' | 'user_id', value: string) => {
       const { data, error } = await supabaseAdmin
         .from('tenants')
         .select(tenantSelect)
@@ -36,13 +35,13 @@ export async function POST(req: Request) {
     };
 
     let tenantResult = isNumericTenantId
-      ? await findTenantByColumn('id', tenantIdAsNumber)
+      ? await findTenantByColumn('id', tenantIdentifier)
       : await findTenantByColumn('user_id', tenantIdentifier);
 
     if (!tenantResult?.data && tenantIdentifier.length > 0) {
       const fallback = isNumericTenantId
         ? await findTenantByColumn('user_id', tenantIdentifier)
-        : await findTenantByColumn('id', tenantIdAsNumber);
+        : await findTenantByColumn('id', tenantIdentifier);
       if (fallback?.data || fallback?.error) {
         tenantResult = fallback;
       }

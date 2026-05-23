@@ -13,7 +13,11 @@ function makeSupabaseAdmin({ tenant, property, landlordById, landlordByUserId })
               return {
                 maybeSingle: async () => {
                   if (table === 'tenants' && column === 'id') {
-                    return { data: value === tenant?.id ? tenant : null, error: null };
+                    return { data: String(value) === String(tenant?.id) ? tenant : null, error: null };
+                  }
+
+                  if (table === 'tenants' && column === 'user_id') {
+                    return { data: value === tenant?.user_id ? tenant : null, error: null };
                   }
 
                   if (table === 'tenants' && column === 'user_id') {
@@ -245,4 +249,29 @@ test('createCheckoutSession falls back to tenant user_id lookup when tenantId st
   assert.equal(result.status, 200);
   assert.equal(result.body.url, 'https://stripe.test/checkout/card-fallback');
   assert.equal(stripeCalls.length, 1);
+});
+
+
+test('createCheckoutSession resolves tenant by large numeric string id without precision loss', async () => {
+  const result = await createCheckoutSession({
+    stripe: {
+      paymentMethods: { list: async () => ({ data: [{ id: 'pm_1' }] }) },
+      checkout: { sessions: { create: async () => ({ url: 'https://stripe.test/checkout/large-id' }) } },
+    },
+    supabaseAdmin: makeSupabaseAdmin({
+      tenant: { id: '9007199254740993123', property_id: 24, owner_id: null },
+      property: { id: 24, name: 'Maple Court', unit_label: null, owner_id: 'user_abc' },
+      landlordByUserId: {
+        id: 99,
+        stripe_connect_account_id: 'acct_ach',
+        stripe_connect_onboarded: true,
+      },
+    }),
+    appUrl: 'https://www.rentzentro.com',
+    esignPriceId: 'price_123',
+    body: { amount: 1200, tenantId: '9007199254740993123', paymentMethodType: 'us_bank_account' },
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.url, 'https://stripe.test/checkout/large-id');
 });
