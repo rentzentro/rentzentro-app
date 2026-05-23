@@ -9,13 +9,16 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type SearchParams = {
-  source?: 'rentzentro' | 'web';
-  location?: string;
-  beds?: string;
-  baths?: string;
-  minRent?: string;
-  maxRent?: string;
+  source?: string | string[];
+  location?: string | string[];
+  beds?: string | string[];
+  baths?: string | string[];
+  minRent?: string | string[];
+  maxRent?: string | string[];
 };
+
+
+const pickFirst = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
 type Listing = {
   id: number;
@@ -29,9 +32,11 @@ type Listing = {
   baths: number | null;
 };
 
-const normalize = (value?: string) => value?.trim() || '';
-const toNumber = (value?: string) => {
-  const numeric = Number((value || '').trim());
+const normalize = (value?: string | string[]) => pickFirst(value)?.trim() || '';
+const toNumber = (value?: string | string[]) => {
+  const raw = normalize(value);
+  if (!raw) return null;
+  const numeric = Number(raw);
   return Number.isFinite(numeric) ? numeric : null;
 };
 
@@ -105,7 +110,8 @@ export default async function PublicListingsPage({
   searchParams?: Promise<SearchParams>;
 }) {
   const params = ((await searchParams) || {}) as SearchParams;
-  const source = params.source === 'web' ? 'web' : 'rentzentro';
+  const sourceParam = pickFirst(params.source);
+  const source = sourceParam === 'web' ? 'web' : 'rentzentro';
 
   if (source === 'web' && hasAnyCriteria(params)) {
     const query = buildGoogleQuery(params);
