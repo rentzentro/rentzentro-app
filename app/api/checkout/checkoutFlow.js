@@ -78,6 +78,8 @@ async function createCheckoutSession({
       tenantId,
       tenantUserId,
       tenantEmail,
+      authUserId,
+      authEmail,
       propertyId,
       paymentMethodType,
       paymentMethod,
@@ -106,6 +108,10 @@ async function createCheckoutSession({
         : String(tenantUserId).trim();
     const tenantEmailIdentifier =
       tenantEmail === undefined || tenantEmail === null ? '' : String(tenantEmail).trim();
+    const authUserIdentifier =
+      authUserId === undefined || authUserId === null ? '' : String(authUserId).trim();
+    const authEmailIdentifier =
+      authEmail === undefined || authEmail === null ? '' : String(authEmail).trim();
     const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
 
     const tenantSelect = 'id, email, property_id, owner_id, stripe_customer_id';
@@ -138,6 +144,14 @@ async function createCheckoutSession({
 
     if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
       tenantResult = await findTenantByColumn('email', tenantEmailIdentifier.toLowerCase());
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && authUserIdentifier) {
+      tenantResult = await findTenantByColumn('user_id', authUserIdentifier);
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
+      tenantResult = await findTenantByColumn('email', authEmailIdentifier.toLowerCase());
     }
 
     const resolvedTenant = tenantResult?.data;

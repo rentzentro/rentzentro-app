@@ -304,6 +304,8 @@ export default function TenantPortalPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [tenant, setTenant] = useState<TenantRow | null>(null);
   const [property, setProperty] = useState<PropertyRow | null>(null);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
@@ -339,25 +341,28 @@ export default function TenantPortalPage() {
 
         const user = authData.user;
         const email = user?.email;
-        const authUserId = user?.id;
+        const userId = user?.id;
 
-        if (!email || !authUserId) {
+        if (!email || !userId) {
           throw new Error('Unable to load tenant: missing account data.');
         }
+
+        setAuthUserId(userId);
+        setAuthEmail(email);
 
         const { data: tenantRows, error: tenantError } = await supabase
           .from('tenants')
           .select(
             'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment, auto_pay_enabled'
           )
-          .or(`user_id.eq.${authUserId},email.eq.${email}`)
+          .or(`user_id.eq.${userId},email.eq.${email}`)
           .order('created_at', { ascending: true });
 
         if (tenantError) throw tenantError;
 
         let t: TenantRow | null =
           tenantRows && tenantRows.length > 0
-            ? (tenantRows.find((row: any) => row.user_id === authUserId) ??
+            ? (tenantRows.find((row: any) => row.user_id === userId) ??
               tenantRows[0])
             : null;
 
@@ -378,7 +383,7 @@ export default function TenantPortalPage() {
         if (!t.user_id) {
           const { data: updated, error: updateError } = await supabase
             .from('tenants')
-            .update({ user_id: authUserId })
+            .update({ user_id: userId })
             .eq('id', t.id)
             .select(
               'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment, auto_pay_enabled'
@@ -706,6 +711,8 @@ export default function TenantPortalPage() {
             tenantId: tenant.id,
             tenantUserId: tenant.user_id ?? null,
             tenantEmail: tenant.email,
+            authUserId,
+            authEmail,
           }),
         });
 
@@ -733,6 +740,8 @@ export default function TenantPortalPage() {
           tenantId: tenant.id,
           tenantUserId: tenant.user_id ?? null,
           tenantEmail: tenant.email,
+          authUserId,
+          authEmail,
           propertyId: property?.id ?? null,
           paymentMethodType,
         }),

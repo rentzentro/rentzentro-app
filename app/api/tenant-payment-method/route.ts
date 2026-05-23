@@ -19,6 +19,8 @@ export async function POST(req: Request) {
     const tenantIdentifier = String(body?.tenantId ?? '').trim();
     const tenantUserIdentifier = String(body?.tenantUserId ?? '').trim();
     const tenantEmailIdentifier = String(body?.tenantEmail ?? '').trim().toLowerCase();
+    const authUserIdentifier = String(body?.authUserId ?? '').trim();
+    const authEmailIdentifier = String(body?.authEmail ?? '').trim().toLowerCase();
     if (!tenantIdentifier) {
       return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
     }
@@ -58,6 +60,14 @@ export async function POST(req: Request) {
 
     if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
       tenantResult = await findTenantByColumn('email', tenantEmailIdentifier);
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && authUserIdentifier) {
+      tenantResult = await findTenantByColumn('user_id', authUserIdentifier);
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
+      tenantResult = await findTenantByColumn('email', authEmailIdentifier);
     }
 
     const tenant = tenantResult?.data;
