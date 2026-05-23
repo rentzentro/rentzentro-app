@@ -93,9 +93,10 @@ async function searchRentzentroListings(params: SearchParams): Promise<Listing[]
   if (error) throw error;
 
   const rows = (data || []) as Listing[];
-  if (!location) return rows;
+  const dedupedRows = Array.from(new Map(rows.map((listing) => [listing.id, listing])).values());
+  if (!location) return dedupedRows;
 
-  return rows.filter((listing) => {
+  return dedupedRows.filter((listing) => {
     const haystack = [listing.neighborhood, listing.city, listing.state]
       .filter(Boolean)
       .join(' ')
@@ -113,8 +114,8 @@ export default async function PublicListingsPage({
   const sourceParam = pickFirst(params.source);
   const source = sourceParam === 'web' ? 'web' : 'rentzentro';
 
-  if (source === 'web' && hasAnyCriteria(params)) {
-    const query = buildGoogleQuery(params);
+  if (source === 'web') {
+    const query = hasAnyCriteria(params) ? buildGoogleQuery(params) : 'apartments for rent near me';
     redirect(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
   }
 
@@ -133,28 +134,6 @@ export default async function PublicListingsPage({
           </p>
 
           <ListingsSearchForm defaultLocation={pickFirst(params.location)} />
-
-          {hasAnyCriteria(params) ? (
-            <div className="mt-8 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
-              <h2 className="text-lg font-semibold text-slate-100">RentZentro results</h2>
-              {listings.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-300">No matching RentZentro listings yet. Try broadening your filters or search the web.</p>
-              ) : (
-                <ul className="mt-4 space-y-3">
-                  {listings.map((listing) => (
-                    <li key={listing.id} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
-                      <Link href={`/listings/${listing.slug}`} className="text-base font-semibold text-emerald-300 hover:text-emerald-200">
-                        {listing.title}
-                      </Link>
-                      <p className="mt-1 text-sm text-slate-300">
-                        {[listing.neighborhood, listing.city, listing.state].filter(Boolean).join(', ') || 'Location coming soon'}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : null}
 
           {hasAnyCriteria(params) ? (
             <div className="mt-8 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
