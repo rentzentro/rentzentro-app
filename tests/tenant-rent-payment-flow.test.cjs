@@ -94,6 +94,9 @@ test('createCheckoutSession builds card rent payment with fee and transfer', asy
   assert.equal(params.metadata.total_cents, '155300');
   assert.equal(params.payment_intent_data.transfer_data.destination, 'acct_123');
   assert.equal(params.payment_intent_data.transfer_data.amount, 150000);
+  assert.deepEqual(params.payment_method_options, {
+    card: { request_three_d_secure: 'any' },
+  });
 });
 
 test('createCheckoutSession builds ACH rent payment with fixed fee and verification options', async () => {
@@ -137,4 +140,25 @@ test('createCheckoutSession builds ACH rent payment with fixed fee and verificat
   });
   assert.equal(params.metadata.fee_cents, '500');
   assert.equal(params.metadata.total_cents, '120500');
+});
+
+test('createCheckoutSession rejects very small rent payments used in card testing', async () => {
+  const result = await createCheckoutSession({
+    stripe: { checkout: { sessions: { create: async () => ({}) } } },
+    supabaseAdmin: makeSupabaseAdmin({
+      tenant: { id: 10, property_id: 22, owner_id: 5 },
+      property: { id: 22, name: 'Sunset Villas', unit_label: 'Unit 4', owner_id: 5 },
+      landlordById: {
+        id: 5,
+        stripe_connect_account_id: 'acct_123',
+        stripe_connect_onboarded: true,
+      },
+    }),
+    appUrl: 'https://www.rentzentro.com',
+    esignPriceId: 'price_123',
+    body: { amount: 25, tenantId: 10, paymentMethodType: 'card' },
+  });
+
+  assert.equal(result.status, 400);
+  assert.equal(result.body.error, 'Minimum payment amount is $50.00.');
 });

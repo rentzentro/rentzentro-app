@@ -5,6 +5,7 @@ const CARD_FEE_PERCENT = 0.035;
 const CARD_FEE_FLAT_CENTS = 50;
 const MAX_FEE_CENTS = 999999;
 const ACH_FEE_CENTS = 500;
+const MIN_RENT_CENTS = 5000;
 
 const toCents = (dollars) => Math.max(0, Math.round(dollars * 100));
 
@@ -174,6 +175,12 @@ async function createCheckoutSession({
 
     const rentCents = toCents(amount);
 
+    if (rentCents < MIN_RENT_CENTS) {
+      return json(400, {
+        error: 'Minimum payment amount is $50.00.',
+      });
+    }
+
     const cardFeeRaw =
       Math.round(rentCents * CARD_FEE_PERCENT) + CARD_FEE_FLAT_CENTS;
     const cardFeeCents = Math.min(MAX_FEE_CENTS, Math.max(0, cardFeeRaw));
@@ -237,6 +244,10 @@ async function createCheckoutSession({
         total_cents: String(totalCents),
       },
       payment_intent_data: {
+        metadata: {
+          tenant_id: String(tenant.id),
+          payment_kind: 'rent',
+        },
         transfer_data: {
           destination: landlord.stripe_connect_account_id,
           amount: rentCents,
@@ -248,6 +259,12 @@ async function createCheckoutSession({
       sessionParams.payment_method_options = {
         us_bank_account: {
           verification_method: 'automatic',
+        },
+      };
+    } else {
+      sessionParams.payment_method_options = {
+        card: {
+          request_three_d_secure: 'any',
         },
       };
     }
