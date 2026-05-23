@@ -21,8 +21,17 @@ export async function POST(req: Request) {
     const tenantEmailIdentifier = String(body?.tenantEmail ?? '').trim().toLowerCase();
     const authUserIdentifier = String(body?.authUserId ?? '').trim();
     const authEmailIdentifier = String(body?.authEmail ?? '').trim().toLowerCase();
-    if (!tenantIdentifier) {
-      return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
+    if (
+      !tenantIdentifier &&
+      !tenantUserIdentifier &&
+      !tenantEmailIdentifier &&
+      !authUserIdentifier &&
+      !authEmailIdentifier
+    ) {
+      return NextResponse.json(
+        { error: 'Missing tenant identifier.' },
+        { status: 400 }
+      );
     }
 
     const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
@@ -41,6 +50,10 @@ export async function POST(req: Request) {
       return { data, error };
     };
 
+    const isInvalidSyntaxError = (err: any) =>
+      typeof err?.message === 'string' &&
+      err.message.toLowerCase().includes('invalid input syntax');
+
     let tenantResult = isNumericTenantId
       ? await findTenantByColumn('id', tenantIdentifier)
       : await findTenantByColumn('user_id', tenantIdentifier);
@@ -49,9 +62,13 @@ export async function POST(req: Request) {
       const fallback = isNumericTenantId
         ? await findTenantByColumn('user_id', tenantIdentifier)
         : await findTenantByColumn('id', tenantIdentifier);
-      if (fallback?.data || fallback?.error) {
+      if (fallback?.data || (fallback?.error && !isInvalidSyntaxError(fallback.error))) {
         tenantResult = fallback;
       }
+    }
+
+    if (tenantResult?.error && isInvalidSyntaxError(tenantResult.error)) {
+      tenantResult = { data: null, error: null };
     }
 
     if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {
