@@ -53,7 +53,7 @@ test('createCheckoutSession returns 400 for missing tenant id', async () => {
   });
 
   assert.equal(result.status, 400);
-  assert.equal(result.body.error, 'Missing tenantId.');
+  assert.equal(result.body.error, 'Missing tenant identifier.');
 });
 
 test('createCheckoutSession builds card rent payment with fee and transfer', async () => {
