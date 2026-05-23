@@ -16,16 +16,40 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const tenantId = Number(body?.tenantId || 0);
-    if (!tenantId) {
+    const tenantIdentifier = String(body?.tenantId ?? '').trim();
+    if (!tenantIdentifier) {
       return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
     }
 
-    const { data: tenant, error: tenantError } = await supabaseAdmin
-      .from('tenants')
-      .select('id, email, name, stripe_customer_id')
-      .eq('id', tenantId)
-      .maybeSingle();
+    const tenantIdAsNumber = Number(tenantIdentifier);
+    const isNumericTenantId = Number.isFinite(tenantIdAsNumber);
+
+    const tenantSelect = 'id, email, name, stripe_customer_id';
+
+    const findTenantByColumn = async (column: 'id' | 'user_id', value: number | string) => {
+      const { data, error } = await supabaseAdmin
+        .from('tenants')
+        .select(tenantSelect)
+        .eq(column, value)
+        .maybeSingle();
+      return { data, error };
+    };
+
+    let tenantResult = isNumericTenantId
+      ? await findTenantByColumn('id', tenantIdAsNumber)
+      : await findTenantByColumn('user_id', tenantIdentifier);
+
+    if (!tenantResult?.data && tenantIdentifier.length > 0) {
+      const fallback = isNumericTenantId
+        ? await findTenantByColumn('user_id', tenantIdentifier)
+        : await findTenantByColumn('id', tenantIdAsNumber);
+      if (fallback?.data || fallback?.error) {
+        tenantResult = fallback;
+      }
+    }
+
+    const tenant = tenantResult?.data;
+    const tenantError = tenantResult?.error;
 
     if (tenantError || !tenant) {
       return NextResponse.json({ error: 'Tenant not found.' }, { status: 404 });

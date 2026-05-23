@@ -96,11 +96,38 @@ async function createCheckoutSession({
       return json(400, { error: 'Invalid payment method.' });
     }
 
-    const { data: tenant, error: tenantError } = await supabaseAdmin
-      .from('tenants')
-      .select('id, email, property_id, owner_id, stripe_customer_id')
-      .eq('id', tenantId)
-      .maybeSingle();
+    const tenantIdentifier =
+      tenantId === undefined || tenantId === null ? '' : String(tenantId).trim();
+    const tenantIdAsNumber = Number(tenantIdentifier);
+    const isNumericTenantId =
+      tenantIdentifier.length > 0 && Number.isFinite(tenantIdAsNumber);
+
+    const tenantSelect = 'id, email, property_id, owner_id, stripe_customer_id';
+
+    const findTenantByColumn = async (column, value) => {
+      const { data, error } = await supabaseAdmin
+        .from('tenants')
+        .select(tenantSelect)
+        .eq(column, value)
+        .maybeSingle();
+      return { data, error };
+    };
+
+    let tenantResult = isNumericTenantId
+      ? await findTenantByColumn('id', tenantIdAsNumber)
+      : await findTenantByColumn('user_id', tenantIdentifier);
+
+    if (!tenantResult?.data && tenantIdentifier.length > 0) {
+      const fallback = isNumericTenantId
+        ? await findTenantByColumn('user_id', tenantIdentifier)
+        : await findTenantByColumn('id', tenantIdAsNumber);
+      if (fallback?.data || fallback?.error) {
+        tenantResult = fallback;
+      }
+    }
+
+    const tenant = tenantResult?.data;
+    const tenantError = tenantResult?.error;
 
     if (tenantError || !tenant) {
       return json(400, { error: 'Tenant not found.' });
