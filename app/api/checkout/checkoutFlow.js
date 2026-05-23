@@ -102,15 +102,32 @@ async function createCheckoutSession({
     const isNumericTenantId =
       tenantIdentifier.length > 0 && Number.isFinite(tenantIdAsNumber);
 
-    let tenantQuery = supabaseAdmin
-      .from('tenants')
-      .select('id, email, property_id, owner_id, stripe_customer_id');
+    const tenantSelect = 'id, email, property_id, owner_id, stripe_customer_id';
 
-    tenantQuery = isNumericTenantId
-      ? tenantQuery.eq('id', tenantIdAsNumber)
-      : tenantQuery.eq('user_id', tenantIdentifier);
+    const findTenantByColumn = async (column, value) => {
+      const { data, error } = await supabaseAdmin
+        .from('tenants')
+        .select(tenantSelect)
+        .eq(column, value)
+        .maybeSingle();
+      return { data, error };
+    };
 
-    const { data: tenant, error: tenantError } = await tenantQuery.maybeSingle();
+    let tenantResult = isNumericTenantId
+      ? await findTenantByColumn('id', tenantIdAsNumber)
+      : await findTenantByColumn('user_id', tenantIdentifier);
+
+    if (!tenantResult?.data && tenantIdentifier.length > 0) {
+      const fallback = isNumericTenantId
+        ? await findTenantByColumn('user_id', tenantIdentifier)
+        : await findTenantByColumn('id', tenantIdAsNumber);
+      if (fallback?.data || fallback?.error) {
+        tenantResult = fallback;
+      }
+    }
+
+    const tenant = tenantResult?.data;
+    const tenantError = tenantResult?.error;
 
     if (tenantError || !tenant) {
       return json(400, { error: 'Tenant not found.' });
