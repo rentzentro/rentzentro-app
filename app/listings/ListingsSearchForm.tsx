@@ -127,6 +127,8 @@ export default function ListingsSearchForm({ defaultLocation = '' }: Props) {
       <div className="flex flex-wrap gap-3 pt-1 lg:col-span-6">
         <button
           type="submit"
+          name="source"
+          value="rentzentro"
           className="inline-flex items-center rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
         >
           Search RentZentro listings
