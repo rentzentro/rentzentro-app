@@ -76,6 +76,10 @@ async function createCheckoutSession({
       amount,
       description,
       tenantId,
+      tenantUserId,
+      tenantEmail,
+      authUserId,
+      authEmail,
       propertyId,
       paymentMethodType,
       paymentMethod,
@@ -96,15 +100,68 @@ async function createCheckoutSession({
       return json(400, { error: 'Invalid payment method.' });
     }
 
-    const { data: tenant, error: tenantError } = await supabaseAdmin
-      .from('tenants')
-      .select('id, email, property_id, owner_id, stripe_customer_id')
-      .eq('id', tenantId)
-      .maybeSingle();
+    const tenantIdentifier =
+      tenantId === undefined || tenantId === null ? '' : String(tenantId).trim();
+    const tenantUserIdentifier =
+      tenantUserId === undefined || tenantUserId === null
+        ? ''
+        : String(tenantUserId).trim();
+    const tenantEmailIdentifier =
+      tenantEmail === undefined || tenantEmail === null ? '' : String(tenantEmail).trim();
+    const authUserIdentifier =
+      authUserId === undefined || authUserId === null ? '' : String(authUserId).trim();
+    const authEmailIdentifier =
+      authEmail === undefined || authEmail === null ? '' : String(authEmail).trim();
+    const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
 
-    if (tenantError || !tenant) {
+    const tenantSelect = 'id, email, property_id, owner_id, stripe_customer_id';
+
+    const findTenantByColumn = async (column, value) => {
+      const { data, error } = await supabaseAdmin
+        .from('tenants')
+        .select(tenantSelect)
+        .eq(column, value)
+        .maybeSingle();
+      return { data, error };
+    };
+
+    let tenantResult = isNumericTenantId
+      ? await findTenantByColumn('id', tenantIdentifier)
+      : await findTenantByColumn('user_id', tenantIdentifier);
+
+    if (!tenantResult?.data && tenantIdentifier.length > 0) {
+      const fallback = isNumericTenantId
+        ? await findTenantByColumn('user_id', tenantIdentifier)
+        : await findTenantByColumn('id', tenantIdentifier);
+      if (fallback?.data || fallback?.error) {
+        tenantResult = fallback;
+      }
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {
+      tenantResult = await findTenantByColumn('user_id', tenantUserIdentifier);
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
+      tenantResult = await findTenantByColumn('email', tenantEmailIdentifier.toLowerCase());
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && authUserIdentifier) {
+      tenantResult = await findTenantByColumn('user_id', authUserIdentifier);
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
+      tenantResult = await findTenantByColumn('email', authEmailIdentifier.toLowerCase());
+    }
+
+    const resolvedTenant = tenantResult?.data;
+    const resolvedTenantError = tenantResult?.error;
+
+    if (resolvedTenantError || !resolvedTenant) {
       return json(400, { error: 'Tenant not found.' });
     }
+
+    const tenant = resolvedTenant;
 
     const effectivePropertyId = propertyId ?? tenant.property_id;
     if (!effectivePropertyId) {
