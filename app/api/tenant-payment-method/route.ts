@@ -21,8 +21,17 @@ export async function POST(req: Request) {
     const tenantEmailIdentifier = String(body?.tenantEmail ?? '').trim().toLowerCase();
     const authUserIdentifier = String(body?.authUserId ?? '').trim();
     const authEmailIdentifier = String(body?.authEmail ?? '').trim().toLowerCase();
-    if (!tenantIdentifier) {
-      return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
+    if (
+      !tenantIdentifier &&
+      !tenantUserIdentifier &&
+      !tenantEmailIdentifier &&
+      !authUserIdentifier &&
+      !authEmailIdentifier
+    ) {
+      return NextResponse.json(
+        { error: 'Missing tenant identifier.' },
+        { status: 400 }
+      );
     }
 
     const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
@@ -41,6 +50,18 @@ export async function POST(req: Request) {
       return { data, error };
     };
 
+    const isTenantLookupTypeError = (err: any) => {
+      const message =
+        typeof err?.message === 'string' ? err.message.toLowerCase() : '';
+      const code = typeof err?.code === 'string' ? err.code : '';
+      return (
+        message.includes('invalid input syntax') ||
+        message.includes('value out of range') ||
+        code === '22P02' || // invalid_text_representation
+        code === '22003' // numeric_value_out_of_range
+      );
+    };
+
     let tenantResult = isNumericTenantId
       ? await findTenantByColumn('id', tenantIdentifier)
       : await findTenantByColumn('user_id', tenantIdentifier);
@@ -49,9 +70,13 @@ export async function POST(req: Request) {
       const fallback = isNumericTenantId
         ? await findTenantByColumn('user_id', tenantIdentifier)
         : await findTenantByColumn('id', tenantIdentifier);
-      if (fallback?.data || fallback?.error) {
+      if (fallback?.data || (fallback?.error && !isTenantLookupTypeError(fallback.error))) {
         tenantResult = fallback;
       }
+    }
+
+    if (tenantResult?.error && isTenantLookupTypeError(tenantResult.error)) {
+      tenantResult = { data: null, error: null };
     }
 
     if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {

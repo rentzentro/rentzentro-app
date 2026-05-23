@@ -90,8 +90,8 @@ async function createCheckoutSession({
       return json(400, { error: 'Invalid amount.' });
     }
 
-    if (!tenantId) {
-      return json(400, { error: 'Missing tenantId.' });
+    if (!tenantId && !tenantUserId && !tenantEmail && !authUserId && !authEmail) {
+      return json(400, { error: 'Missing tenant identifier.' });
     }
 
     const requestedMethod = paymentMethodType || paymentMethod || method || 'card';
@@ -125,6 +125,17 @@ async function createCheckoutSession({
       return { data, error };
     };
 
+    const isTenantLookupTypeError = (err) => {
+      const message = typeof err?.message === 'string' ? err.message.toLowerCase() : '';
+      const code = typeof err?.code === 'string' ? err.code : '';
+      return (
+        message.includes('invalid input syntax') ||
+        message.includes('value out of range') ||
+        code === '22P02' || // invalid_text_representation
+        code === '22003' // numeric_value_out_of_range
+      );
+    };
+
     let tenantResult = isNumericTenantId
       ? await findTenantByColumn('id', tenantIdentifier)
       : await findTenantByColumn('user_id', tenantIdentifier);
@@ -133,9 +144,13 @@ async function createCheckoutSession({
       const fallback = isNumericTenantId
         ? await findTenantByColumn('user_id', tenantIdentifier)
         : await findTenantByColumn('id', tenantIdentifier);
-      if (fallback?.data || fallback?.error) {
+      if (fallback?.data || (fallback?.error && !isTenantLookupTypeError(fallback.error))) {
         tenantResult = fallback;
       }
+    }
+
+    if (tenantResult?.error && isTenantLookupTypeError(tenantResult.error)) {
+      tenantResult = { data: null, error: null };
     }
 
     if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {

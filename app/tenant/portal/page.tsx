@@ -14,7 +14,7 @@ import {
 // ---------- Types ----------
 
 type TenantRow = {
-  id: number;
+  id: number | string;
   owner_id: string | null; // landlord's auth UID
   name: string | null;
   email: string;
@@ -30,7 +30,7 @@ type TenantRow = {
 };
 
 type PropertyRow = {
-  id: number;
+  id: number | string;
   name: string | null;
   unit_label: string | null;
   monthly_rent: number | null;
@@ -38,7 +38,7 @@ type PropertyRow = {
 };
 
 type PaymentRow = {
-  id: number;
+  id: number | string;
   tenant_id: number | null;
   property_id: number | null;
   amount: number | null;
@@ -48,7 +48,7 @@ type PaymentRow = {
 };
 
 type DocumentRow = {
-  id: number;
+  id: number | string;
   created_at: string;
   title: string;
   file_url: string;
@@ -57,7 +57,7 @@ type DocumentRow = {
 };
 
 type MaintenanceRow = {
-  id: number;
+  id: number | string;
   tenant_id: number;
   property_id: number;
   title: string;
@@ -708,7 +708,7 @@ export default function TenantPortalPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            tenantId: tenant.id,
+            tenantId: String(tenant.id),
             tenantUserId: tenant.user_id ?? null,
             tenantEmail: tenant.email,
             authUserId,
@@ -737,7 +737,7 @@ export default function TenantPortalPage() {
           description: `Rent payment for ${property?.name || 'your unit'}${
             property?.unit_label ? ` · ${property.unit_label}` : ''
           }`,
-          tenantId: tenant.id,
+          tenantId: String(tenant.id),
           tenantUserId: tenant.user_id ?? null,
           tenantEmail: tenant.email,
           authUserId,
