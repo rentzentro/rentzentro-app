@@ -702,6 +702,8 @@ export default function TenantPortalPage() {
     setError(null);
     setSuccess(null);
 
+    let checkoutPaymentMethodType = paymentMethodType;
+
     try {
       if (paymentMethodType === 'card') {
         const verificationRes = await fetch('/api/tenant-payment-method', {
@@ -718,9 +720,16 @@ export default function TenantPortalPage() {
 
         const verificationData = await verificationRes.json().catch(() => ({}));
         if (!verificationRes.ok) {
-          throw new Error(
-            verificationData?.error || 'Failed to start card verification.'
-          );
+          if (verificationRes.status === 404) {
+            console.warn(
+              'tenant-payment-method route returned 404; falling back to bank checkout.'
+            );
+            checkoutPaymentMethodType = 'us_bank_account';
+          } else {
+            throw new Error(
+              verificationData?.error || 'Failed to start card verification.'
+            );
+          }
         }
 
         if (!verificationData?.verified && verificationData?.url) {
@@ -743,7 +752,7 @@ export default function TenantPortalPage() {
           authUserId,
           authEmail,
           propertyId: property?.id ?? null,
-          paymentMethodType,
+          paymentMethodType: checkoutPaymentMethodType,
         }),
       });
 
