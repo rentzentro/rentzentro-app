@@ -49,6 +49,32 @@ export async function POST(req: Request) {
 
     const tenantSelect = 'id, email, name, stripe_customer_id';
 
+    const normalizeEmail = (value: unknown) =>
+      String(value ?? '')
+        .trim()
+        .toLowerCase();
+
+    const findTenantByEmailLoose = async (rawEmail: unknown) => {
+      const normalized = normalizeEmail(rawEmail);
+      if (!normalized) return { data: null, error: null };
+
+      const { data, error } = await supabaseAdmin
+        .from('tenants')
+        .select(tenantSelect)
+        .ilike('email', `%${normalized}%`)
+        .order('created_at', { ascending: true })
+        .limit(10);
+
+      if (error) return { data: null, error };
+
+      const match = (Array.isArray(data) ? data : []).find(
+        (row: any) => normalizeEmail(row?.email) === normalized
+      );
+
+      return { data: match ?? null, error: null };
+    };
+
+
     const findTenantByColumn = async (
       column: 'id' | 'user_id' | 'email',
       value: string
@@ -57,7 +83,7 @@ export async function POST(req: Request) {
         const { data, error } = await supabaseAdmin
           .from('tenants')
           .select(tenantSelect)
-          .eq(column, value)
+          .eq(column, Number(value))
           .maybeSingle();
         return { data, error };
       }
@@ -95,6 +121,9 @@ export async function POST(req: Request) {
 
     if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
       tenantResult = await findTenantByColumn('email', tenantEmailIdentifier);
+      if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
+        tenantResult = await findTenantByEmailLoose(tenantEmailIdentifier);
+      }
     }
 
     if ((!tenantResult?.data || tenantResult?.error) && authUserIdentifier) {
@@ -103,6 +132,9 @@ export async function POST(req: Request) {
 
     if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
       tenantResult = await findTenantByColumn('email', authEmailIdentifier);
+      if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
+        tenantResult = await findTenantByEmailLoose(authEmailIdentifier);
+      }
     }
 
     const tenant = tenantResult?.data;
