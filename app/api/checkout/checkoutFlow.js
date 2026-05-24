@@ -10,6 +10,16 @@ const MIN_RENT_CENTS = 5000;
 const toCents = (dollars) => Math.max(0, Math.round(dollars * 100));
 
 const json = (status, body) => ({ status, body });
+const isTenantLookupTypeError = (err) => {
+  const message = typeof err?.message === 'string' ? err.message.toLowerCase() : '';
+  const code = typeof err?.code === 'string' ? err.code : '';
+  return (
+    message.includes('invalid input syntax') ||
+    message.includes('value out of range') ||
+    code === '22P02' || // invalid_text_representation
+    code === '22003' // numeric_value_out_of_range
+  );
+};
 
 async function createCheckoutSession({
   stripe,
@@ -134,28 +144,6 @@ async function createCheckoutSession({
         .limit(1);
 
       return { data: Array.isArray(data) ? data[0] ?? null : null, error };
-    };
-
-    const isTenantLookupTypeError = (err) => {
-      const message = typeof err?.message === 'string' ? err.message.toLowerCase() : '';
-      const code = typeof err?.code === 'string' ? err.code : '';
-      return (
-        message.includes('invalid input syntax') ||
-        message.includes('value out of range') ||
-        code === '22P02' || // invalid_text_representation
-        code === '22003' // numeric_value_out_of_range
-      );
-    };
-
-    const isTenantLookupTypeError = (err) => {
-      const message = typeof err?.message === 'string' ? err.message.toLowerCase() : '';
-      const code = typeof err?.code === 'string' ? err.code : '';
-      return (
-        message.includes('invalid input syntax') ||
-        message.includes('value out of range') ||
-        code === '22P02' || // invalid_text_representation
-        code === '22003' // numeric_value_out_of_range
-      );
     };
 
     let tenantResult = isNumericTenantId

@@ -5,6 +5,17 @@ import { supabaseAdmin } from '../../supabaseAdminClient';
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.rentzentro.com';
+const isTenantLookupTypeError = (err: any) => {
+  const message =
+    typeof err?.message === 'string' ? err.message.toLowerCase() : '';
+  const code = typeof err?.code === 'string' ? err.code : '';
+  return (
+    message.includes('invalid input syntax') ||
+    message.includes('value out of range') ||
+    code === '22P02' || // invalid_text_representation
+    code === '22003' // numeric_value_out_of_range
+  );
+};
 
 export async function POST(req: Request) {
   try {
@@ -59,30 +70,6 @@ export async function POST(req: Request) {
         .limit(1);
 
       return { data: Array.isArray(data) ? data[0] ?? null : null, error };
-    };
-
-    const isTenantLookupTypeError = (err: any) => {
-      const message =
-        typeof err?.message === 'string' ? err.message.toLowerCase() : '';
-      const code = typeof err?.code === 'string' ? err.code : '';
-      return (
-        message.includes('invalid input syntax') ||
-        message.includes('value out of range') ||
-        code === '22P02' || // invalid_text_representation
-        code === '22003' // numeric_value_out_of_range
-      );
-    };
-
-    const isTenantLookupTypeError = (err: any) => {
-      const message =
-        typeof err?.message === 'string' ? err.message.toLowerCase() : '';
-      const code = typeof err?.code === 'string' ? err.code : '';
-      return (
-        message.includes('invalid input syntax') ||
-        message.includes('value out of range') ||
-        code === '22P02' || // invalid_text_representation
-        code === '22003' // numeric_value_out_of_range
-      );
     };
 
     let tenantResult = isNumericTenantId
