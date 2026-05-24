@@ -126,6 +126,32 @@ async function createCheckoutSession({
 
     const tenantSelect = 'id, email, property_id, owner_id, stripe_customer_id';
 
+    const normalizeEmail = (value) =>
+      String(value ?? '')
+        .trim()
+        .toLowerCase();
+
+    const findTenantByEmailLoose = async (rawEmail) => {
+      const normalized = normalizeEmail(rawEmail);
+      if (!normalized) return { data: null, error: null };
+
+      const { data, error } = await supabaseAdmin
+        .from('tenants')
+        .select(tenantSelect)
+        .ilike('email', `%${normalized}%`)
+        .order('created_at', { ascending: true })
+        .limit(10);
+
+      if (error) return { data: null, error };
+
+      const match = (Array.isArray(data) ? data : []).find(
+        (row) => normalizeEmail(row?.email) === normalized
+      );
+
+      return { data: match ?? null, error: null };
+    };
+
+
     const findTenantByColumn = async (column, value) => {
       if (column === 'id') {
         const { data, error } = await supabaseAdmin
@@ -169,6 +195,9 @@ async function createCheckoutSession({
 
     if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
       tenantResult = await findTenantByColumn('email', tenantEmailIdentifier.toLowerCase());
+      if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
+        tenantResult = await findTenantByEmailLoose(tenantEmailIdentifier);
+      }
     }
 
     if ((!tenantResult?.data || tenantResult?.error) && authUserIdentifier) {
@@ -177,6 +206,9 @@ async function createCheckoutSession({
 
     if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
       tenantResult = await findTenantByColumn('email', authEmailIdentifier.toLowerCase());
+      if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
+        tenantResult = await findTenantByEmailLoose(authEmailIdentifier);
+      }
     }
 
     const resolvedTenant = tenantResult?.data;
