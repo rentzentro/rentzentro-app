@@ -5,6 +5,17 @@ import { supabaseAdmin } from '../../supabaseAdminClient';
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.rentzentro.com';
+const isTenantLookupTypeError = (err: any) => {
+  const message =
+    typeof err?.message === 'string' ? err.message.toLowerCase() : '';
+  const code = typeof err?.code === 'string' ? err.code : '';
+  return (
+    message.includes('invalid input syntax') ||
+    message.includes('value out of range') ||
+    code === '22P02' || // invalid_text_representation
+    code === '22003' // numeric_value_out_of_range
+  );
+};
 
 export async function POST(req: Request) {
   try {
@@ -21,8 +32,17 @@ export async function POST(req: Request) {
     const tenantEmailIdentifier = String(body?.tenantEmail ?? '').trim().toLowerCase();
     const authUserIdentifier = String(body?.authUserId ?? '').trim();
     const authEmailIdentifier = String(body?.authEmail ?? '').trim().toLowerCase();
-    if (!tenantIdentifier) {
-      return NextResponse.json({ error: 'Missing tenantId.' }, { status: 400 });
+    if (
+      !tenantIdentifier &&
+      !tenantUserIdentifier &&
+      !tenantEmailIdentifier &&
+      !authUserIdentifier &&
+      !authEmailIdentifier
+    ) {
+      return NextResponse.json(
+        { error: 'Missing tenant identifier.' },
+        { status: 400 }
+      );
     }
 
     const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
@@ -33,12 +53,23 @@ export async function POST(req: Request) {
       column: 'id' | 'user_id' | 'email',
       value: string
     ) => {
-      const { data, error } = await supabaseAdmin
-        .from('tenants')
-        .select(tenantSelect)
-        .eq(column, value)
-        .maybeSingle();
-      return { data, error };
+      if (column === 'id') {
+        const { data, error } = await supabaseAdmin
+          .from('tenants')
+          .select(tenantSelect)
+          .eq(column, value)
+          .maybeSingle();
+        return { data, error };
+      }
+
+      const query = supabaseAdmin.from('tenants').select(tenantSelect);
+      const filteredQuery =
+        column === 'email' ? query.ilike(column, value) : query.eq(column, value);
+      const { data, error } = await filteredQuery
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      return { data: Array.isArray(data) ? data[0] ?? null : null, error };
     };
 
     let tenantResult = isNumericTenantId
@@ -49,9 +80,13 @@ export async function POST(req: Request) {
       const fallback = isNumericTenantId
         ? await findTenantByColumn('user_id', tenantIdentifier)
         : await findTenantByColumn('id', tenantIdentifier);
-      if (fallback?.data || fallback?.error) {
+      if (fallback?.data || (fallback?.error && !isTenantLookupTypeError(fallback.error))) {
         tenantResult = fallback;
       }
+    }
+
+    if (tenantResult?.error && isTenantLookupTypeError(tenantResult.error)) {
+      tenantResult = { data: null, error: null };
     }
 
     if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {

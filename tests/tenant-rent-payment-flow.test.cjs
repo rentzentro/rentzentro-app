@@ -10,29 +10,64 @@ function makeSupabaseAdmin({ tenant, property, landlordById, landlordByUserId })
         select() {
           return {
             eq(column, value) {
+              const resolveSingle = () => {
+                if (table === 'tenants' && column === 'id') {
+                  return String(value) === String(tenant?.id) ? tenant : null;
+                }
+
+                if (table === 'tenants' && column === 'user_id') {
+                  return value === tenant?.user_id ? tenant : null;
+                }
+
+                if (table === 'tenants' && column === 'email') {
+                  return value === tenant?.email ? tenant : null;
+                }
+
+                if (table === 'properties' && column === 'id') {
+                  return value === property?.id ? property : null;
+                }
+
+                if (table === 'landlords' && column === 'id') {
+                  return landlordById || null;
+                }
+
+                if (table === 'landlords' && column === 'user_id') {
+                  return landlordByUserId || null;
+                }
+
+                return null;
+              };
+
               return {
-                maybeSingle: async () => {
-                  if (table === 'tenants' && column === 'id') {
-                    return { data: String(value) === String(tenant?.id) ? tenant : null, error: null };
-                  }
+                maybeSingle: async () => ({ data: resolveSingle(), error: null }),
+                order() {
+                  return {
+                    limit: async () => {
+                      const row = resolveSingle();
+                      return { data: row ? [row] : [], error: null };
+                    },
+                  };
+                },
+              };
+            },
+            ilike(column, value) {
+              const resolveSingle = () => {
+                if (table === 'tenants' && column === 'email') {
+                  return String(value).toLowerCase() === String(tenant?.email).toLowerCase()
+                    ? tenant
+                    : null;
+                }
+                return null;
+              };
 
-                  if (table === 'tenants' && column === 'user_id') {
-                    return { data: value === tenant?.user_id ? tenant : null, error: null };
-                  }
-
-                  if (table === 'properties' && column === 'id') {
-                    return { data: value === property?.id ? property : null, error: null };
-                  }
-
-                  if (table === 'landlords' && column === 'id') {
-                    return { data: landlordById || null, error: null };
-                  }
-
-                  if (table === 'landlords' && column === 'user_id') {
-                    return { data: landlordByUserId || null, error: null };
-                  }
-
-                  return { data: null, error: null };
+              return {
+                order() {
+                  return {
+                    limit: async () => {
+                      const row = resolveSingle();
+                      return { data: row ? [row] : [], error: null };
+                    },
+                  };
                 },
               };
             },
@@ -53,7 +88,7 @@ test('createCheckoutSession returns 400 for missing tenant id', async () => {
   });
 
   assert.equal(result.status, 400);
-  assert.equal(result.body.error, 'Missing tenantId.');
+  assert.equal(result.body.error, 'Missing tenant identifier.');
 });
 
 test('createCheckoutSession builds card rent payment with fee and transfer', async () => {
@@ -270,4 +305,46 @@ test('createCheckoutSession resolves tenant by large numeric string id without p
 
   assert.equal(result.status, 200);
   assert.equal(result.body.url, 'https://stripe.test/checkout/large-id');
+});
+
+test('createCheckoutSession resolves tenant by email case-insensitively', async () => {
+  const result = await createCheckoutSession({
+    stripe: {
+      paymentMethods: {
+        list: async () => ({ data: [{ id: 'pm_1' }] }),
+      },
+      checkout: {
+        sessions: {
+          create: async () => ({ url: 'https://stripe.test/checkout/email-match' }),
+        },
+      },
+    },
+    supabaseAdmin: makeSupabaseAdmin({
+      tenant: {
+        id: 18,
+        user_id: 'user-email',
+        email: 'tenant@example.com',
+        property_id: 22,
+        owner_id: 5,
+        stripe_customer_id: 'cus_123',
+      },
+      property: { id: 22, name: 'Sunset Villas', unit_label: 'Unit 4', owner_id: 5 },
+      landlordById: {
+        id: 5,
+        stripe_connect_account_id: 'acct_123',
+        stripe_connect_onboarded: true,
+      },
+    }),
+    appUrl: 'https://www.rentzentro.com',
+    esignPriceId: 'price_123',
+    body: {
+      amount: 1500,
+      tenantId: 'not-a-match',
+      tenantEmail: 'TENANT@EXAMPLE.COM',
+      paymentMethodType: 'card',
+    },
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.url, 'https://stripe.test/checkout/email-match');
 });
