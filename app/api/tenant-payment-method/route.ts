@@ -62,10 +62,10 @@ export async function POST(req: Request) {
         return { data, error };
       }
 
-      const { data, error } = await supabaseAdmin
-        .from('tenants')
-        .select(tenantSelect)
-        .eq(column, value)
+      const query = supabaseAdmin.from('tenants').select(tenantSelect);
+      const filteredQuery =
+        column === 'email' ? query.ilike(column, value) : query.eq(column, value);
+      const { data, error } = await filteredQuery
         .order('created_at', { ascending: true })
         .limit(1);
 
