@@ -10,6 +10,16 @@ const MIN_RENT_CENTS = 5000;
 const toCents = (dollars) => Math.max(0, Math.round(dollars * 100));
 
 const json = (status, body) => ({ status, body });
+const isTenantLookupTypeError = (err) => {
+  const message = typeof err?.message === 'string' ? err.message.toLowerCase() : '';
+  const code = typeof err?.code === 'string' ? err.code : '';
+  return (
+    message.includes('invalid input syntax') ||
+    message.includes('value out of range') ||
+    code === '22P02' || // invalid_text_representation
+    code === '22003' // numeric_value_out_of_range
+  );
+};
 
 async function createCheckoutSession({
   stripe,
@@ -90,8 +100,8 @@ async function createCheckoutSession({
       return json(400, { error: 'Invalid amount.' });
     }
 
-    if (!tenantId) {
-      return json(400, { error: 'Missing tenantId.' });
+    if (!tenantId && !tenantUserId && !tenantEmail && !authUserId && !authEmail) {
+      return json(400, { error: 'Missing tenant identifier.' });
     }
 
     const requestedMethod = paymentMethodType || paymentMethod || method || 'card';
@@ -117,12 +127,23 @@ async function createCheckoutSession({
     const tenantSelect = 'id, email, property_id, owner_id, stripe_customer_id';
 
     const findTenantByColumn = async (column, value) => {
+      if (column === 'id') {
+        const { data, error } = await supabaseAdmin
+          .from('tenants')
+          .select(tenantSelect)
+          .eq(column, value)
+          .maybeSingle();
+        return { data, error };
+      }
+
       const { data, error } = await supabaseAdmin
         .from('tenants')
         .select(tenantSelect)
         .eq(column, value)
-        .maybeSingle();
-      return { data, error };
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      return { data: Array.isArray(data) ? data[0] ?? null : null, error };
     };
 
     let tenantResult = isNumericTenantId
@@ -133,9 +154,13 @@ async function createCheckoutSession({
       const fallback = isNumericTenantId
         ? await findTenantByColumn('user_id', tenantIdentifier)
         : await findTenantByColumn('id', tenantIdentifier);
-      if (fallback?.data || fallback?.error) {
+      if (fallback?.data || (fallback?.error && !isTenantLookupTypeError(fallback.error))) {
         tenantResult = fallback;
       }
+    }
+
+    if (tenantResult?.error && isTenantLookupTypeError(tenantResult.error)) {
+      tenantResult = { data: null, error: null };
     }
 
     if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {
