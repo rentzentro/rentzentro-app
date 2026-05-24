@@ -42,12 +42,35 @@ export async function POST(req: Request) {
       column: 'id' | 'user_id' | 'email',
       value: string
     ) => {
+      if (column === 'id') {
+        const { data, error } = await supabaseAdmin
+          .from('tenants')
+          .select(tenantSelect)
+          .eq(column, value)
+          .maybeSingle();
+        return { data, error };
+      }
+
       const { data, error } = await supabaseAdmin
         .from('tenants')
         .select(tenantSelect)
         .eq(column, value)
-        .maybeSingle();
-      return { data, error };
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      return { data: Array.isArray(data) ? data[0] ?? null : null, error };
+    };
+
+    const isTenantLookupTypeError = (err: any) => {
+      const message =
+        typeof err?.message === 'string' ? err.message.toLowerCase() : '';
+      const code = typeof err?.code === 'string' ? err.code : '';
+      return (
+        message.includes('invalid input syntax') ||
+        message.includes('value out of range') ||
+        code === '22P02' || // invalid_text_representation
+        code === '22003' // numeric_value_out_of_range
+      );
     };
 
     const isTenantLookupTypeError = (err: any) => {

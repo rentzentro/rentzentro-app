@@ -117,12 +117,34 @@ async function createCheckoutSession({
     const tenantSelect = 'id, email, property_id, owner_id, stripe_customer_id';
 
     const findTenantByColumn = async (column, value) => {
+      if (column === 'id') {
+        const { data, error } = await supabaseAdmin
+          .from('tenants')
+          .select(tenantSelect)
+          .eq(column, value)
+          .maybeSingle();
+        return { data, error };
+      }
+
       const { data, error } = await supabaseAdmin
         .from('tenants')
         .select(tenantSelect)
         .eq(column, value)
-        .maybeSingle();
-      return { data, error };
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      return { data: Array.isArray(data) ? data[0] ?? null : null, error };
+    };
+
+    const isTenantLookupTypeError = (err) => {
+      const message = typeof err?.message === 'string' ? err.message.toLowerCase() : '';
+      const code = typeof err?.code === 'string' ? err.code : '';
+      return (
+        message.includes('invalid input syntax') ||
+        message.includes('value out of range') ||
+        code === '22P02' || // invalid_text_representation
+        code === '22003' // numeric_value_out_of_range
+      );
     };
 
     const isTenantLookupTypeError = (err) => {

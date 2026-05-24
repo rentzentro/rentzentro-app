@@ -10,29 +10,43 @@ function makeSupabaseAdmin({ tenant, property, landlordById, landlordByUserId })
         select() {
           return {
             eq(column, value) {
+              const resolveSingle = () => {
+                if (table === 'tenants' && column === 'id') {
+                  return String(value) === String(tenant?.id) ? tenant : null;
+                }
+
+                if (table === 'tenants' && column === 'user_id') {
+                  return value === tenant?.user_id ? tenant : null;
+                }
+
+                if (table === 'tenants' && column === 'email') {
+                  return value === tenant?.email ? tenant : null;
+                }
+
+                if (table === 'properties' && column === 'id') {
+                  return value === property?.id ? property : null;
+                }
+
+                if (table === 'landlords' && column === 'id') {
+                  return landlordById || null;
+                }
+
+                if (table === 'landlords' && column === 'user_id') {
+                  return landlordByUserId || null;
+                }
+
+                return null;
+              };
+
               return {
-                maybeSingle: async () => {
-                  if (table === 'tenants' && column === 'id') {
-                    return { data: String(value) === String(tenant?.id) ? tenant : null, error: null };
-                  }
-
-                  if (table === 'tenants' && column === 'user_id') {
-                    return { data: value === tenant?.user_id ? tenant : null, error: null };
-                  }
-
-                  if (table === 'properties' && column === 'id') {
-                    return { data: value === property?.id ? property : null, error: null };
-                  }
-
-                  if (table === 'landlords' && column === 'id') {
-                    return { data: landlordById || null, error: null };
-                  }
-
-                  if (table === 'landlords' && column === 'user_id') {
-                    return { data: landlordByUserId || null, error: null };
-                  }
-
-                  return { data: null, error: null };
+                maybeSingle: async () => ({ data: resolveSingle(), error: null }),
+                order() {
+                  return {
+                    limit: async () => {
+                      const row = resolveSingle();
+                      return { data: row ? [row] : [], error: null };
+                    },
+                  };
                 },
               };
             },
