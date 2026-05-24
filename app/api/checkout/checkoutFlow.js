@@ -131,7 +131,7 @@ async function createCheckoutSession({
         const { data, error } = await supabaseAdmin
           .from('tenants')
           .select(tenantSelect)
-          .eq(column, value)
+          .eq(column, Number(value))
           .maybeSingle();
         return { data, error };
       }
