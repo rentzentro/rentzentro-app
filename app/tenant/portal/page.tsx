@@ -718,9 +718,15 @@ export default function TenantPortalPage() {
 
         const verificationData = await verificationRes.json().catch(() => ({}));
         if (!verificationRes.ok) {
-          throw new Error(
-            verificationData?.error || 'Failed to start card verification.'
-          );
+          if (verificationRes.status === 404) {
+            console.warn(
+              'tenant-payment-method route returned 404; continuing directly to checkout fallback.'
+            );
+          } else {
+            throw new Error(
+              verificationData?.error || 'Failed to start card verification.'
+            );
+          }
         }
 
         if (!verificationData?.verified && verificationData?.url) {
