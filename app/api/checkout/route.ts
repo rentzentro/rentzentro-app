@@ -72,8 +72,8 @@ export async function POST(req: Request) {
     esignPriceId: ESIGN_PRICE_ID,
     body: {
       ...body,
-      authUserId: body?.authUserId || authenticatedTenant?.id || null,
-      authEmail: body?.authEmail || authenticatedTenant?.email || null,
+      authUserId: authenticatedTenant?.id || body?.authUserId || null,
+      authEmail: authenticatedTenant?.email || body?.authEmail || null,
     },
   });
 

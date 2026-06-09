@@ -610,7 +610,12 @@ export default function TenantPortalPage() {
         const res = await fetch('/api/tenant-autopay', {
           method: 'POST',
           headers: await buildTenantApiHeaders(),
-          body: JSON.stringify({ action: 'enable', tenantId: tenant.id }),
+          body: JSON.stringify({
+            action: 'enable',
+            tenantId: tenant.id,
+            tenantUserId: tenant.user_id ?? null,
+            tenantEmail: tenant.email,
+          }),
         });
 
         const data = await res.json().catch(() => ({} as any));
@@ -631,7 +636,12 @@ export default function TenantPortalPage() {
         const res = await fetch('/api/tenant-autopay', {
           method: 'POST',
           headers: await buildTenantApiHeaders(),
-          body: JSON.stringify({ action: 'disable', tenantId: tenant.id }),
+          body: JSON.stringify({
+            action: 'disable',
+            tenantId: tenant.id,
+            tenantUserId: tenant.user_id ?? null,
+            tenantEmail: tenant.email,
+          }),
         });
 
         const data = await res.json().catch(() => ({} as any));

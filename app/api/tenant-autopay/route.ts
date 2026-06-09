@@ -18,6 +18,150 @@ const supabaseAdmin =
     ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
     : null;
 
+const isTenantLookupTypeError = (err: any) => {
+  const message =
+    typeof err?.message === 'string' ? err.message.toLowerCase() : '';
+  const code = typeof err?.code === 'string' ? err.code : '';
+  return (
+    message.includes('invalid input syntax') ||
+    message.includes('value out of range') ||
+    code === '22P02' ||
+    code === '22003'
+  );
+};
+
+async function getAuthenticatedTenantFromRequest(req: Request) {
+  if (!supabaseAdmin) return null;
+
+  const authHeader = req.headers.get('authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+  if (!token) return null;
+
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !data?.user) {
+    console.warn('tenant-autopay: unable to verify tenant auth token', error);
+    return null;
+  }
+
+  return {
+    id: data.user.id,
+    email: data.user.email || null,
+  };
+}
+
+const normalizeEmail = (value: unknown) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase();
+
+async function findTenantForPayment({
+  tenantId,
+  tenantUserId,
+  tenantEmail,
+  authUserId,
+  authEmail,
+}: {
+  tenantId?: string | number | null;
+  tenantUserId?: string | null;
+  tenantEmail?: string | null;
+  authUserId?: string | null;
+  authEmail?: string | null;
+}) {
+  if (!supabaseAdmin) return { data: null, error: null };
+
+  const tenantIdentifier =
+    tenantId === undefined || tenantId === null ? '' : String(tenantId).trim();
+  const tenantUserIdentifier = String(tenantUserId ?? '').trim();
+  const tenantEmailIdentifier = normalizeEmail(tenantEmail);
+  const authUserIdentifier = String(authUserId ?? '').trim();
+  const authEmailIdentifier = normalizeEmail(authEmail);
+  const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
+  const tenantSelect =
+    'id, owner_id, property_id, email, name, monthly_rent, auto_pay_enabled, auto_pay_stripe_subscription_id';
+
+  const findTenantByColumn = async (
+    column: 'id' | 'user_id' | 'email',
+    value: string
+  ) => {
+    if (column === 'id') {
+      const { data, error } = await supabaseAdmin
+        .from('tenants')
+        .select(tenantSelect)
+        .eq(column, value)
+        .maybeSingle();
+      return { data, error };
+    }
+
+    const query = supabaseAdmin.from('tenants').select(tenantSelect);
+    const filteredQuery =
+      column === 'email' ? query.ilike(column, value) : query.eq(column, value);
+    const { data, error } = await filteredQuery
+      .order('created_at', { ascending: true })
+      .limit(1);
+
+    return { data: Array.isArray(data) ? data[0] ?? null : null, error };
+  };
+
+  const findTenantByEmailLoose = async (rawEmail: string) => {
+    const normalized = normalizeEmail(rawEmail);
+    if (!normalized) return { data: null, error: null };
+
+    const { data, error } = await supabaseAdmin
+      .from('tenants')
+      .select(tenantSelect)
+      .ilike('email', `%${normalized}%`)
+      .order('created_at', { ascending: true })
+      .limit(10);
+
+    if (error) return { data: null, error };
+
+    const match = (Array.isArray(data) ? data : []).find(
+      (row: any) => normalizeEmail(row?.email) === normalized
+    );
+
+    return { data: match ?? null, error: null };
+  };
+
+  const lookupCandidates = [
+    authUserIdentifier && { column: 'user_id', value: authUserIdentifier },
+    authEmailIdentifier && { column: 'email', value: authEmailIdentifier },
+    tenantUserIdentifier && { column: 'user_id', value: tenantUserIdentifier },
+    tenantEmailIdentifier && { column: 'email', value: tenantEmailIdentifier },
+    tenantIdentifier && {
+      column: isNumericTenantId ? 'id' : 'user_id',
+      value: tenantIdentifier,
+    },
+    tenantIdentifier && {
+      column: isNumericTenantId ? 'user_id' : 'id',
+      value: tenantIdentifier,
+    },
+  ].filter(Boolean) as Array<{
+    column: 'id' | 'user_id' | 'email';
+    value: string;
+  }>;
+
+  for (const candidate of lookupCandidates) {
+    const result = await findTenantByColumn(candidate.column, candidate.value);
+
+    if (result?.data || (result?.error && !isTenantLookupTypeError(result.error))) {
+      return result;
+    }
+  }
+
+  if (authEmailIdentifier) {
+    const result = await findTenantByEmailLoose(authEmailIdentifier);
+    if (result?.data || result?.error) return result;
+  }
+
+  if (tenantEmailIdentifier) {
+    return findTenantByEmailLoose(tenantEmailIdentifier);
+  }
+
+  return { data: null, error: null };
+}
+
 export async function POST(req: Request) {
   try {
     if (!stripe || !supabaseAdmin) {
@@ -31,26 +175,37 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { action, tenantId } = body as {
+    const authenticatedTenant = await getAuthenticatedTenantFromRequest(req);
+    const { action, tenantId, tenantUserId, tenantEmail } = body as {
       action?: 'enable' | 'disable';
-      tenantId?: number;
+      tenantId?: number | string;
+      tenantUserId?: string | null;
+      tenantEmail?: string | null;
     };
 
-    if (!action || !tenantId) {
+    if (
+      !action ||
+      (!tenantId &&
+        !tenantUserId &&
+        !tenantEmail &&
+        !authenticatedTenant?.id &&
+        !authenticatedTenant?.email)
+    ) {
       return NextResponse.json(
-        { error: 'Missing action or tenantId.' },
+        { error: 'Missing action or tenant identifier.' },
         { status: 400 }
       );
     }
 
-    // Load tenant (server-side, using service role)
-    const { data: tenant, error: tenantError } = await supabaseAdmin
-      .from('tenants')
-      .select(
-        'id, owner_id, property_id, email, name, monthly_rent, auto_pay_enabled, auto_pay_stripe_subscription_id'
-      )
-      .eq('id', tenantId)
-      .maybeSingle();
+    // Load tenant (server-side, using service role). Prefer the verified
+    // authenticated user over client-provided tenant ids, which can be stale.
+    const { data: tenant, error: tenantError } = await findTenantForPayment({
+      tenantId,
+      tenantUserId: tenantUserId ?? null,
+      tenantEmail: tenantEmail ?? null,
+      authUserId: authenticatedTenant?.id ?? null,
+      authEmail: authenticatedTenant?.email ?? null,
+    });
 
     if (tenantError) {
       console.error('tenant-autopay: tenantError', tenantError);

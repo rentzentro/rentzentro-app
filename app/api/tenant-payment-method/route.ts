@@ -51,9 +51,9 @@ export async function POST(req: Request) {
     const tenantIdentifier = String(body?.tenantId ?? '').trim();
     const tenantUserIdentifier = String(body?.tenantUserId ?? '').trim();
     const tenantEmailIdentifier = String(body?.tenantEmail ?? '').trim().toLowerCase();
-    const authUserIdentifier = String(body?.authUserId ?? authenticatedTenant?.id ?? '').trim();
+    const authUserIdentifier = String(authenticatedTenant?.id ?? body?.authUserId ?? '').trim();
     const authEmailIdentifier = String(
-      body?.authEmail ?? authenticatedTenant?.email ?? ''
+      authenticatedTenant?.email ?? body?.authEmail ?? ''
     )
       .trim()
       .toLowerCase();
