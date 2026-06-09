@@ -157,7 +157,7 @@ async function createCheckoutSession({
         const { data, error } = await supabaseAdmin
           .from('tenants')
           .select(tenantSelect)
-          .eq(column, Number(value))
+          .eq(column, value)
           .maybeSingle();
         return { data, error };
       }
@@ -172,43 +172,41 @@ async function createCheckoutSession({
       return { data: Array.isArray(data) ? data[0] ?? null : null, error };
     };
 
-    let tenantResult = isNumericTenantId
-      ? await findTenantByColumn('id', tenantIdentifier)
-      : await findTenantByColumn('user_id', tenantIdentifier);
+    const lookupCandidates = [
+      authUserIdentifier && { column: 'user_id', value: authUserIdentifier },
+      authEmailIdentifier && { column: 'email', value: authEmailIdentifier.toLowerCase() },
+      tenantUserIdentifier && { column: 'user_id', value: tenantUserIdentifier },
+      tenantIdentifier && {
+        column: isNumericTenantId ? 'id' : 'user_id',
+        value: tenantIdentifier,
+      },
+      tenantIdentifier && {
+        column: isNumericTenantId ? 'user_id' : 'id',
+        value: tenantIdentifier,
+      },
+      tenantEmailIdentifier && {
+        column: 'email',
+        value: tenantEmailIdentifier.toLowerCase(),
+      },
+    ].filter(Boolean);
 
-    if (!tenantResult?.data && tenantIdentifier.length > 0) {
-      const fallback = isNumericTenantId
-        ? await findTenantByColumn('user_id', tenantIdentifier)
-        : await findTenantByColumn('id', tenantIdentifier);
-      if (fallback?.data || (fallback?.error && !isTenantLookupTypeError(fallback.error))) {
-        tenantResult = fallback;
+    let tenantResult = { data: null, error: null };
+
+    for (const candidate of lookupCandidates) {
+      const result = await findTenantByColumn(candidate.column, candidate.value);
+
+      if (result?.data || (result?.error && !isTenantLookupTypeError(result.error))) {
+        tenantResult = result;
+        break;
       }
-    }
-
-    if (tenantResult?.error && isTenantLookupTypeError(tenantResult.error)) {
-      tenantResult = { data: null, error: null };
-    }
-
-    if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {
-      tenantResult = await findTenantByColumn('user_id', tenantUserIdentifier);
-    }
-
-    if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
-      tenantResult = await findTenantByColumn('email', tenantEmailIdentifier.toLowerCase());
-      if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
-        tenantResult = await findTenantByEmailLoose(tenantEmailIdentifier);
-      }
-    }
-
-    if ((!tenantResult?.data || tenantResult?.error) && authUserIdentifier) {
-      tenantResult = await findTenantByColumn('user_id', authUserIdentifier);
     }
 
     if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
-      tenantResult = await findTenantByColumn('email', authEmailIdentifier.toLowerCase());
-      if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
-        tenantResult = await findTenantByEmailLoose(authEmailIdentifier);
-      }
+      tenantResult = await findTenantByEmailLoose(authEmailIdentifier);
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
+      tenantResult = await findTenantByEmailLoose(tenantEmailIdentifier);
     }
 
     const resolvedTenant = tenantResult?.data;

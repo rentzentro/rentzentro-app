@@ -5,6 +5,26 @@ import { supabaseAdmin } from '../../supabaseAdminClient';
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.rentzentro.com';
+
+async function getAuthenticatedTenantFromRequest(req: Request) {
+  const authHeader = req.headers.get('authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+  if (!token) return null;
+
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !data?.user) {
+    console.warn('tenant-payment-method: unable to verify tenant auth token', error);
+    return null;
+  }
+
+  return {
+    id: data.user.id,
+    email: data.user.email || null,
+  };
+}
+
 const isTenantLookupTypeError = (err: any) => {
   const message =
     typeof err?.message === 'string' ? err.message.toLowerCase() : '';
@@ -27,11 +47,16 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
+    const authenticatedTenant = await getAuthenticatedTenantFromRequest(req);
     const tenantIdentifier = String(body?.tenantId ?? '').trim();
     const tenantUserIdentifier = String(body?.tenantUserId ?? '').trim();
     const tenantEmailIdentifier = String(body?.tenantEmail ?? '').trim().toLowerCase();
-    const authUserIdentifier = String(body?.authUserId ?? '').trim();
-    const authEmailIdentifier = String(body?.authEmail ?? '').trim().toLowerCase();
+    const authUserIdentifier = String(body?.authUserId ?? authenticatedTenant?.id ?? '').trim();
+    const authEmailIdentifier = String(
+      body?.authEmail ?? authenticatedTenant?.email ?? ''
+    )
+      .trim()
+      .toLowerCase();
     if (
       !tenantIdentifier &&
       !tenantUserIdentifier &&
@@ -83,7 +108,7 @@ export async function POST(req: Request) {
         const { data, error } = await supabaseAdmin
           .from('tenants')
           .select(tenantSelect)
-          .eq(column, Number(value))
+          .eq(column, value)
           .maybeSingle();
         return { data, error };
       }
@@ -98,43 +123,41 @@ export async function POST(req: Request) {
       return { data: Array.isArray(data) ? data[0] ?? null : null, error };
     };
 
-    let tenantResult = isNumericTenantId
-      ? await findTenantByColumn('id', tenantIdentifier)
-      : await findTenantByColumn('user_id', tenantIdentifier);
+    const lookupCandidates = [
+      authUserIdentifier && { column: 'user_id', value: authUserIdentifier },
+      authEmailIdentifier && { column: 'email', value: authEmailIdentifier },
+      tenantUserIdentifier && { column: 'user_id', value: tenantUserIdentifier },
+      tenantIdentifier && {
+        column: isNumericTenantId ? 'id' : 'user_id',
+        value: tenantIdentifier,
+      },
+      tenantIdentifier && {
+        column: isNumericTenantId ? 'user_id' : 'id',
+        value: tenantIdentifier,
+      },
+      tenantEmailIdentifier && { column: 'email', value: tenantEmailIdentifier },
+    ].filter(Boolean) as Array<{
+      column: 'id' | 'user_id' | 'email';
+      value: string;
+    }>;
 
-    if (!tenantResult?.data && tenantIdentifier.length > 0) {
-      const fallback = isNumericTenantId
-        ? await findTenantByColumn('user_id', tenantIdentifier)
-        : await findTenantByColumn('id', tenantIdentifier);
-      if (fallback?.data || (fallback?.error && !isTenantLookupTypeError(fallback.error))) {
-        tenantResult = fallback;
+    let tenantResult: { data: any; error: any } = { data: null, error: null };
+
+    for (const candidate of lookupCandidates) {
+      const result = await findTenantByColumn(candidate.column, candidate.value);
+
+      if (result?.data || (result?.error && !isTenantLookupTypeError(result.error))) {
+        tenantResult = result;
+        break;
       }
-    }
-
-    if (tenantResult?.error && isTenantLookupTypeError(tenantResult.error)) {
-      tenantResult = { data: null, error: null };
-    }
-
-    if ((!tenantResult?.data || tenantResult?.error) && tenantUserIdentifier) {
-      tenantResult = await findTenantByColumn('user_id', tenantUserIdentifier);
-    }
-
-    if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
-      tenantResult = await findTenantByColumn('email', tenantEmailIdentifier);
-      if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
-        tenantResult = await findTenantByEmailLoose(tenantEmailIdentifier);
-      }
-    }
-
-    if ((!tenantResult?.data || tenantResult?.error) && authUserIdentifier) {
-      tenantResult = await findTenantByColumn('user_id', authUserIdentifier);
     }
 
     if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
-      tenantResult = await findTenantByColumn('email', authEmailIdentifier);
-      if ((!tenantResult?.data || tenantResult?.error) && authEmailIdentifier) {
-        tenantResult = await findTenantByEmailLoose(authEmailIdentifier);
-      }
+      tenantResult = await findTenantByEmailLoose(authEmailIdentifier);
+    }
+
+    if ((!tenantResult?.data || tenantResult?.error) && tenantEmailIdentifier) {
+      tenantResult = await findTenantByEmailLoose(tenantEmailIdentifier);
     }
 
     const tenant = tenantResult?.data;
