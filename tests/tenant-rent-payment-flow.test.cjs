@@ -348,3 +348,101 @@ test('createCheckoutSession resolves tenant by email case-insensitively', async 
   assert.equal(result.status, 200);
   assert.equal(result.body.url, 'https://stripe.test/checkout/email-match');
 });
+
+test('createCheckoutSession resolves authenticated tenant before stale client tenant id for ACH', async () => {
+  const stripeCalls = [];
+
+  const result = await createCheckoutSession({
+    stripe: {
+      paymentMethods: {
+        list: async () => ({ data: [{ id: 'pm_1' }] }),
+      },
+      checkout: {
+        sessions: {
+          create: async (params) => {
+            stripeCalls.push(params);
+            return { url: 'https://stripe.test/checkout/auth-email-ach' };
+          },
+        },
+      },
+    },
+    supabaseAdmin: makeSupabaseAdmin({
+      tenant: {
+        id: 42,
+        user_id: 'auth-tenant-user',
+        email: 'signedup@example.com',
+        property_id: 24,
+        owner_id: null,
+      },
+      property: { id: 24, name: 'Maple Court', unit_label: null, owner_id: 'user_abc' },
+      landlordByUserId: {
+        id: 99,
+        stripe_connect_account_id: 'acct_ach',
+        stripe_connect_onboarded: true,
+      },
+    }),
+    appUrl: 'https://www.rentzentro.com',
+    esignPriceId: 'price_123',
+    body: {
+      amount: 1200,
+      tenantId: 999999,
+      authUserId: 'auth-tenant-user',
+      authEmail: 'signedup@example.com',
+      paymentMethodType: 'us_bank_account',
+    },
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.url, 'https://stripe.test/checkout/auth-email-ach');
+  assert.equal(stripeCalls[0].metadata.tenant_id, '42');
+});
+
+test('createCheckoutSession resolves authenticated tenant before stale client tenant id for card', async () => {
+  const stripeCalls = [];
+
+  const result = await createCheckoutSession({
+    stripe: {
+      paymentMethods: {
+        list: async () => ({ data: [{ id: 'pm_verified' }] }),
+      },
+      checkout: {
+        sessions: {
+          create: async (params) => {
+            stripeCalls.push(params);
+            return { url: 'https://stripe.test/checkout/auth-email-card' };
+          },
+        },
+      },
+    },
+    supabaseAdmin: makeSupabaseAdmin({
+      tenant: {
+        id: 43,
+        user_id: 'auth-card-user',
+        email: 'cardholder@example.com',
+        property_id: 25,
+        owner_id: 5,
+        stripe_customer_id: 'cus_verified',
+      },
+      property: { id: 25, name: 'Oak Flats', unit_label: '2R', owner_id: 5 },
+      landlordById: {
+        id: 5,
+        stripe_connect_account_id: 'acct_card',
+        stripe_connect_onboarded: true,
+      },
+    }),
+    appUrl: 'https://www.rentzentro.com',
+    esignPriceId: 'price_123',
+    body: {
+      amount: 1500,
+      tenantId: 123456,
+      authUserId: 'auth-card-user',
+      authEmail: 'cardholder@example.com',
+      paymentMethodType: 'card',
+    },
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.url, 'https://stripe.test/checkout/auth-email-card');
+  assert.equal(stripeCalls[0].metadata.tenant_id, '43');
+  assert.equal(stripeCalls[0].payment_method_types[0], 'card');
+});

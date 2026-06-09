@@ -13,6 +13,25 @@ const APP_URL =
 
 const ESIGN_PRICE_ID = process.env.STRIPE_ESIGN_PRICE_ID as string | undefined;
 
+async function getAuthenticatedTenantFromRequest(req: Request) {
+  const authHeader = req.headers.get('authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+  if (!token) return null;
+
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !data?.user) {
+    console.warn('checkout: unable to verify tenant auth token', error);
+    return null;
+  }
+
+  return {
+    id: data.user.id,
+    email: data.user.email || null,
+  };
+}
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const clientIp = getRateLimitClientIp(req);
@@ -44,12 +63,18 @@ export async function POST(req: Request) {
     );
   }
 
+  const authenticatedTenant = await getAuthenticatedTenantFromRequest(req);
+
   const result = await createCheckoutSession({
     stripe,
     supabaseAdmin,
     appUrl: APP_URL,
     esignPriceId: ESIGN_PRICE_ID,
-    body,
+    body: {
+      ...body,
+      authUserId: authenticatedTenant?.id || body?.authUserId || null,
+      authEmail: authenticatedTenant?.email || body?.authEmail || null,
+    },
   });
 
   return NextResponse.json(result.body, { status: result.status });
