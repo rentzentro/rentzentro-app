@@ -77,7 +77,15 @@ type RentStatus = {
   isCaughtUp: boolean;
 };
 
+const TENANT_PORTAL_SELECT =
+  'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment, auto_pay_enabled';
+
 // ---------- Helpers ----------
+
+const normalizeEmail = (value: string | null | undefined) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase();
 
 const parseSupabaseDate = (value: string | null | undefined): Date | null => {
   if (!value) return null;
@@ -350,21 +358,55 @@ export default function TenantPortalPage() {
         setAuthUserId(userId);
         setAuthEmail(email);
 
-        const { data: tenantRows, error: tenantError } = await supabase
+        const { data: tenantByUser, error: tenantByUserError } = await supabase
           .from('tenants')
-          .select(
-            'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment, auto_pay_enabled'
-          )
-          .or(`user_id.eq.${userId},email.eq.${email}`)
-          .order('created_at', { ascending: true });
+          .select(TENANT_PORTAL_SELECT)
+          .eq('user_id', userId)
+          .maybeSingle();
 
-        if (tenantError) throw tenantError;
+        if (tenantByUserError) throw tenantByUserError;
 
-        let t: TenantRow | null =
-          tenantRows && tenantRows.length > 0
-            ? (tenantRows.find((row: any) => row.user_id === userId) ??
-              tenantRows[0])
-            : null;
+        let t: TenantRow | null = tenantByUser as TenantRow | null;
+
+        if (!t) {
+          const { data: tenantRowsByEmail, error: tenantByEmailError } = await supabase
+            .from('tenants')
+            .select(TENANT_PORTAL_SELECT)
+            .ilike('email', email)
+            .order('created_at', { ascending: true })
+            .limit(10);
+
+          if (tenantByEmailError) throw tenantByEmailError;
+
+          t =
+            ((tenantRowsByEmail || []).find(
+              (row: TenantRow) => normalizeEmail(row.email) === normalizeEmail(email)
+            ) as TenantRow | undefined) ?? null;
+        }
+
+        if (!t || !t.user_id) {
+          try {
+            const linkRes = await fetch('/api/link-tenant-user', {
+              method: 'POST',
+              headers: await buildTenantApiHeaders(),
+              body: JSON.stringify({
+                email,
+                userId,
+                tenantName: t?.name || undefined,
+              }),
+            });
+
+            const linkData = await linkRes.json().catch(() => ({} as any));
+
+            if (linkRes.ok && linkData?.tenant) {
+              t = linkData.tenant as TenantRow;
+            } else if (!linkRes.ok) {
+              console.warn('Failed to link tenant user from tenant portal:', linkData);
+            }
+          } catch (linkErr) {
+            console.warn('Error calling /api/link-tenant-user from tenant portal:', linkErr);
+          }
+        }
 
         if (!t) {
           setTenant(null);
@@ -378,23 +420,6 @@ export default function TenantPortalPage() {
             'We couldn’t find a tenant profile for this email yet. This usually means your landlord hasn’t added you to their tenant list, or used a different email. Please contact your landlord to confirm they added you with this exact email address.'
           );
           return;
-        }
-
-        if (!t.user_id) {
-          const { data: updated, error: updateError } = await supabase
-            .from('tenants')
-            .update({ user_id: userId })
-            .eq('id', t.id)
-            .select(
-              'id, owner_id, name, email, phone, status, property_id, monthly_rent, lease_start, lease_end, user_id, allow_early_payment, auto_pay_enabled'
-            )
-            .maybeSingle();
-
-          if (updateError) {
-            console.error('Failed to link tenant.user_id:', updateError);
-          } else if (updated) {
-            t = updated as TenantRow;
-          }
         }
 
         setTenant(t);
