@@ -404,7 +404,7 @@ export default function TenantPortalPage() {
           try {
             const res = await fetch('/api/tenant-landlord-access', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: await buildTenantApiHeaders(),
               body: JSON.stringify({ ownerId: t.owner_id }),
             });
 
@@ -569,6 +569,16 @@ export default function TenantPortalPage() {
     router.push('/tenant/login');
   };
 
+  const buildTenantApiHeaders = async () => {
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+
+    return {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    };
+  };
+
   const handleToggleAutoPay = async () => {
     if (!tenant) return;
 
@@ -599,7 +609,7 @@ export default function TenantPortalPage() {
       if (!autoPayEnabled) {
         const res = await fetch('/api/tenant-autopay', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await buildTenantApiHeaders(),
           body: JSON.stringify({ action: 'enable', tenantId: tenant.id }),
         });
 
@@ -620,7 +630,7 @@ export default function TenantPortalPage() {
 
         const res = await fetch('/api/tenant-autopay', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await buildTenantApiHeaders(),
           body: JSON.stringify({ action: 'disable', tenantId: tenant.id }),
         });
 
@@ -708,7 +718,7 @@ export default function TenantPortalPage() {
       if (paymentMethodType === 'card') {
         const verificationRes = await fetch('/api/tenant-payment-method', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await buildTenantApiHeaders(),
           body: JSON.stringify({
             tenantId: String(tenant.id),
             tenantUserId: tenant.user_id ?? null,
@@ -740,7 +750,7 @@ export default function TenantPortalPage() {
 
       const res = await fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await buildTenantApiHeaders(),
         body: JSON.stringify({
           amount,
           description: `Rent payment for ${property?.name || 'your unit'}${
