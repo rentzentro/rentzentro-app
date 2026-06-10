@@ -10,6 +10,8 @@ export const dynamic = 'force-dynamic';
 type LandlordRow = {
   id: number;
   user_id: string | null;
+  name: string | null;
+  email: string | null;
   created_at: string | null;
   subscription_status: string | null;
   trial_active?: boolean | null;
@@ -34,6 +36,20 @@ type PaymentRow = {
   id: number;
   amount: number | null;
   paid_on: string | null;
+};
+
+type ActivationOutreachLandlord = {
+  id: number;
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  createdAt: string | null;
+  subscriptionStatus: string | null;
+  propertyCount: number;
+  tenantCount: number;
+  missingProperty: boolean;
+  missingTenant: boolean;
+  daysSinceSignup: number | null;
 };
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set([
@@ -73,7 +89,7 @@ const loadLandlords = async (): Promise<LandlordRow[]> => {
   const withCreatedAt = await supabaseAdmin
     .from('landlords')
     .select(
-      'id, user_id, created_at, subscription_status, trial_active, trial_end, stripe_connect_onboarded'
+      'id, user_id, name, email, created_at, subscription_status, trial_active, trial_end, stripe_connect_onboarded'
     );
 
   if (!withCreatedAt.error) {
@@ -91,7 +107,7 @@ const loadLandlords = async (): Promise<LandlordRow[]> => {
   const withoutCreatedAt = await supabaseAdmin
     .from('landlords')
     .select(
-      'id, user_id, subscription_status, trial_active, trial_end, stripe_connect_onboarded'
+      'id, user_id, name, email, subscription_status, trial_active, trial_end, stripe_connect_onboarded'
     );
 
   if (withoutCreatedAt.error) {
@@ -190,8 +206,15 @@ export async function GET(req: Request) {
     }, 0);
 
     const firstPropertyTimeByOwner = new Map<string, number>();
+    const propertyCountByOwner = new Map<string, number>();
     for (const property of properties) {
       if (!property.owner_id) continue;
+
+      propertyCountByOwner.set(
+        property.owner_id,
+        (propertyCountByOwner.get(property.owner_id) || 0) + 1
+      );
+
       const createdAt = safeTime(property.created_at);
       if (createdAt == null) continue;
 
@@ -202,8 +225,15 @@ export async function GET(req: Request) {
     }
 
     const firstTenantTimeByOwner = new Map<string, number>();
+    const tenantCountByOwner = new Map<string, number>();
     for (const tenant of tenants) {
       if (!tenant.owner_id) continue;
+
+      tenantCountByOwner.set(
+        tenant.owner_id,
+        (tenantCountByOwner.get(tenant.owner_id) || 0) + 1
+      );
+
       const createdAt = safeTime(tenant.created_at);
       if (createdAt == null) continue;
 
@@ -292,6 +322,43 @@ export async function GET(req: Request) {
       },
     };
 
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    const activationOutreachLandlords: ActivationOutreachLandlord[] = landlords
+      .map((landlord) => {
+        const ownerUserId = landlord.user_id;
+        const propertyCount = ownerUserId
+          ? propertyCountByOwner.get(ownerUserId) || 0
+          : 0;
+        const tenantCount = ownerUserId ? tenantCountByOwner.get(ownerUserId) || 0 : 0;
+        const landlordCreatedAt =
+          safeTime(landlord.created_at) ??
+          inferSignupTimeFromTrialEnd(landlord.trial_end);
+
+        return {
+          id: landlord.id,
+          userId: ownerUserId,
+          name: landlord.name,
+          email: landlord.email,
+          createdAt: landlord.created_at,
+          subscriptionStatus: landlord.subscription_status,
+          propertyCount,
+          tenantCount,
+          missingProperty: propertyCount === 0,
+          missingTenant: tenantCount === 0,
+          daysSinceSignup:
+            landlordCreatedAt == null
+              ? null
+              : Math.max(0, Math.floor((now.getTime() - landlordCreatedAt) / MS_PER_DAY)),
+        };
+      })
+      .filter((landlord) => landlord.missingProperty || landlord.missingTenant)
+      .sort((a, b) => {
+        const aDays = a.daysSinceSignup ?? -1;
+        const bDays = b.daysSinceSignup ?? -1;
+        if (aDays !== bDays) return bDays - aDays;
+        return a.id - b.id;
+      });
+
     return NextResponse.json(
       {
         totalLandlords,
@@ -303,6 +370,9 @@ export async function GET(req: Request) {
         MRR,
         paymentsLast30Days,
         activationFunnel,
+        activationOutreach: {
+          landlords: activationOutreachLandlords,
+        },
       },
       { status: 200 }
     );
