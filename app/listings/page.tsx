@@ -192,35 +192,6 @@ function buildPageHref(params: SearchParams, page: number) {
   return `/listings?${qs.toString()}`;
 }
 
-function ResultsSummary({ count, location, mapHref }: { count: number; location: string; mapHref: string }) {
-  return (
-    <section className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 shadow-2xl shadow-slate-950/40">
-      <div className="relative p-5 sm:p-6">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(16,185,129,0.16),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(37,99,235,0.18),transparent_25%)]" />
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-emerald-300">Live RentZentro inventory</p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">
-              {count || 'No'} {count === 1 ? 'home' : 'homes'} {location ? `in ${location}` : 'ready to browse'}
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-              The decorative map has been removed. Use the real map button to open your current filters in Google Maps, or keep browsing RentZentro listings below.
-            </p>
-          </div>
-          <a
-            href={mapHref}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-emerald-400/40 bg-emerald-400 px-5 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950/20 transition hover:bg-emerald-300"
-          >
-            View real map
-          </a>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function ListingCard({ listing, cover }: { listing: Listing; cover?: PhotoRow }) {
   const location = [listing.neighborhood, listing.city, listing.state].filter(Boolean).join(', ');
   const price = money(listing.rent_amount);
@@ -301,8 +272,6 @@ export default async function PublicListingsPage({
 
   const { listings, hasNextPage, coverMap } = await searchRentzentroListings(params, page);
   const location = normalize(params.location);
-  const mapHref = buildGoogleMapsHref(params);
-
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="border-b border-slate-800 bg-slate-950/95 px-4 py-3 shadow-sm shadow-slate-950/40 backdrop-blur">
@@ -318,9 +287,7 @@ export default async function PublicListingsPage({
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1520px] space-y-4 p-4">
-        <ResultsSummary count={listings.length} location={location} mapHref={mapHref} />
-
+      <div className="mx-auto max-w-[1520px] p-4">
         <section className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-900 shadow-xl shadow-slate-950/40">
           <div className="sticky top-0 z-20 border-b border-slate-800 bg-slate-900/95 p-4 backdrop-blur">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -345,13 +312,6 @@ export default async function PublicListingsPage({
           </div>
 
           <div className="bg-slate-950 p-4">
-            <div className="mb-4 rounded-3xl border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm text-emerald-50">
-              <p className="font-bold">A livelier browsing experience is here.</p>
-              <p className="mt-1 text-emerald-100/80">
-                Photo-led cards, quick facts, and working save actions keep RentZentro listings useful without a fake map taking over the page.
-              </p>
-            </div>
-
             {listings.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-900 p-8 text-center shadow-sm">
                 <p className="text-2xl font-black text-white">No matching RentZentro listings yet</p>
