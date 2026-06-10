@@ -64,12 +64,21 @@ export async function POST(req: Request) {
   }
 
   const authenticatedTenant = await getAuthenticatedTenantFromRequest(req);
+  const paymentKind = body?.paymentKind || body?.payment_kind || 'rent';
+
+  if (paymentKind === 'rent' && !authenticatedTenant) {
+    return NextResponse.json(
+      { error: 'Please sign in before starting a rent payment.' },
+      { status: 401 }
+    );
+  }
 
   const result = await createCheckoutSession({
     stripe,
     supabaseAdmin,
     appUrl: APP_URL,
     esignPriceId: ESIGN_PRICE_ID,
+    requireAuthenticatedTenant: paymentKind === 'rent',
     body: {
       ...body,
       authUserId: authenticatedTenant?.id || body?.authUserId || null,

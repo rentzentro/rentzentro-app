@@ -27,6 +27,7 @@ async function createCheckoutSession({
   appUrl,
   esignPriceId,
   body,
+  requireAuthenticatedTenant = false,
 }) {
   try {
     if (!stripe) {
@@ -124,7 +125,7 @@ async function createCheckoutSession({
       authEmail === undefined || authEmail === null ? '' : String(authEmail).trim();
     const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
 
-    const tenantSelect = 'id, email, property_id, owner_id, stripe_customer_id';
+    const tenantSelect = 'id, user_id, email, property_id, owner_id, stripe_customer_id';
 
     const normalizeEmail = (value) =>
       String(value ?? '')
@@ -217,6 +218,18 @@ async function createCheckoutSession({
     }
 
     const tenant = resolvedTenant;
+
+    if (requireAuthenticatedTenant) {
+      const tenantBelongsToAuthenticatedUser =
+        (authUserIdentifier && String(tenant.user_id ?? '') === authUserIdentifier) ||
+        (authEmailIdentifier && normalizeEmail(tenant.email) === normalizeEmail(authEmailIdentifier));
+
+      if (!tenantBelongsToAuthenticatedUser) {
+        return json(403, {
+          error: 'You are not authorized to start a rent payment for this tenant.',
+        });
+      }
+    }
 
     const effectivePropertyId = propertyId ?? tenant.property_id;
     if (!effectivePropertyId) {
