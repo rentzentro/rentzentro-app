@@ -11,7 +11,7 @@ type Props = {
 };
 
 const inputClass =
-  'h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100';
+  'h-11 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm font-medium text-slate-100 shadow-sm placeholder:text-slate-400 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/10';
 
 export default function ListingsSearchForm({
   defaultLocation = '',
@@ -83,7 +83,7 @@ export default function ListingsSearchForm({
             type="button"
             onClick={handleUseCurrentLocation}
             disabled={isLocating}
-            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm transition hover:border-blue-500 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-950 px-3 text-xs font-bold text-slate-100 shadow-sm transition hover:border-emerald-400 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-70"
           >
             <svg
               aria-hidden="true"
@@ -99,7 +99,7 @@ export default function ListingsSearchForm({
             <span className="hidden sm:inline">{isLocating ? 'Locating…' : 'Near me'}</span>
           </button>
         </div>
-        {geoStatus ? <p className="mt-1 text-xs font-medium text-slate-500">{geoStatus}</p> : null}
+        {geoStatus ? <p className="mt-1 text-xs font-medium text-slate-400">{geoStatus}</p> : null}
       </label>
 
       <label>
@@ -156,7 +156,7 @@ export default function ListingsSearchForm({
           type="submit"
           name="source"
           value="rentzentro"
-          className="inline-flex h-11 items-center rounded-xl bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+          className="inline-flex h-11 items-center rounded-xl bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-500"
         >
           Search listings
         </button>
@@ -164,7 +164,7 @@ export default function ListingsSearchForm({
           type="submit"
           name="source"
           value="web"
-          className="inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-black text-slate-900 shadow-sm transition hover:border-blue-500 hover:text-blue-700"
+          className="inline-flex h-11 items-center rounded-xl border border-slate-700 bg-slate-950 px-5 text-sm font-black text-slate-100 shadow-sm transition hover:border-emerald-400 hover:text-emerald-300"
         >
           Search the web
         </button>
