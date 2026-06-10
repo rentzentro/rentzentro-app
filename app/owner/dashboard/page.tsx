@@ -5,6 +5,22 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 const OWNER_API_TOKEN = process.env.NEXT_PUBLIC_OWNER_API_TOKEN || '';
+const DEFAULT_OUTREACH_GMAIL_ACCOUNT = 'support@rentzentro.com';
+const SECONDARY_OUTREACH_GMAIL_ACCOUNT = 'bradley@rentzentro.com';
+
+type OwnerDashboardActivationOutreachLandlord = {
+  id: number;
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  createdAt: string | null;
+  subscriptionStatus: string | null;
+  propertyCount: number;
+  tenantCount: number;
+  missingProperty: boolean;
+  missingTenant: boolean;
+  daysSinceSignup: number | null;
+};
 
 type ActivationOutreachLandlord = {
   id: number;
@@ -30,7 +46,7 @@ type OwnerMetrics = {
   MRR: number;
   paymentsLast30Days: number;
   activationOutreach: {
-    landlords: ActivationOutreachLandlord[];
+    landlords: OwnerDashboardActivationOutreachLandlord[];
   };
   activationFunnel: {
     signup: number;
@@ -85,7 +101,10 @@ const formatHours = (value: number | null | undefined) => {
   return `${(value / 24).toFixed(1)} days`;
 };
 
-const buildHelpEmailHref = (landlord: ActivationOutreachLandlord) => {
+const buildGmailHelpEmailHref = (
+  landlord: OwnerDashboardActivationOutreachLandlord,
+  fromEmail = DEFAULT_OUTREACH_GMAIL_ACCOUNT
+) => {
   if (!landlord.email) return '#';
 
   const missingSteps = [
@@ -105,9 +124,16 @@ I can walk you through adding your first property, inviting a tenant, or answeri
 Best,
 RentZentro Team`;
 
-  return `mailto:${encodeURIComponent(landlord.email)}?subject=${encodeURIComponent(
-    subject
-  )}&body=${encodeURIComponent(body)}`;
+  const params = new URLSearchParams({
+    authuser: fromEmail,
+    view: 'cm',
+    fs: '1',
+    to: landlord.email,
+    su: subject,
+    body,
+  });
+
+  return `https://mail.google.com/mail/?${params.toString()}`;
 };
 
 
@@ -529,7 +555,7 @@ export default function OwnerDashboardPage() {
                     Landlords missing a property or tenant
                   </p>
                   <p className="mt-1 text-[11px] text-slate-400">
-                    Click a landlord with an email address to open a pre-written help message.
+                    Open Gmail as support@rentzentro.com or bradley@rentzentro.com with a pre-written help message.
                   </p>
                 </div>
                 <div className="rounded-full border border-rose-500/30 bg-rose-950/30 px-3 py-1 text-xs font-semibold text-rose-100">
@@ -543,12 +569,13 @@ export default function OwnerDashboardPage() {
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-xl border border-slate-800">
-                  <div className="hidden grid-cols-[1.5fr_1fr_0.9fr_0.9fr_1fr] gap-3 border-b border-slate-800 bg-slate-900/80 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid">
+                  <div className="hidden grid-cols-[1.4fr_1fr_0.8fr_0.8fr_0.9fr_1.2fr] gap-3 border-b border-slate-800 bg-slate-900/80 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid">
                     <span>Landlord</span>
                     <span>Missing</span>
                     <span>Properties</span>
                     <span>Tenants</span>
                     <span>Signed up</span>
+                    <span>Email</span>
                   </div>
                   <div className="divide-y divide-slate-800">
                     {metrics.activationOutreach.landlords.map((landlord) => {
@@ -561,17 +588,10 @@ export default function OwnerDashboardPage() {
                       const canEmail = Boolean(landlord.email);
 
                       return (
-                        <a
+                        <div
                           key={landlord.id}
-                          href={buildHelpEmailHref(landlord)}
-                          aria-disabled={!canEmail}
-                          onClick={(event) => {
-                            if (!canEmail) event.preventDefault();
-                          }}
-                          className={`grid gap-2 px-3 py-3 text-xs transition md:grid-cols-[1.5fr_1fr_0.9fr_0.9fr_1fr] md:gap-3 ${
-                            canEmail
-                              ? 'bg-slate-950/70 hover:bg-slate-900/90'
-                              : 'cursor-not-allowed bg-slate-950/50 opacity-70'
+                          className={`grid gap-2 px-3 py-3 text-xs md:grid-cols-[1.4fr_1fr_0.8fr_0.8fr_0.9fr_1.2fr] md:items-center md:gap-3 ${
+                            canEmail ? 'bg-slate-950/70' : 'bg-slate-950/50 opacity-70'
                           }`}
                         >
                           <div>
@@ -594,7 +614,34 @@ export default function OwnerDashboardPage() {
                               ? 'Unknown'
                               : `${landlord.daysSinceSignup} days ago`}
                           </p>
-                        </a>
+                          <div className="flex flex-wrap gap-2">
+                            {canEmail ? (
+                              <>
+                                <a
+                                  href={buildGmailHelpEmailHref(landlord)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3 py-1 font-semibold text-emerald-100 transition hover:bg-emerald-900/60"
+                                >
+                                  Gmail support
+                                </a>
+                                <a
+                                  href={buildGmailHelpEmailHref(
+                                    landlord,
+                                    SECONDARY_OUTREACH_GMAIL_ACCOUNT
+                                  )}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-full border border-sky-500/40 bg-sky-950/40 px-3 py-1 font-semibold text-sky-100 transition hover:bg-sky-900/60"
+                                >
+                                  Gmail Bradley
+                                </a>
+                              </>
+                            ) : (
+                              <span className="text-slate-500">Add email first</span>
+                            )}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
