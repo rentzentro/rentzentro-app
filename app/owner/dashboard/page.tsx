@@ -22,6 +22,20 @@ type OwnerDashboardActivationOutreachLandlord = {
   daysSinceSignup: number | null;
 };
 
+type ActivationOutreachLandlord = {
+  id: number;
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  createdAt: string | null;
+  subscriptionStatus: string | null;
+  propertyCount: number;
+  tenantCount: number;
+  missingProperty: boolean;
+  missingTenant: boolean;
+  daysSinceSignup: number | null;
+};
+
 type OwnerMetrics = {
   totalLandlords: number;
   totalProperties: number;
