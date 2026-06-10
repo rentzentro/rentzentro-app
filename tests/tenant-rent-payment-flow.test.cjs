@@ -446,3 +446,50 @@ test('createCheckoutSession resolves authenticated tenant before stale client te
   assert.equal(stripeCalls[0].metadata.tenant_id, '43');
   assert.equal(stripeCalls[0].payment_method_types[0], 'card');
 });
+
+test('createCheckoutSession rejects authenticated tenant mismatch when required', async () => {
+  const result = await createCheckoutSession({
+    stripe: {
+      paymentMethods: {
+        list: async () => ({ data: [{ id: 'pm_1' }] }),
+      },
+      checkout: {
+        sessions: {
+          create: async () => ({ url: 'https://stripe.test/checkout/card' }),
+        },
+      },
+    },
+    supabaseAdmin: makeSupabaseAdmin({
+      tenant: {
+        id: 10,
+        user_id: 'tenant-owner-user',
+        email: 'tenant@example.com',
+        property_id: 22,
+        owner_id: 5,
+        stripe_customer_id: 'cus_123',
+      },
+      property: { id: 22, name: 'Sunset Villas', unit_label: 'Unit 4', owner_id: 5 },
+      landlordById: {
+        id: 5,
+        stripe_connect_account_id: 'acct_123',
+        stripe_connect_onboarded: true,
+      },
+    }),
+    appUrl: 'https://www.rentzentro.com',
+    esignPriceId: 'price_123',
+    requireAuthenticatedTenant: true,
+    body: {
+      amount: 1500,
+      tenantId: 10,
+      authUserId: 'attacker-user',
+      authEmail: 'attacker@example.com',
+      paymentMethodType: 'card',
+    },
+  });
+
+  assert.equal(result.status, 403);
+  assert.equal(
+    result.body.error,
+    'You are not authorized to start a rent payment for this tenant.'
+  );
+});

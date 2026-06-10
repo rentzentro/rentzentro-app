@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '../../supabaseAdminClient';
+import { getRateLimitClientIp, takeRateLimitToken } from '../../lib/requestRateLimiter';
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
@@ -47,7 +48,29 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
+    const clientIp = getRateLimitClientIp(req);
+
+    const ipRateLimit = takeRateLimitToken({
+      key: `tenant-payment-method:ip:${clientIp}`,
+      limit: 5,
+      windowMs: 10 * 60 * 1000,
+    });
+
+    if (!ipRateLimit.ok) {
+      return NextResponse.json(
+        { error: 'Too many card verification attempts from this network. Please try again shortly.' },
+        { status: 429 }
+      );
+    }
+
     const authenticatedTenant = await getAuthenticatedTenantFromRequest(req);
+
+    if (!authenticatedTenant) {
+      return NextResponse.json(
+        { error: 'Please sign in before verifying a payment card.' },
+        { status: 401 }
+      );
+    }
     const tenantIdentifier = String(body?.tenantId ?? '').trim();
     const tenantUserIdentifier = String(body?.tenantUserId ?? '').trim();
     const tenantEmailIdentifier = String(body?.tenantEmail ?? '').trim().toLowerCase();
@@ -72,7 +95,7 @@ export async function POST(req: Request) {
 
     const isNumericTenantId = /^\d+$/.test(tenantIdentifier);
 
-    const tenantSelect = 'id, email, name, stripe_customer_id';
+    const tenantSelect = 'id, user_id, email, name, stripe_customer_id';
 
     const normalizeEmail = (value: unknown) =>
       String(value ?? '')
@@ -167,6 +190,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Tenant not found.' }, { status: 404 });
     }
 
+    const tenantBelongsToAuthenticatedUser =
+      (authUserIdentifier && String(tenant.user_id ?? '') === authUserIdentifier) ||
+      (authEmailIdentifier && normalizeEmail(tenant.email) === authEmailIdentifier);
+
+    if (!tenantBelongsToAuthenticatedUser) {
+      return NextResponse.json(
+        { error: 'You are not authorized to verify a card for this tenant.' },
+        { status: 403 }
+      );
+    }
+
+    const tenantRateLimit = takeRateLimitToken({
+      key: `tenant-payment-method:tenant:${tenant.id}`,
+      limit: 3,
+      windowMs: 10 * 60 * 1000,
+    });
+
+    if (!tenantRateLimit.ok) {
+      return NextResponse.json(
+        { error: 'Too many card verification attempts for this tenant. Please wait and retry.' },
+        { status: 429 }
+      );
+    }
+
     let customerId = tenant.stripe_customer_id as string | null;
 
     if (customerId) {
@@ -198,6 +245,17 @@ export async function POST(req: Request) {
       mode: 'setup',
       customer: customerId,
       payment_method_types: ['card'],
+      payment_method_options: {
+        card: {
+          request_three_d_secure: 'any',
+        },
+      },
+      setup_intent_data: {
+        metadata: {
+          type: 'tenant_card_verification',
+          tenant_id: String(tenant.id),
+        },
+      },
       success_url: `${APP_URL}/tenant/portal?cardVerification=success`,
       cancel_url: `${APP_URL}/tenant/portal?cardVerification=cancelled`,
       metadata: {
