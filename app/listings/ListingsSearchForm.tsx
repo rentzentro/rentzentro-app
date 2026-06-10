@@ -4,9 +4,22 @@ import { useState } from 'react';
 
 type Props = {
   defaultLocation?: string;
+  defaultBeds?: string;
+  defaultBaths?: string;
+  defaultMinRent?: string;
+  defaultMaxRent?: string;
 };
 
-export default function ListingsSearchForm({ defaultLocation = '' }: Props) {
+const inputClass =
+  'h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100';
+
+export default function ListingsSearchForm({
+  defaultLocation = '',
+  defaultBeds = '',
+  defaultBaths = '',
+  defaultMinRent = '',
+  defaultMaxRent = '',
+}: Props) {
   const [location, setLocation] = useState(defaultLocation);
   const [geoStatus, setGeoStatus] = useState('');
   const [isLocating, setIsLocating] = useState(false);
@@ -39,25 +52,38 @@ export default function ListingsSearchForm({ defaultLocation = '' }: Props) {
   };
 
   return (
-    <form method="GET" className="mt-7 grid gap-3 md:grid-cols-2 lg:grid-cols-6">
+    <form method="GET" className="mt-4 grid gap-3 lg:grid-cols-[minmax(220px,1.8fr)_repeat(4,minmax(96px,1fr))]">
       <input type="hidden" name="source" value="rentzentro" />
 
-      <label className="lg:col-span-2">
-        <span className="mb-1 block text-xs font-medium text-slate-300">Location</span>
+      <label>
+        <span className="sr-only">Location</span>
         <div className="flex gap-2">
-          <input
-            type="text"
-            name="location"
-            value={location}
-            onChange={(event) => setLocation(event.target.value)}
-            placeholder="City, neighborhood, or state"
-            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
-          />
+          <div className="relative flex-1">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              type="text"
+              name="location"
+              value={location}
+              onChange={(event) => setLocation(event.target.value)}
+              placeholder="City, neighborhood, or state"
+              className={`${inputClass} pl-9`}
+            />
+          </div>
           <button
             type="button"
             onClick={handleUseCurrentLocation}
             disabled={isLocating}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-emerald-400/60 bg-emerald-400/10 px-3 py-2.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm transition hover:border-blue-500 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
             <svg
               aria-hidden="true"
@@ -70,74 +96,75 @@ export default function ListingsSearchForm({ defaultLocation = '' }: Props) {
               <path d="M12 21s-6-5.373-6-10a6 6 0 1 1 12 0c0 4.627-6 10-6 10Z" />
               <circle cx="12" cy="11" r="2" />
             </svg>
-            <span>{isLocating ? 'Locating…' : 'Use current location'}</span>
+            <span className="hidden sm:inline">{isLocating ? 'Locating…' : 'Near me'}</span>
           </button>
         </div>
-        {geoStatus ? <p className="mt-1 text-xs text-slate-400">{geoStatus}</p> : null}
+        {geoStatus ? <p className="mt-1 text-xs font-medium text-slate-500">{geoStatus}</p> : null}
       </label>
 
       <label>
-        <span className="mb-1 block text-xs font-medium text-slate-300">Beds (min)</span>
-        <input
-          type="number"
-          min="0"
-          step="1"
-          name="beds"
-          placeholder="Any"
-          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
-        />
+        <span className="sr-only">Beds minimum</span>
+        <select name="beds" defaultValue={defaultBeds} className={inputClass}>
+          <option value="">Beds</option>
+          <option value="0">Studio+</option>
+          <option value="1">1+ bed</option>
+          <option value="2">2+ beds</option>
+          <option value="3">3+ beds</option>
+          <option value="4">4+ beds</option>
+        </select>
       </label>
 
       <label>
-        <span className="mb-1 block text-xs font-medium text-slate-300">Baths (min)</span>
-        <input
-          type="number"
-          min="0"
-          step="0.5"
-          name="baths"
-          placeholder="Any"
-          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
-        />
+        <span className="sr-only">Baths minimum</span>
+        <select name="baths" defaultValue={defaultBaths} className={inputClass}>
+          <option value="">Baths</option>
+          <option value="1">1+ bath</option>
+          <option value="1.5">1.5+ baths</option>
+          <option value="2">2+ baths</option>
+          <option value="3">3+ baths</option>
+        </select>
       </label>
 
       <label>
-        <span className="mb-1 block text-xs font-medium text-slate-300">Min rent</span>
+        <span className="sr-only">Minimum rent</span>
         <input
           type="number"
           min="0"
           step="50"
           name="minRent"
-          placeholder="$0"
-          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
+          defaultValue={defaultMinRent}
+          placeholder="Min rent"
+          className={inputClass}
         />
       </label>
 
       <label>
-        <span className="mb-1 block text-xs font-medium text-slate-300">Max rent</span>
+        <span className="sr-only">Maximum rent</span>
         <input
           type="number"
           min="0"
           step="50"
           name="maxRent"
-          placeholder="No cap"
-          className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400 focus:outline-none"
+          defaultValue={defaultMaxRent}
+          placeholder="Max rent"
+          className={inputClass}
         />
       </label>
 
-      <div className="flex flex-wrap gap-3 pt-1 lg:col-span-6">
+      <div className="flex flex-wrap gap-2 lg:col-span-5">
         <button
           type="submit"
           name="source"
           value="rentzentro"
-          className="inline-flex items-center rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+          className="inline-flex h-11 items-center rounded-xl bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
         >
-          Search RentZentro listings
+          Search listings
         </button>
         <button
           type="submit"
           name="source"
           value="web"
-          className="inline-flex items-center rounded-full border border-white/20 px-5 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-white/40 hover:bg-white/5"
+          className="inline-flex h-11 items-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-black text-slate-900 shadow-sm transition hover:border-blue-500 hover:text-blue-700"
         >
           Search the web
         </button>
