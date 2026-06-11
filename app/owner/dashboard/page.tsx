@@ -19,6 +19,11 @@ type OwnerDashboardActivationOutreachLandlord = {
   missingProperty: boolean;
   missingTenant: boolean;
   daysSinceSignup: number | null;
+  lastOutreachAt: string | null;
+  lastOutreachSenderLabel: string | null;
+  daysSinceLastOutreach: number | null;
+  nextFollowUpAt: string | null;
+  daysUntilNextFollowUp: number | null;
 };
 
 type OwnerMetrics = {
@@ -31,7 +36,9 @@ type OwnerMetrics = {
   MRR: number;
   paymentsLast30Days: number;
   activationOutreach: {
+    followUpCooldownDays: number;
     landlords: OwnerDashboardActivationOutreachLandlord[];
+    recentlyContacted: OwnerDashboardActivationOutreachLandlord[];
   };
   activationFunnel: {
     signup: number;
@@ -86,46 +93,46 @@ const formatHours = (value: number | null | undefined) => {
   return `${(value / 24).toFixed(1)} days`;
 };
 
-const buildGmailHelpEmailHref = (
-  landlord: OwnerDashboardActivationOutreachLandlord,
-  fromEmail = DEFAULT_OUTREACH_GMAIL_ACCOUNT
-) => {
-  if (!landlord.email) return '#';
 
-  const missingSteps = [
-    landlord.missingProperty ? 'property' : null,
-    landlord.missingTenant ? 'tenant' : null,
-  ].filter(Boolean);
-  const subject = 'Can I help you finish setting up RentZentro?';
-  const greeting = landlord.name ? `Hi ${landlord.name},` : 'Hi there,';
-  const body = `${greeting}
+const formatDate = (value: string | null | undefined) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
 
-I noticed you signed up for RentZentro but have not added a ${missingSteps.join(
-    ' or '
-  )} yet. Do you need any help getting your account set up?
-
-I can walk you through adding your first property, inviting a tenant, or answering any questions.
-
-Best,
-RentZentro Team`;
-
-  const params = new URLSearchParams({
-    view: 'cm',
-    fs: '1',
-    tf: '1',
-    to: landlord.email,
-    su: subject,
-    body,
-    authuser: fromEmail,
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   });
-
-  // Put the selected Google account in Gmail's `/u/{account}/` path instead
-  // of relying only on `authuser`; mobile browsers/apps are more likely to
-  // honor this path and land directly in that account's compose screen.
-  return `https://mail.google.com/mail/u/${encodeURIComponent(
-    fromEmail
-  )}/?${params.toString()}`;
 };
+
+const mapActivationOutreachLandlord = (
+  landlord: any
+): OwnerDashboardActivationOutreachLandlord => ({
+  id: Number(landlord.id ?? 0),
+  userId: landlord.userId ?? null,
+  name: landlord.name ?? null,
+  email: landlord.email ?? null,
+  createdAt: landlord.createdAt ?? null,
+  subscriptionStatus: landlord.subscriptionStatus ?? null,
+  propertyCount: Number(landlord.propertyCount ?? 0),
+  tenantCount: Number(landlord.tenantCount ?? 0),
+  missingProperty: Boolean(landlord.missingProperty),
+  missingTenant: Boolean(landlord.missingTenant),
+  daysSinceSignup:
+    landlord.daysSinceSignup == null ? null : Number(landlord.daysSinceSignup),
+  lastOutreachAt: landlord.lastOutreachAt ?? null,
+  lastOutreachSenderLabel: landlord.lastOutreachSenderLabel ?? null,
+  daysSinceLastOutreach:
+    landlord.daysSinceLastOutreach == null
+      ? null
+      : Number(landlord.daysSinceLastOutreach),
+  nextFollowUpAt: landlord.nextFollowUpAt ?? null,
+  daysUntilNextFollowUp:
+    landlord.daysUntilNextFollowUp == null
+      ? null
+      : Number(landlord.daysUntilNextFollowUp),
+});
 
 
 export default function OwnerDashboardPage() {
@@ -185,23 +192,18 @@ export default function OwnerDashboardPage() {
           MRR: Number(src.MRR ?? 0),
           paymentsLast30Days: Number(src.paymentsLast30Days ?? 0),
           activationOutreach: {
+            followUpCooldownDays: Number(
+              src.activationOutreach?.followUpCooldownDays ?? 5
+            ),
             landlords: Array.isArray(src.activationOutreach?.landlords)
-              ? src.activationOutreach.landlords.map((landlord: any) => ({
-                  id: Number(landlord.id ?? 0),
-                  userId: landlord.userId ?? null,
-                  name: landlord.name ?? null,
-                  email: landlord.email ?? null,
-                  createdAt: landlord.createdAt ?? null,
-                  subscriptionStatus: landlord.subscriptionStatus ?? null,
-                  propertyCount: Number(landlord.propertyCount ?? 0),
-                  tenantCount: Number(landlord.tenantCount ?? 0),
-                  missingProperty: Boolean(landlord.missingProperty),
-                  missingTenant: Boolean(landlord.missingTenant),
-                  daysSinceSignup:
-                    landlord.daysSinceSignup == null
-                      ? null
-                      : Number(landlord.daysSinceSignup),
-                }))
+              ? src.activationOutreach.landlords.map(mapActivationOutreachLandlord)
+              : [],
+            recentlyContacted: Array.isArray(
+              src.activationOutreach?.recentlyContacted
+            )
+              ? src.activationOutreach.recentlyContacted.map(
+                  mapActivationOutreachLandlord
+                )
               : [],
           },
           activationFunnel: {
@@ -286,10 +288,50 @@ export default function OwnerDashboardPage() {
         throw new Error(raw?.error || 'Unable to send activation outreach email.');
       }
 
+      const sentAt = raw?.outreach?.sentAt || new Date().toISOString();
+      const nextFollowUpAt = raw?.outreach?.nextFollowUpAt || null;
+      const followUpCooldownDays = Number(
+        raw?.outreach?.followUpCooldownDays ??
+          metrics?.activationOutreach.followUpCooldownDays ??
+          5
+      );
+      const sentLandlord: OwnerDashboardActivationOutreachLandlord = {
+        ...landlord,
+        lastOutreachAt: sentAt,
+        lastOutreachSenderLabel: raw?.senderLabel || senderLabel,
+        daysSinceLastOutreach: 0,
+        nextFollowUpAt,
+        daysUntilNextFollowUp: followUpCooldownDays,
+      };
+
+      setMetrics((current) => {
+        if (!current) return current;
+
+        return {
+          ...current,
+          activationOutreach: {
+            ...current.activationOutreach,
+            followUpCooldownDays,
+            landlords: current.activationOutreach.landlords.filter(
+              (item) => item.id !== landlord.id
+            ),
+            recentlyContacted: [
+              sentLandlord,
+              ...current.activationOutreach.recentlyContacted.filter(
+                (item) => item.id !== landlord.id
+              ),
+            ],
+          },
+        };
+      });
+
+      const trackingWarning = raw?.outreach?.trackingWarning
+        ? ` ${raw.outreach.trackingWarning}`
+        : '';
       setOutreachNotice(
         `Sent setup help email to ${landlord.email} from ${
           raw?.senderLabel || senderLabel
-        }.`
+        }. They are snoozed for ${followUpCooldownDays} days and will return to the follow-up list if they still need setup help.${trackingWarning}`
       );
     } catch (err: any) {
       setOutreachNotice(
@@ -600,7 +642,7 @@ export default function OwnerDashboardPage() {
                     Landlords missing a property or tenant
                   </p>
                   <p className="mt-1 text-[11px] text-slate-400">
-                    Send a pre-written setup help email from support@rentzentro.com or bradley@rentzentro.com without using your personal Gmail.
+                    Send a pre-written setup help email from support@rentzentro.com or bradley@rentzentro.com without using your personal Gmail. Sent landlords leave this list for 5 days, then return if they still need a property or tenant.
                   </p>
                 </div>
                 <div className="rounded-full border border-rose-500/30 bg-rose-950/30 px-3 py-1 text-xs font-semibold text-rose-100">
@@ -616,7 +658,7 @@ export default function OwnerDashboardPage() {
 
               {metrics.activationOutreach.landlords.length === 0 ? (
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-3 py-3 text-xs text-emerald-100">
-                  Every landlord has added at least one property and one tenant.
+                  No eligible follow-ups right now. Anyone recently contacted is snoozed for {metrics.activationOutreach.followUpCooldownDays} days and will return here if they still need a property or tenant.
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-xl border border-slate-800">
@@ -700,6 +742,79 @@ export default function OwnerDashboardPage() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+              {metrics.activationOutreach.recentlyContacted.length > 0 && (
+                <div className="rounded-xl border border-sky-500/20 bg-sky-950/20 p-3">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-sky-100">
+                        Recently contacted / snoozed
+                      </p>
+                      <p className="mt-1 text-[11px] text-sky-100/75">
+                        These landlords were sent setup help and are hidden from the active follow-up queue until the {metrics.activationOutreach.followUpCooldownDays}-day follow-up window is over.
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-sky-500/30 bg-sky-950/40 px-3 py-1 text-[11px] font-semibold text-sky-100">
+                      {metrics.activationOutreach.recentlyContacted.length} snoozed
+                    </span>
+                  </div>
+
+                  <div className="mt-3 overflow-hidden rounded-lg border border-sky-500/20">
+                    <div className="hidden grid-cols-[1.3fr_0.9fr_0.9fr_1fr_1fr] gap-3 border-b border-sky-500/20 bg-sky-950/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-sky-100/70 md:grid">
+                      <span>Landlord</span>
+                      <span>Missing</span>
+                      <span>Sent by</span>
+                      <span>Last follow-up</span>
+                      <span>Back on list</span>
+                    </div>
+                    <div className="divide-y divide-sky-500/20">
+                      {metrics.activationOutreach.recentlyContacted.map((landlord) => {
+                        const missingLabel = [
+                          landlord.missingProperty ? 'Property' : null,
+                          landlord.missingTenant ? 'Tenant' : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' + ');
+
+                        return (
+                          <div
+                            key={landlord.id}
+                            className="grid gap-2 px-3 py-3 text-xs text-sky-50 md:grid-cols-[1.3fr_0.9fr_0.9fr_1fr_1fr] md:items-center md:gap-3"
+                          >
+                            <div>
+                              <p className="font-semibold">
+                                {landlord.name || landlord.email || `Landlord #${landlord.id}`}
+                              </p>
+                              <p className="mt-0.5 text-sky-100/60">
+                                {landlord.email || 'No email on landlord record'}
+                              </p>
+                            </div>
+                            <span className="w-fit rounded-full border border-sky-400/30 bg-sky-950/50 px-2 py-1 font-semibold text-sky-100">
+                              {missingLabel}
+                            </span>
+                            <span className="text-sky-100/80">
+                              {landlord.lastOutreachSenderLabel || 'RentZentro'}
+                            </span>
+                            <span className="text-sky-100/80">
+                              {landlord.daysSinceLastOutreach == null
+                                ? formatDate(landlord.lastOutreachAt)
+                                : landlord.daysSinceLastOutreach === 0
+                                  ? 'Today'
+                                  : `${landlord.daysSinceLastOutreach} days ago`}
+                            </span>
+                            <span className="text-sky-100/80">
+                              {landlord.daysUntilNextFollowUp == null
+                                ? formatDate(landlord.nextFollowUpAt)
+                                : landlord.daysUntilNextFollowUp === 0
+                                  ? 'Now'
+                                  : `In ${landlord.daysUntilNextFollowUp} days`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
