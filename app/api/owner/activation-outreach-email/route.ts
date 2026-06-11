@@ -17,6 +17,15 @@ type LandlordRow = {
 
 type OutreachSenderKey = 'support' | 'bradley';
 
+type OutreachInsertResult = {
+  trackingWarning: string | null;
+  sentAt: string;
+  nextFollowUpAt: string;
+};
+
+const ACTIVATION_OUTREACH_FOLLOW_UP_DAYS = 5;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 const OUTREACH_SENDERS: Record<
   OutreachSenderKey,
   { from: string; replyTo: string; label: string }
@@ -65,6 +74,75 @@ const buildOutreachEmail = ({
   `;
 
   return { subject, text, html };
+};
+
+
+const isMissingActivationOutreachTableError = (error: any): boolean => {
+  const message = String(error?.message || '').toLowerCase();
+  const code = String(error?.code || '');
+
+  return (
+    code === '42P01' ||
+    message.includes('owner_activation_outreach_events') ||
+    message.includes('could not find the table') ||
+    message.includes('does not exist')
+  );
+};
+
+const getResendMessageId = (result: any): string | null => {
+  const id = result?.data?.id || result?.id;
+  return typeof id === 'string' && id.trim() ? id.trim() : null;
+};
+
+const recordActivationOutreachEvent = async ({
+  landlord,
+  recipientEmail,
+  senderKey,
+  senderLabel,
+  resendMessageId,
+  missingProperty,
+  missingTenant,
+}: {
+  landlord: LandlordRow;
+  recipientEmail: string;
+  senderKey: OutreachSenderKey;
+  senderLabel: string;
+  resendMessageId: string | null;
+  missingProperty: boolean;
+  missingTenant: boolean;
+}): Promise<OutreachInsertResult> => {
+  const sentAt = new Date().toISOString();
+  const nextFollowUpAt = new Date(
+    new Date(sentAt).getTime() + ACTIVATION_OUTREACH_FOLLOW_UP_DAYS * MS_PER_DAY
+  ).toISOString();
+
+  const result = await supabaseAdmin.from('owner_activation_outreach_events').insert({
+    landlord_id: landlord.id,
+    landlord_user_id: landlord.user_id,
+    recipient_email: recipientEmail,
+    sender_key: senderKey,
+    sender_label: senderLabel,
+    resend_message_id: resendMessageId,
+    missing_property: missingProperty,
+    missing_tenant: missingTenant,
+    sent_at: sentAt,
+  });
+
+  if (result.error) {
+    if (isMissingActivationOutreachTableError(result.error)) {
+      const trackingWarning =
+        'Email sent, but follow-up tracking is not available until the owner_activation_outreach_events table is migrated.';
+      console.warn(`[owner activation outreach email] ${trackingWarning}`);
+      return { trackingWarning, sentAt, nextFollowUpAt };
+    }
+
+    const trackingWarning =
+      'Email sent, but follow-up tracking could not be saved. Please check the owner_activation_outreach_events table.';
+    console.error('[owner activation outreach email] tracking insert failed:', result.error);
+    return { trackingWarning, sentAt, nextFollowUpAt };
+  }
+
+  return { trackingWarning: null, sentAt, nextFollowUpAt };
 };
 
 const countRowsForOwner = async (table: 'properties' | 'tenants', ownerId: string) => {
@@ -170,12 +248,28 @@ export async function POST(req: Request) {
       html: message.html,
     });
 
+    const outreach = await recordActivationOutreachEvent({
+      landlord,
+      recipientEmail: email,
+      senderKey,
+      senderLabel: sender.label,
+      resendMessageId: getResendMessageId(result),
+      missingProperty,
+      missingTenant,
+    });
+
     return NextResponse.json(
       {
         ok: true,
         data: result,
         sender: senderKey,
         senderLabel: sender.label,
+        outreach: {
+          sentAt: outreach.sentAt,
+          nextFollowUpAt: outreach.nextFollowUpAt,
+          followUpCooldownDays: ACTIVATION_OUTREACH_FOLLOW_UP_DAYS,
+          trackingWarning: outreach.trackingWarning,
+        },
       },
       { status: 200 }
     );
