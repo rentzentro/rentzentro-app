@@ -5,8 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 const OWNER_API_TOKEN = process.env.NEXT_PUBLIC_OWNER_API_TOKEN || '';
-const DEFAULT_OUTREACH_GMAIL_ACCOUNT = 'support@rentzentro.com';
-const SECONDARY_OUTREACH_GMAIL_ACCOUNT = 'bradley@rentzentro.com';
+type OutreachSender = 'support' | 'bradley';
 
 type OwnerDashboardActivationOutreachLandlord = {
   id: number;
@@ -134,6 +133,8 @@ export default function OwnerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
+  const [sendingOutreachKey, setSendingOutreachKey] = useState<string | null>(null);
+  const [outreachNotice, setOutreachNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -246,6 +247,58 @@ export default function OwnerDashboardPage() {
 
     load();
   }, []);
+
+  const sendActivationOutreachEmail = async (
+    landlord: OwnerDashboardActivationOutreachLandlord,
+    sender: OutreachSender
+  ) => {
+    if (!landlord.email) return;
+
+    const senderLabel = sender === 'bradley' ? 'Bradley' : 'support';
+    const confirmed = window.confirm(
+      `Send this pre-written setup help email to ${landlord.email} from ${senderLabel}?`
+    );
+
+    if (!confirmed) return;
+
+    const requestKey = `${landlord.id}:${sender}`;
+    setSendingOutreachKey(requestKey);
+    setOutreachNotice(null);
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (OWNER_API_TOKEN) {
+        headers['x-owner-api-key'] = OWNER_API_TOKEN;
+      }
+
+      const res = await fetch('/api/owner/activation-outreach-email', {
+        method: 'POST',
+        cache: 'no-store',
+        headers,
+        body: JSON.stringify({ landlordId: landlord.id, sender }),
+      });
+      const raw = await res.json().catch(() => ({}));
+
+      if (!res.ok || raw?.ok === false) {
+        throw new Error(raw?.error || 'Unable to send activation outreach email.');
+      }
+
+      setOutreachNotice(
+        `Sent setup help email to ${landlord.email} from ${
+          raw?.senderLabel || senderLabel
+        }.`
+      );
+    } catch (err: any) {
+      setOutreachNotice(
+        err?.message || 'Unable to send activation outreach email.'
+      );
+    } finally {
+      setSendingOutreachKey(null);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -547,13 +600,19 @@ export default function OwnerDashboardPage() {
                     Landlords missing a property or tenant
                   </p>
                   <p className="mt-1 text-[11px] text-slate-400">
-                    Open a pre-written Gmail compose window from support@rentzentro.com or bradley@rentzentro.com.
+                    Send a pre-written setup help email from support@rentzentro.com or bradley@rentzentro.com without using your personal Gmail.
                   </p>
                 </div>
                 <div className="rounded-full border border-rose-500/30 bg-rose-950/30 px-3 py-1 text-xs font-semibold text-rose-100">
                   {metrics.activationOutreach.landlords.length} need follow-up
                 </div>
               </div>
+
+              {outreachNotice && (
+                <div className="rounded-xl border border-sky-500/30 bg-sky-950/30 px-3 py-2 text-xs text-sky-100">
+                  {outreachNotice}
+                </div>
+              )}
 
               {metrics.activationOutreach.landlords.length === 0 ? (
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-3 py-3 text-xs text-emerald-100">
@@ -609,25 +668,30 @@ export default function OwnerDashboardPage() {
                           <div className="flex flex-wrap gap-2">
                             {canEmail ? (
                               <>
-                                <a
-                                  href={buildGmailHelpEmailHref(landlord)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3 py-1 font-semibold text-emerald-100 transition hover:bg-emerald-900/60"
+                                <button
+                                  type="button"
+                                  disabled={sendingOutreachKey != null}
+                                  onClick={() =>
+                                    sendActivationOutreachEmail(landlord, 'support')
+                                  }
+                                  className="rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3 py-1 font-semibold text-emerald-100 transition hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
-                                  Open as support
-                                </a>
-                                <a
-                                  href={buildGmailHelpEmailHref(
-                                    landlord,
-                                    SECONDARY_OUTREACH_GMAIL_ACCOUNT
-                                  )}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="rounded-full border border-sky-500/40 bg-sky-950/40 px-3 py-1 font-semibold text-sky-100 transition hover:bg-sky-900/60"
+                                  {sendingOutreachKey === `${landlord.id}:support`
+                                    ? 'Sending…'
+                                    : 'Send from support'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={sendingOutreachKey != null}
+                                  onClick={() =>
+                                    sendActivationOutreachEmail(landlord, 'bradley')
+                                  }
+                                  className="rounded-full border border-sky-500/40 bg-sky-950/40 px-3 py-1 font-semibold text-sky-100 transition hover:bg-sky-900/60 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
-                                  Open as Bradley
-                                </a>
+                                  {sendingOutreachKey === `${landlord.id}:bradley`
+                                    ? 'Sending…'
+                                    : 'Send from Bradley'}
+                                </button>
                               </>
                             ) : (
                               <span className="text-slate-500">Add email first</span>
