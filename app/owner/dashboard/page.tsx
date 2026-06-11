@@ -5,6 +5,21 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 const OWNER_API_TOKEN = process.env.NEXT_PUBLIC_OWNER_API_TOKEN || '';
+type OutreachSender = 'support' | 'bradley';
+
+type OwnerDashboardActivationOutreachLandlord = {
+  id: number;
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  createdAt: string | null;
+  subscriptionStatus: string | null;
+  propertyCount: number;
+  tenantCount: number;
+  missingProperty: boolean;
+  missingTenant: boolean;
+  daysSinceSignup: number | null;
+};
 
 type OwnerMetrics = {
   totalLandlords: number;
@@ -15,6 +30,9 @@ type OwnerMetrics = {
   trialLandlords: number;
   MRR: number;
   paymentsLast30Days: number;
+  activationOutreach: {
+    landlords: OwnerDashboardActivationOutreachLandlord[];
+  };
   activationFunnel: {
     signup: number;
     connectedPayouts: number;
@@ -73,6 +91,8 @@ export default function OwnerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
+  const [sendingOutreachKey, setSendingOutreachKey] = useState<string | null>(null);
+  const [outreachNotice, setOutreachNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -122,6 +142,26 @@ export default function OwnerDashboardPage() {
           trialLandlords: Number(src.trialLandlords ?? 0),
           MRR: Number(src.MRR ?? 0),
           paymentsLast30Days: Number(src.paymentsLast30Days ?? 0),
+          activationOutreach: {
+            landlords: Array.isArray(src.activationOutreach?.landlords)
+              ? src.activationOutreach.landlords.map((landlord: any) => ({
+                  id: Number(landlord.id ?? 0),
+                  userId: landlord.userId ?? null,
+                  name: landlord.name ?? null,
+                  email: landlord.email ?? null,
+                  createdAt: landlord.createdAt ?? null,
+                  subscriptionStatus: landlord.subscriptionStatus ?? null,
+                  propertyCount: Number(landlord.propertyCount ?? 0),
+                  tenantCount: Number(landlord.tenantCount ?? 0),
+                  missingProperty: Boolean(landlord.missingProperty),
+                  missingTenant: Boolean(landlord.missingTenant),
+                  daysSinceSignup:
+                    landlord.daysSinceSignup == null
+                      ? null
+                      : Number(landlord.daysSinceSignup),
+                }))
+              : [],
+          },
           activationFunnel: {
             signup: Number(src.activationFunnel?.signup ?? 0),
             connectedPayouts: Number(src.activationFunnel?.connectedPayouts ?? 0),
@@ -165,6 +205,58 @@ export default function OwnerDashboardPage() {
 
     load();
   }, []);
+
+  const sendActivationOutreachEmail = async (
+    landlord: OwnerDashboardActivationOutreachLandlord,
+    sender: OutreachSender
+  ) => {
+    if (!landlord.email) return;
+
+    const senderLabel = sender === 'bradley' ? 'Bradley' : 'support';
+    const confirmed = window.confirm(
+      `Send this pre-written setup help email to ${landlord.email} from ${senderLabel}?`
+    );
+
+    if (!confirmed) return;
+
+    const requestKey = `${landlord.id}:${sender}`;
+    setSendingOutreachKey(requestKey);
+    setOutreachNotice(null);
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (OWNER_API_TOKEN) {
+        headers['x-owner-api-key'] = OWNER_API_TOKEN;
+      }
+
+      const res = await fetch('/api/owner/activation-outreach-email', {
+        method: 'POST',
+        cache: 'no-store',
+        headers,
+        body: JSON.stringify({ landlordId: landlord.id, sender }),
+      });
+      const raw = await res.json().catch(() => ({}));
+
+      if (!res.ok || raw?.ok === false) {
+        throw new Error(raw?.error || 'Unable to send activation outreach email.');
+      }
+
+      setOutreachNotice(
+        `Sent setup help email to ${landlord.email} from ${
+          raw?.senderLabel || senderLabel
+        }.`
+      );
+    } catch (err: any) {
+      setOutreachNotice(
+        err?.message || 'Unable to send activation outreach email.'
+      );
+    } finally {
+      setSendingOutreachKey(null);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 px-4 py-6">
@@ -454,6 +546,121 @@ export default function OwnerDashboardPage() {
                   <p className="mt-1 text-base font-semibold text-rose-100">{metrics.activationFunnel.opportunities.tenantNoPaid}</p>
                 </div>
               </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-[11px] text-slate-500 uppercase tracking-wide">
+                    Activation outreach
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-slate-50">
+                    Landlords missing a property or tenant
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Send a pre-written setup help email from support@rentzentro.com or bradley@rentzentro.com without using your personal Gmail.
+                  </p>
+                </div>
+                <div className="rounded-full border border-rose-500/30 bg-rose-950/30 px-3 py-1 text-xs font-semibold text-rose-100">
+                  {metrics.activationOutreach.landlords.length} need follow-up
+                </div>
+              </div>
+
+              {outreachNotice && (
+                <div className="rounded-xl border border-sky-500/30 bg-sky-950/30 px-3 py-2 text-xs text-sky-100">
+                  {outreachNotice}
+                </div>
+              )}
+
+              {metrics.activationOutreach.landlords.length === 0 ? (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-3 py-3 text-xs text-emerald-100">
+                  Every landlord has added at least one property and one tenant.
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-xl border border-slate-800">
+                  <div className="hidden grid-cols-[1.4fr_1fr_0.8fr_0.8fr_0.9fr_1.2fr] gap-3 border-b border-slate-800 bg-slate-900/80 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:grid">
+                    <span>Landlord</span>
+                    <span>Missing</span>
+                    <span>Properties</span>
+                    <span>Tenants</span>
+                    <span>Signed up</span>
+                    <span>Email</span>
+                  </div>
+                  <div className="divide-y divide-slate-800">
+                    {metrics.activationOutreach.landlords.map((landlord) => {
+                      const missingLabel = [
+                        landlord.missingProperty ? 'Property' : null,
+                        landlord.missingTenant ? 'Tenant' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' + ');
+                      const canEmail = Boolean(landlord.email);
+
+                      return (
+                        <div
+                          key={landlord.id}
+                          className={`grid gap-2 px-3 py-3 text-xs md:grid-cols-[1.4fr_1fr_0.8fr_0.8fr_0.9fr_1.2fr] md:items-center md:gap-3 ${
+                            canEmail ? 'bg-slate-950/70' : 'bg-slate-950/50 opacity-70'
+                          }`}
+                        >
+                          <div>
+                            <p className="font-semibold text-slate-100">
+                              {landlord.name || landlord.email || `Landlord #${landlord.id}`}
+                            </p>
+                            <p className="mt-0.5 text-slate-500">
+                              {landlord.email || 'No email on landlord record'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="inline-flex rounded-full border border-rose-500/30 bg-rose-950/30 px-2 py-1 font-semibold text-rose-100">
+                              {missingLabel}
+                            </span>
+                          </div>
+                          <p className="text-slate-300">{landlord.propertyCount}</p>
+                          <p className="text-slate-300">{landlord.tenantCount}</p>
+                          <p className="text-slate-400">
+                            {landlord.daysSinceSignup == null
+                              ? 'Unknown'
+                              : `${landlord.daysSinceSignup} days ago`}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {canEmail ? (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={sendingOutreachKey != null}
+                                  onClick={() =>
+                                    sendActivationOutreachEmail(landlord, 'support')
+                                  }
+                                  className="rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3 py-1 font-semibold text-emerald-100 transition hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {sendingOutreachKey === `${landlord.id}:support`
+                                    ? 'Sending…'
+                                    : 'Send from support'}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={sendingOutreachKey != null}
+                                  onClick={() =>
+                                    sendActivationOutreachEmail(landlord, 'bradley')
+                                  }
+                                  className="rounded-full border border-sky-500/40 bg-sky-950/40 px-3 py-1 font-semibold text-sky-100 transition hover:bg-sky-900/60 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {sendingOutreachKey === `${landlord.id}:bradley`
+                                    ? 'Sending…'
+                                    : 'Send from Bradley'}
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-slate-500">Add email first</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* Notes */}
