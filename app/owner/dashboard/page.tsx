@@ -22,20 +22,6 @@ type OwnerDashboardActivationOutreachLandlord = {
   daysSinceSignup: number | null;
 };
 
-type ActivationOutreachLandlord = {
-  id: number;
-  userId: string | null;
-  name: string | null;
-  email: string | null;
-  createdAt: string | null;
-  subscriptionStatus: string | null;
-  propertyCount: number;
-  tenantCount: number;
-  missingProperty: boolean;
-  missingTenant: boolean;
-  daysSinceSignup: number | null;
-};
-
 type OwnerMetrics = {
   totalLandlords: number;
   totalProperties: number;
@@ -125,15 +111,21 @@ Best,
 RentZentro Team`;
 
   const params = new URLSearchParams({
-    authuser: fromEmail,
     view: 'cm',
     fs: '1',
+    tf: '1',
     to: landlord.email,
     su: subject,
     body,
+    authuser: fromEmail,
   });
 
-  return `https://mail.google.com/mail/?${params.toString()}`;
+  // Put the selected Google account in Gmail's `/u/{account}/` path instead
+  // of relying only on `authuser`; mobile browsers/apps are more likely to
+  // honor this path and land directly in that account's compose screen.
+  return `https://mail.google.com/mail/u/${encodeURIComponent(
+    fromEmail
+  )}/?${params.toString()}`;
 };
 
 
@@ -555,7 +547,7 @@ export default function OwnerDashboardPage() {
                     Landlords missing a property or tenant
                   </p>
                   <p className="mt-1 text-[11px] text-slate-400">
-                    Open Gmail as support@rentzentro.com or bradley@rentzentro.com with a pre-written help message.
+                    Open a pre-written Gmail compose window from support@rentzentro.com or bradley@rentzentro.com.
                   </p>
                 </div>
                 <div className="rounded-full border border-rose-500/30 bg-rose-950/30 px-3 py-1 text-xs font-semibold text-rose-100">
@@ -623,7 +615,7 @@ export default function OwnerDashboardPage() {
                                   rel="noopener noreferrer"
                                   className="rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3 py-1 font-semibold text-emerald-100 transition hover:bg-emerald-900/60"
                                 >
-                                  Gmail support
+                                  Open as support
                                 </a>
                                 <a
                                   href={buildGmailHelpEmailHref(
@@ -634,7 +626,7 @@ export default function OwnerDashboardPage() {
                                   rel="noopener noreferrer"
                                   className="rounded-full border border-sky-500/40 bg-sky-950/40 px-3 py-1 font-semibold text-sky-100 transition hover:bg-sky-900/60"
                                 >
-                                  Gmail Bradley
+                                  Open as Bradley
                                 </a>
                               </>
                             ) : (
