@@ -86,47 +86,6 @@ const formatHours = (value: number | null | undefined) => {
   return `${(value / 24).toFixed(1)} days`;
 };
 
-const buildGmailHelpEmailHref = (
-  landlord: OwnerDashboardActivationOutreachLandlord,
-  fromEmail = DEFAULT_OUTREACH_GMAIL_ACCOUNT
-) => {
-  if (!landlord.email) return '#';
-
-  const missingSteps = [
-    landlord.missingProperty ? 'property' : null,
-    landlord.missingTenant ? 'tenant' : null,
-  ].filter(Boolean);
-  const subject = 'Can I help you finish setting up RentZentro?';
-  const greeting = landlord.name ? `Hi ${landlord.name},` : 'Hi there,';
-  const body = `${greeting}
-
-I noticed you signed up for RentZentro but have not added a ${missingSteps.join(
-    ' or '
-  )} yet. Do you need any help getting your account set up?
-
-I can walk you through adding your first property, inviting a tenant, or answering any questions.
-
-Best,
-RentZentro Team`;
-
-  const params = new URLSearchParams({
-    view: 'cm',
-    fs: '1',
-    tf: '1',
-    to: landlord.email,
-    su: subject,
-    body,
-    authuser: fromEmail,
-  });
-
-  // Put the selected Google account in Gmail's `/u/{account}/` path instead
-  // of relying only on `authuser`; mobile browsers/apps are more likely to
-  // honor this path and land directly in that account's compose screen.
-  return `https://mail.google.com/mail/u/${encodeURIComponent(
-    fromEmail
-  )}/?${params.toString()}`;
-};
-
 
 export default function OwnerDashboardPage() {
   const [metrics, setMetrics] = useState<OwnerMetrics | null>(null);
