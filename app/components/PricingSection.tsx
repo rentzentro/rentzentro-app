@@ -93,8 +93,12 @@ const faqs = [
 
 function formatPrice(plan: PricingPlan, billing: BillingCycle) {
   if (plan.free) return '$0';
-  const price = billing === 'annual' ? plan.annualMonthlyPrice : plan.monthlyPrice;
+  const price = billing === 'annual' ? plan.annualMonthlyPrice * 12 : plan.monthlyPrice;
   return Number.isInteger(price) ? `$${price}` : `$${price.toFixed(2)}`;
+}
+
+function priceSuffix(billing: BillingCycle) {
+  return billing === 'annual' ? '/yr' : '/mo';
 }
 
 function CheckMark({ active }: { active: boolean }) {
@@ -135,9 +139,9 @@ function PricingCard({ plan, billing }: { plan: PricingPlan; billing: BillingCyc
 
       <div className="mt-4">
         <span className="text-3xl font-semibold text-emerald-300">{formatPrice(plan, billing)}</span>
-        <span className="ml-1 text-sm text-slate-400">/mo</span>
+        <span className="ml-1 text-sm text-slate-400">{priceSuffix(billing)}</span>
         {billing === 'annual' && annualSavings > 0 && (
-          <p className="mt-1 text-xs font-semibold text-amber-200">Save about ${annualSavings}/year with annual billing</p>
+          <p className="mt-1 text-xs font-semibold text-amber-200">Save about ${annualSavings}/year vs. monthly billing</p>
         )}
       </div>
       <p className="mt-2 text-sm leading-6 text-slate-300">{plan.description}</p>
