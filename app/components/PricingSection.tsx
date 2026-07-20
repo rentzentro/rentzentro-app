@@ -131,8 +131,8 @@ function PricingCard({ plan, billing }: { plan: PricingPlan; billing: BillingCyc
           <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">{plan.unitRange}</p>
         </div>
         {(plan.featured || plan.free) && (
-          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-            {plan.free ? 'Forever free' : 'Most popular'}
+          <span className="whitespace-nowrap rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+            {plan.free ? 'Free' : 'Most popular'}
           </span>
         )}
       </div>
