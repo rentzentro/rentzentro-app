@@ -181,7 +181,6 @@ const hasLandlordAccess = (l: LandlordRow | null, unitCount = 0): boolean => {
   const isPaidPlanActive =
     l.subscription_active === true ||
     status === 'active' ||
-    status === 'trialing' ||
     status === 'active_cancel_at_period_end';
 
   if (isPaidPlanActive) return true;

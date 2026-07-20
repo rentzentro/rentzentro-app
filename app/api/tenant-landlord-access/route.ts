@@ -5,18 +5,6 @@ import { supabaseAdmin } from '../../supabaseAdminClient';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const parseSupabaseDate = (value: string | null | undefined): Date | null => {
-  if (!value) return null;
-  // YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split('-').map(Number);
-    return new Date(y, m - 1, d);
-  }
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
-};
-
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -33,7 +21,7 @@ export async function POST(req: Request) {
     // This admin query bypasses RLS.
     const { data: landlord, error } = await supabaseAdmin
       .from('landlords')
-      .select('id, user_id, email, subscription_status, trial_active, trial_end')
+      .select('id, user_id, email, subscription_status, subscription_active')
       .eq('user_id', ownerId)
       .maybeSingle();
 
@@ -58,19 +46,24 @@ export async function POST(req: Request) {
     const status = String(landlord.subscription_status || '').toLowerCase();
 
     const isPaidPlanActive =
+      landlord.subscription_active === true ||
       status === 'active' ||
-      status === 'trialing' ||
       status === 'active_cancel_at_period_end';
 
-    const now = new Date();
-    const trialEnd = parseSupabaseDate(landlord.trial_end);
-    const promoActive =
-      !!landlord.trial_active &&
-      !!trialEnd &&
-      !Number.isNaN(trialEnd.getTime()) &&
-      trialEnd >= now;
+    const { count: unitCount, error: unitCountError } = await supabaseAdmin
+      .from('properties')
+      .select('id', { count: 'exact', head: true })
+      .eq('owner_id', ownerId);
 
-    const allowed = isPaidPlanActive || promoActive;
+    if (unitCountError) {
+      console.error('tenant-landlord-access unit count error:', unitCountError);
+      return NextResponse.json({
+        allowed: true,
+        reason: 'Temporary verification issue (fail-open).',
+      });
+    }
+
+    const allowed = isPaidPlanActive || (unitCount || 0) <= 1;
 
     if (!allowed) {
       return NextResponse.json({
