@@ -33,7 +33,7 @@ export default function LandlordSignupPage() {
     setError(null);
     setInfo(null);
 
-    const { validateLandlordSignupInput, getTrialEndYMD } = signupValidation;
+    const { validateLandlordSignupInput } = signupValidation;
     const validation = validateLandlordSignupInput({ email, password, confirmPassword });
 
     if (!validation.ok) {
@@ -68,9 +68,6 @@ export default function LandlordSignupPage() {
         throw new Error('We could not complete signup. Please try again in a moment.');
       }
 
-      // 🔥 NEW: 35-DAY ROLLING TRIAL
-      const trialEndYMD = getTrialEndYMD();
-
       // 2) Insert landlord row
       const { data: insertedLandlord, error: insertError } = await supabase
         .from('landlords')
@@ -78,8 +75,8 @@ export default function LandlordSignupPage() {
           {
             email: normalizedEmail,
             user_id: user.id,
-            trial_active: true,
-            trial_end: trialEndYMD,
+            trial_active: false,
+            trial_end: null,
             subscription_active: false,
           },
         ])
@@ -118,9 +115,9 @@ export default function LandlordSignupPage() {
         });
       }
 
-      // 3) Redirect to dashboard (always — trial handles access)
+      // 3) Redirect to dashboard. The forever-free unit handles initial access.
       setInfo(
-        'Account created! Your free trial is active. Redirecting you to your landlord dashboard…'
+        'Account created! Your forever-free unit is ready. Redirecting you to your landlord dashboard…'
       );
 
       router.push('/landlord?signup=1');
@@ -150,9 +147,8 @@ export default function LandlordSignupPage() {
           Start collecting rent online and managing your properties in minutes.
         </p>
 
-        {/* 🔥 UPDATED COPY */}
         <p className="text-[11px] text-emerald-300 mb-4">
-          First month free (35 days). No card required.
+          One unit forever free. No card required.
         </p>
 
         {referralCode && (

@@ -20,12 +20,6 @@ function validateLandlordSignupInput({ email, password, confirmPassword }) {
   return { ok: true, normalizedEmail };
 }
 
-function getTrialEndYMD(days = 35, now = new Date()) {
-  const trialEnd = new Date(now);
-  trialEnd.setDate(trialEnd.getDate() + days);
-  return trialEnd.toISOString().split('T')[0];
-}
-
 
 function mapSignupErrorMessage(err) {
   const raw = String(err?.message || err?.error_description || '').toLowerCase();
@@ -46,7 +40,6 @@ function mapSignupErrorMessage(err) {
 }
 
 module.exports = {
-  getTrialEndYMD,
   normalizeEmail,
   validateLandlordSignupInput,
   mapSignupErrorMessage,

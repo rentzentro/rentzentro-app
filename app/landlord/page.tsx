@@ -173,22 +173,20 @@ const formatMethodLabel = (method: string | null | undefined) => {
   return method || 'Method not specified';
 };
 
-// ✅ Single source of truth access check (Supabase booleans)
-const hasLandlordAccess = (l: LandlordRow | null): boolean => {
+// ✅ Single source of truth access check: paid plans or one forever-free unit.
+const hasLandlordAccess = (l: LandlordRow | null, unitCount = 0): boolean => {
   if (!l) return false;
 
-  // Primary: subscription_active boolean
-  if (l.subscription_active === true) return true;
+  const status = (l.subscription_status || '').toLowerCase();
+  const isPaidPlanActive =
+    l.subscription_active === true ||
+    status === 'active' ||
+    status === 'trialing' ||
+    status === 'active_cancel_at_period_end';
 
-  // Secondary: promo trial window
-  const end = parseDateOnlySafe(l.trial_end);
-  const promoOk =
-    l.trial_active === true &&
-    !!end &&
-    !Number.isNaN(end.getTime()) &&
-    end >= todayDateOnly();
+  if (isPaidPlanActive) return true;
 
-  return promoOk;
+  return unitCount <= 1;
 };
 
 // ---------- Component ----------
@@ -641,12 +639,10 @@ export default function LandlordDashboardPage() {
     );
   }
 
-  // ✅ MAIN ACCESS GATE: uses subscription_active + trial window ONLY
-  const canAccess = hasLandlordAccess(landlord);
+  // ✅ MAIN ACCESS GATE: paid subscription or forever-free one-unit access
+  const canAccess = hasLandlordAccess(landlord, properties.length);
 
   if (!canAccess) {
-    const isTrialConfigured = landlord.trial_active === true && !!landlord.trial_end;
-
     return (
       <main className="min-h-screen bg-slate-950 text-slate-50 flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-3xl bg-slate-900/80 border border-amber-500/60 p-6 shadow-xl space-y-4 text-center">
@@ -659,10 +655,8 @@ export default function LandlordDashboardPage() {
           </h1>
 
           <p className="text-sm text-slate-300">
-            Your landlord account is created, but your subscription isn&apos;t active
-            {isTrialConfigured ? ' and your promo access has ended' : ''}.
-            To access your dashboard, properties, tenants, and online rent collection,
-            please activate the{' '}
+            Your landlord account includes one unit forever free. To manage more than
+            one unit, please activate the{' '}
             <span className="font-semibold text-emerald-300">
               RentZentro paid plan (starting at $19/mo)
             </span>

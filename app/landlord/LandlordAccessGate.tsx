@@ -8,44 +8,23 @@ import { supabase } from '../supabaseClient';
 
 type LandlordAccessRow = {
   subscription_status: string | null;
-  trial_active: boolean | null;
-  trial_end: string | null;
-};
-
-const parseSupabaseDate = (value: string | null | undefined): Date | null => {
-  if (!value) return null;
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split('-').map(Number);
-    if (!y || !m || !d) return null;
-    return new Date(y, m - 1, d);
-  }
-
-  const dt = new Date(value);
-  if (Number.isNaN(dt.getTime())) return null;
-  return dt;
+  subscription_active: boolean | null;
+  unit_count?: number | null;
 };
 
 const isLandlordAccessAllowed = (row: LandlordAccessRow | null): boolean => {
   const status = (row?.subscription_status || '').toLowerCase();
 
   const isPaidPlanActive =
+    row?.subscription_active === true ||
     status === 'active' ||
     status === 'trialing' ||
     status === 'active_cancel_at_period_end';
 
-  const now = new Date();
-  const todayDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const unitCount = Number(row?.unit_count ?? 0);
+  const isForeverFreeEligible = Number.isFinite(unitCount) && unitCount <= 1;
 
-  const trialEnd = parseSupabaseDate(row?.trial_end || null);
-
-  const trialActive =
-    !!row?.trial_active &&
-    !!trialEnd &&
-    !Number.isNaN(trialEnd.getTime()) &&
-    trialEnd >= todayDateOnly;
-
-  return isPaidPlanActive || trialActive;
+  return isPaidPlanActive || isForeverFreeEligible;
 };
 
 export default function LandlordAccessGate({
@@ -114,7 +93,7 @@ export default function LandlordAccessGate({
 
         const { data: landlordRow, error: landlordErr } = await supabase
           .from('landlords')
-          .select('subscription_status, trial_active, trial_end')
+          .select('subscription_status, subscription_active')
           .eq('user_id', authUserId)
           .maybeSingle();
 
@@ -135,9 +114,21 @@ export default function LandlordAccessGate({
           return;
         }
 
-        const ok = isLandlordAccessAllowed(
-          (landlordRow as LandlordAccessRow | null) || null
-        );
+        const { count: unitCount, error: unitCountErr } = await supabase
+          .from('properties')
+          .select('id', { count: 'exact', head: true })
+          .eq('owner_id', authUserId);
+
+        if (unitCountErr) {
+          console.error('Unit count access lookup error:', unitCountErr);
+        }
+
+        const row = (landlordRow as LandlordAccessRow | null) || null;
+        const ok = isLandlordAccessAllowed({
+          subscription_status: row?.subscription_status || null,
+          subscription_active: row?.subscription_active ?? null,
+          unit_count: unitCount || 0,
+        });
 
         if (!ok) {
           const status = ((landlordRow as any)?.subscription_status || '').toLowerCase();
@@ -148,7 +139,7 @@ export default function LandlordAccessGate({
             );
           } else {
             setMsg(
-              'Your free month has ended. Start your subscription to continue using RentZentro.'
+              'Your account has more than one unit. Start a subscription to continue using RentZentro.'
             );
           }
 

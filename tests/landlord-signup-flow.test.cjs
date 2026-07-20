@@ -2,7 +2,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
-  getTrialEndYMD,
   normalizeEmail,
   validateLandlordSignupInput,
   mapSignupErrorMessage,
@@ -46,11 +45,6 @@ test('validation accepts valid values and returns normalized email', () => {
   });
   assert.equal(result.ok, true);
   assert.equal(result.normalizedEmail, 'owner@example.com');
-});
-
-test('trial end date is 35 days from now by default', () => {
-  const mockNow = new Date('2026-04-21T00:00:00.000Z');
-  assert.equal(getTrialEndYMD(35, mockNow), '2026-05-26');
 });
 
 
