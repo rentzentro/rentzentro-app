@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import BrandWordmark from './components/BrandWordmark';
 import DashboardPreviewUpload from './components/DashboardPreviewUpload';
+import PricingSection from './components/PricingSection';
 import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from './supabaseClient';
 
 export const runtime = 'nodejs';
@@ -64,15 +65,6 @@ type Testimonial = {
   image: string;
 };
 
-type PricingPlan = {
-  name: string;
-  price: string;
-  unitRange: string;
-  description: string;
-  highlights: string[];
-  featured?: boolean;
-};
-
 const testimonials: Testimonial[] = [
   {
     quote:
@@ -103,42 +95,6 @@ const testimonials: Testimonial[] = [
   },
 ];
 
-const pricingPlans: PricingPlan[] = [
-  {
-    name: 'Starter',
-    price: '$19/mo',
-    unitRange: 'Up to 3 units',
-    description: 'Best for new landlords who want the essentials in one place.',
-    highlights: [
-      'Collect rent with ACH and card payments',
-      'Track tenants, documents, and maintenance',
-      'View income, expenses, and net profit',
-    ],
-  },
-  {
-    name: 'Core',
-    price: '$29.95/mo',
-    unitRange: 'Up to 20 units',
-    description: 'Most popular for growing landlords managing multiple doors.',
-    highlights: [
-      'Everything in Starter',
-      'More unit capacity for growing portfolios',
-      'Clear property-by-property performance view',
-    ],
-    featured: true,
-  },
-  {
-    name: 'Growth',
-    price: '$59/mo',
-    unitRange: 'Up to 75 units',
-    description: 'For larger portfolios that need scale without adding complexity.',
-    highlights: [
-      'Everything in Core',
-      'Built for higher monthly rent volume',
-      'Manage more tenants with one workflow',
-    ],
-  },
-];
 
 
 const money = (v: number | null | undefined) =>
@@ -388,45 +344,7 @@ function TestimonialCard({ item }: { item: Testimonial }) {
   );
 }
 
-function PricingCard({ plan }: { plan: PricingPlan }) {
-  return (
-    <div
-      className={`rounded-3xl border p-5 transition duration-300 hover:-translate-y-1 ${
-        plan.featured
-          ? 'border-emerald-400/30 bg-emerald-950/25'
-          : 'border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 hover:border-emerald-500/20 hover:bg-slate-900/70'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-lg font-semibold text-slate-50">{plan.name}</p>
-          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-            {plan.unitRange}
-          </p>
-        </div>
-        {plan.featured && (
-          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
-            Most popular
-          </span>
-        )}
-      </div>
 
-      <p className="mt-4 text-3xl font-semibold text-emerald-300">{plan.price}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-300">{plan.description}</p>
-
-      <ul className="mt-4 space-y-2.5">
-        {plan.highlights.map((item) => (
-          <li key={item} className="flex items-start gap-2 text-sm text-slate-200">
-            <span className="mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-500/14 text-[11px] text-emerald-300">
-              ✓
-            </span>
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 export default async function HomePage() {
   let publicListings: Listing[] = [];
@@ -863,29 +781,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-14">
-          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Pricing
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold text-slate-50">
-                Clear plans based on your number of units
-              </h2>
-              <p className="mt-2 max-w-3xl text-[14px] leading-6 text-slate-400">
-                Start with a free trial. Then choose a plan that fits your portfolio size.
-                Every plan includes rent collection, maintenance, documents, and financial
-                visibility.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            {pricingPlans.map((plan) => (
-              <PricingCard key={plan.name} plan={plan} />
-            ))}
-          </div>
-        </section>
+        <PricingSection />
 
         <section className="rz-fade-up rz-delay-7 border-t border-slate-900 py-14">
           <div className="mb-6 rounded-3xl border border-sky-300/40 bg-gradient-to-br from-sky-500/20 via-slate-950 to-slate-950 p-5 sm:p-6">
