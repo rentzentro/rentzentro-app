@@ -15,25 +15,8 @@ type LandlordRow = {
 
   // Billing gate fields
   subscription_status: string | null;
-  trial_active: boolean | null;
-  trial_end: string | null;
-};
-
-const parseSupabaseDate = (value: string | null | undefined): Date | null => {
-  if (!value) return null;
-  // Pure date (YYYY-MM-DD) → avoid timezone shift
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split('-').map(Number);
-    return new Date(y, m - 1, d);
-  }
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
-};
-
-const todayDateOnly = () => {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  subscription_active: boolean | null;
+  unit_count?: number | null;
 };
 
 export default function LandlordSettingsPage() {
@@ -45,6 +28,7 @@ export default function LandlordSettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [connectingStripe, setConnectingStripe] = useState(false);
   const [copiedReferral, setCopiedReferral] = useState(false);
+  const [unitCount, setUnitCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -66,7 +50,7 @@ export default function LandlordSettingsPage() {
         let { data: landlordRow, error: landlordError } = await supabase
           .from('landlords')
           .select(
-            'id, email, name, stripe_connect_account_id, stripe_connect_onboarded, subscription_status, trial_active, trial_end'
+            'id, email, name, stripe_connect_account_id, stripe_connect_onboarded, subscription_status, subscription_active'
           )
           .eq('user_id', user.id)
           .maybeSingle();
@@ -81,7 +65,7 @@ export default function LandlordSettingsPage() {
           const byEmail = await supabase
             .from('landlords')
             .select(
-              'id, email, name, stripe_connect_account_id, stripe_connect_onboarded, subscription_status, trial_active, trial_end'
+              'id, email, name, stripe_connect_account_id, stripe_connect_onboarded, subscription_status, subscription_active'
             )
             .eq('email', user.email)
             .maybeSingle();
@@ -99,6 +83,12 @@ export default function LandlordSettingsPage() {
         }
 
         setLandlord(landlordRow as LandlordRow);
+
+        const { count } = await supabase
+          .from('properties')
+          .select('id', { count: 'exact', head: true })
+          .eq('owner_id', user.id);
+        setUnitCount(count || 0);
       } catch (err: any) {
         console.error(err);
         setError(
@@ -116,20 +106,16 @@ export default function LandlordSettingsPage() {
   const billing = useMemo(() => {
     const status = (landlord?.subscription_status || '').toLowerCase();
 
-    // Treat these as "allowed"
+    // Treat paid plans and the forever-free first unit as allowed.
     const isPaidPlanActive =
+      landlord?.subscription_active === true ||
       status === 'active' ||
       status === 'trialing' ||
       status === 'active_cancel_at_period_end';
 
-    const trialEnd = parseSupabaseDate(landlord?.trial_end || null);
-    const trialActive =
-      !!landlord?.trial_active &&
-      !!trialEnd &&
-      !Number.isNaN(trialEnd.getTime()) &&
-      trialEnd >= todayDateOnly();
+    const isForeverFreeEligible = unitCount <= 1;
 
-    const allowed = isPaidPlanActive || trialActive;
+    const allowed = isPaidPlanActive || isForeverFreeEligible;
 
     // Common “blocked” statuses you may see: past_due, unpaid, canceled, incomplete, incomplete_expired
     const isPastDue =
@@ -143,22 +129,22 @@ export default function LandlordSettingsPage() {
 
     const message = allowed
       ? null
-      : trialActive
+      : isForeverFreeEligible
       ? null
       : isPastDue
       ? 'Your subscription payment is past due. To keep full access and allow tenants to pay online, please update your billing.'
-      : 'Your landlord subscription is not currently active. Please subscribe to restore full access and allow tenants to pay online.';
+      : 'Your account has more than one unit. Please subscribe to restore full access and allow tenants to pay online.';
 
     return {
       status,
       allowed,
-      trialActive,
+      isForeverFreeEligible,
       isPaidPlanActive,
       isPastDue,
       label,
       message,
     };
-  }, [landlord]);
+  }, [landlord, unitCount]);
 
 
   const referralLink = useMemo(() => {
@@ -354,7 +340,7 @@ export default function LandlordSettingsPage() {
               <p className="text-[11px] text-amber-100/80 sm:flex-1">
                 You can still access Settings and Subscription to resolve this.
                 Dashboard access will be restored once billing is active or your
-                free month is active.
+                account is back within the forever-free one-unit limit.
               </p>
             </div>
           </div>

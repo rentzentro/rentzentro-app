@@ -422,7 +422,7 @@ export default async function HomePage() {
 
       <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-4 sm:px-5 sm:py-6 lg:px-6">
         <div className="rz-fade-up mb-4 rounded-2xl border border-emerald-300/40 bg-gradient-to-r from-emerald-400/20 via-emerald-300/5 to-slate-900/80 px-3 py-2.5 text-center text-[11px] font-medium leading-5 text-emerald-50 shadow-[0_0_35px_rgba(16,185,129,0.2)] backdrop-blur sm:rounded-full sm:px-4">
-          🎉 Start free for <span className="font-semibold text-emerald-300">35 days</span>. No
+          🎉 Your first unit is <span className="font-semibold text-emerald-300">forever free</span>. No
           card required.
         </div>
 
@@ -551,7 +551,7 @@ export default async function HomePage() {
 
             <div className="mt-5 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
               <span className="rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/20 hover:text-slate-300">
-                Free trial available
+                One unit forever free
               </span>
               <span className="rounded-full border border-white/10 bg-gradient-to-br from-slate-900/90 to-slate-950 px-2.5 py-1.5 transition duration-300 hover:border-emerald-500/20 hover:text-slate-300">
                 Plans: $19 / $29.95 / $59
@@ -683,7 +683,7 @@ export default async function HomePage() {
             />
             <TrustCard
               title="No complicated setup"
-              text="Start free for 35 days with no card required and get set up in minutes."
+              text="Start with one unit forever free, no card required, and get set up in minutes."
             />
             <TrustCard
               title="Works with your existing tenants"
@@ -881,7 +881,7 @@ export default async function HomePage() {
             <StepCard
               number="1"
               title="Create your landlord account"
-              text="Start your free 35-day trial, add your first property, and get organized fast."
+              text="Create your forever-free account, add your first unit, and get organized fast."
             />
             <StepCard
               number="2"
@@ -994,7 +994,7 @@ export default async function HomePage() {
             </div>
 
             <p className="mt-3 text-[12px] leading-5 text-slate-400">
-              Free trial available • No credit card required • Secure payments via Stripe • Built for
+              One unit forever free • No credit card required • Secure payments via Stripe • Built for
               landlords across the U.S.
             </p>
           </div>

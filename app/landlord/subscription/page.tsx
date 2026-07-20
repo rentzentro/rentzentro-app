@@ -423,25 +423,9 @@ export default function LandlordSubscriptionPage() {
   const dbDateLabel = formatDate(landlord?.subscription_current_period_end || null);
   const effectiveDateLabel = stripeCancelDate || dbDateLabel;
 
-  // Rolling trial logic only
-  const trialEndDate = landlord?.trial_end ? parseSupabaseDate(landlord.trial_end) : null;
-
-  const isOnPromoTrial = (() => {
-    const today = todayDateOnly();
-
-    if (landlord?.trial_active && trialEndDate) {
-      return trialEndDate.getTime() >= today.getTime();
-    }
-
-    return false;
-  })();
-
-  const trialEndLabel = trialEndDate ? formatDate(landlord?.trial_end || null) : null;
   const selectedPlanOption = PLAN_OPTIONS.find((p) => p.key === selectedPlan) || PLAN_OPTIONS[1];
   const exceedsSelfServeLimit = unitCount > 75;
 
-  // Only show the trial banner when they are NOT actively subscribed (paid) and trial is active
-  const showPromoBanner = !!landlord && isOnPromoTrial && !isActive;
 
   // ---------- UI ----------
   if (loading) {
@@ -513,21 +497,6 @@ export default function LandlordSubscriptionPage() {
           </div>
         )}
 
-        {/* Trial banner */}
-        {showPromoBanner && (
-          <div className="rounded-2xl border border-emerald-500/50 bg-emerald-950/40 px-4 py-3 text-xs text-emerald-100 space-y-1">
-            <p className="font-semibold text-emerald-200">You&apos;re on your free month.</p>
-            <p>
-              You can use RentZentro without a paid subscription until{' '}
-              <span className="font-semibold text-emerald-200">
-                {trialEndLabel || 'the end of your free month'}
-              </span>
-              . During this time, you won&apos;t be billed. When you&apos;re ready to continue after your free month,
-              start a paid plan from this page.
-            </p>
-          </div>
-        )}
-
         {/* Alerts */}
         {(info || error) && (
           <div
@@ -548,13 +517,6 @@ export default function LandlordSubscriptionPage() {
             <div>
               <p className="text-2xl font-semibold text-slate-50">$19 / $29.95 / $59</p>
               <p className="text-xs text-slate-300">per month • cancel anytime</p>
-
-              {showPromoBanner && (
-                <p className="mt-1 text-[11px] text-emerald-200">
-                  You&apos;re not being billed yet. Your free month lasts until{' '}
-                  <span className="font-semibold">{trialEndLabel || 'your trial end date'}</span>.
-                </p>
-              )}
 
               {isCanceled && (
                 <p className="mt-1 text-[11px] text-slate-300">Your subscription is canceled. You can restart anytime.</p>
@@ -648,15 +610,12 @@ export default function LandlordSubscriptionPage() {
                   }
                 >
                   {prettyStatus(landlord.subscription_status)}
-                  {showPromoBanner && !isActive && <span className="ml-1 text-emerald-300">(on free month)</span>}
                 </span>
               </p>
 
               <p>
                 <span className="text-slate-500">
-                  {showPromoBanner && !isActive
-                    ? 'Free month ends:'
-                    : isScheduledToCancel
+                  {isScheduledToCancel
                     ? 'Cancellation date:'
                     : isActive
                     ? 'Next billing date:'
@@ -665,9 +624,7 @@ export default function LandlordSubscriptionPage() {
                     : 'Next step:'}
                 </span>{' '}
                 <span className="text-slate-100">
-                  {showPromoBanner && !isActive ? (
-                    trialEndLabel || 'Not available'
-                  ) : isScheduledToCancel ? (
+                  {isScheduledToCancel ? (
                     effectiveDateLabel ? `Scheduled to cancel on ${effectiveDateLabel}` : loadingStripeDate ? 'Loading cancellation date…' : 'Not available'
                   ) : isActive ? (
                     effectiveDateLabel ? effectiveDateLabel : 'Renewal is handled automatically through Stripe'
@@ -762,14 +719,6 @@ export default function LandlordSubscriptionPage() {
             </div>
           )}
 
-          {showPromoBanner && (
-            <div className="pt-2 border-t border-slate-800 mt-2 text-[11px] text-slate-400">
-              <p>
-                During your free month, you can set up payouts and use RentZentro with real tenants. You&apos;ll only
-                be billed if you choose to start a paid plan.
-              </p>
-            </div>
-          )}
         </section>
 
         {/* Support */}
