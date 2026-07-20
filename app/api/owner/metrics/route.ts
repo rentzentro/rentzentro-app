@@ -55,6 +55,9 @@ type ActivationOutreachLandlord = {
   daysSinceLastOutreach: number | null;
   nextFollowUpAt: string | null;
   daysUntilNextFollowUp: number | null;
+  followUpCount: number;
+  maxFollowUps: number;
+  followUpExpired: boolean;
 };
 
 type ActivationOutreachEventRow = {
@@ -69,6 +72,7 @@ const ACTIVE_SUBSCRIPTION_STATUSES = new Set([
 ]);
 const ASSUMED_AVERAGE_PLAN_PRICE = 29.95;
 const ACTIVATION_OUTREACH_FOLLOW_UP_DAYS = 5;
+const ACTIVATION_OUTREACH_MAX_FOLLOW_UPS = 5;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const safeTime = (value: string | null | undefined): number | null => {
@@ -369,7 +373,15 @@ export async function GET(req: Request) {
     };
 
     const latestOutreachByLandlord = new Map<number, ActivationOutreachEventRow>();
+    const outreachCountByLandlord = new Map<number, number>();
     for (const event of outreachEvents) {
+      if (event.landlord_id) {
+        outreachCountByLandlord.set(
+          event.landlord_id,
+          (outreachCountByLandlord.get(event.landlord_id) || 0) + 1
+        );
+      }
+
       if (!event.landlord_id || !event.sent_at) continue;
 
       const existing = latestOutreachByLandlord.get(event.landlord_id);
@@ -393,6 +405,7 @@ export async function GET(req: Request) {
           inferSignupTimeFromTrialEnd(landlord.trial_end);
 
         const latestOutreach = latestOutreachByLandlord.get(landlord.id);
+        const followUpCount = outreachCountByLandlord.get(landlord.id) || 0;
         const lastOutreachTime = safeTime(latestOutreach?.sent_at);
         const nextFollowUpTime =
           lastOutreachTime == null
@@ -426,6 +439,9 @@ export async function GET(req: Request) {
             nextFollowUpTime == null
               ? null
               : Math.max(0, Math.ceil((nextFollowUpTime - now.getTime()) / MS_PER_DAY)),
+          followUpCount,
+          maxFollowUps: ACTIVATION_OUTREACH_MAX_FOLLOW_UPS,
+          followUpExpired: followUpCount >= ACTIVATION_OUTREACH_MAX_FOLLOW_UPS,
         };
       })
       .filter((landlord) => landlord.missingProperty || landlord.missingTenant);
@@ -433,8 +449,9 @@ export async function GET(req: Request) {
     const readyForActivationOutreach = activationOutreachLandlords
       .filter(
         (landlord) =>
-          landlord.daysSinceLastOutreach == null ||
-          landlord.daysSinceLastOutreach >= ACTIVATION_OUTREACH_FOLLOW_UP_DAYS
+          !landlord.followUpExpired &&
+          (landlord.daysSinceLastOutreach == null ||
+            landlord.daysSinceLastOutreach >= ACTIVATION_OUTREACH_FOLLOW_UP_DAYS)
       )
       .sort((a, b) => {
         const aDays = a.daysSinceSignup ?? -1;
@@ -446,6 +463,7 @@ export async function GET(req: Request) {
     const recentlyContactedActivationOutreach = activationOutreachLandlords
       .filter(
         (landlord) =>
+          !landlord.followUpExpired &&
           landlord.daysSinceLastOutreach != null &&
           landlord.daysSinceLastOutreach < ACTIVATION_OUTREACH_FOLLOW_UP_DAYS
       )
@@ -469,6 +487,7 @@ export async function GET(req: Request) {
         activationFunnel,
         activationOutreach: {
           followUpCooldownDays: ACTIVATION_OUTREACH_FOLLOW_UP_DAYS,
+          maxFollowUps: ACTIVATION_OUTREACH_MAX_FOLLOW_UPS,
           landlords: readyForActivationOutreach,
           recentlyContacted: recentlyContactedActivationOutreach,
         },

@@ -24,6 +24,9 @@ type OwnerDashboardActivationOutreachLandlord = {
   daysSinceLastOutreach: number | null;
   nextFollowUpAt: string | null;
   daysUntilNextFollowUp: number | null;
+  followUpCount: number;
+  maxFollowUps: number;
+  followUpExpired: boolean;
 };
 
 type OwnerMetrics = {
@@ -37,6 +40,7 @@ type OwnerMetrics = {
   paymentsLast30Days: number;
   activationOutreach: {
     followUpCooldownDays: number;
+    maxFollowUps: number;
     landlords: OwnerDashboardActivationOutreachLandlord[];
     recentlyContacted: OwnerDashboardActivationOutreachLandlord[];
   };
@@ -132,6 +136,9 @@ const mapActivationOutreachLandlord = (
     landlord.daysUntilNextFollowUp == null
       ? null
       : Number(landlord.daysUntilNextFollowUp),
+  followUpCount: Number(landlord.followUpCount ?? 0),
+  maxFollowUps: Number(landlord.maxFollowUps ?? 5),
+  followUpExpired: Boolean(landlord.followUpExpired),
 });
 
 
@@ -195,6 +202,7 @@ export default function OwnerDashboardPage() {
             followUpCooldownDays: Number(
               src.activationOutreach?.followUpCooldownDays ?? 5
             ),
+            maxFollowUps: Number(src.activationOutreach?.maxFollowUps ?? 5),
             landlords: Array.isArray(src.activationOutreach?.landlords)
               ? src.activationOutreach.landlords.map(mapActivationOutreachLandlord)
               : [],
@@ -295,6 +303,16 @@ export default function OwnerDashboardPage() {
           metrics?.activationOutreach.followUpCooldownDays ??
           5
       );
+      const maxFollowUps = Number(
+        raw?.outreach?.maxFollowUps ??
+          metrics?.activationOutreach.maxFollowUps ??
+          landlord.maxFollowUps ??
+          5
+      );
+      const followUpCount = Number(
+        raw?.outreach?.followUpCount ?? landlord.followUpCount + 1
+      );
+      const followUpExpired = followUpCount >= maxFollowUps;
       const sentLandlord: OwnerDashboardActivationOutreachLandlord = {
         ...landlord,
         lastOutreachAt: sentAt,
@@ -302,6 +320,9 @@ export default function OwnerDashboardPage() {
         daysSinceLastOutreach: 0,
         nextFollowUpAt,
         daysUntilNextFollowUp: followUpCooldownDays,
+        followUpCount,
+        maxFollowUps,
+        followUpExpired,
       };
 
       setMetrics((current) => {
@@ -312,15 +333,20 @@ export default function OwnerDashboardPage() {
           activationOutreach: {
             ...current.activationOutreach,
             followUpCooldownDays,
+            maxFollowUps,
             landlords: current.activationOutreach.landlords.filter(
               (item) => item.id !== landlord.id
             ),
-            recentlyContacted: [
-              sentLandlord,
-              ...current.activationOutreach.recentlyContacted.filter(
-                (item) => item.id !== landlord.id
-              ),
-            ],
+            recentlyContacted: followUpExpired
+              ? current.activationOutreach.recentlyContacted.filter(
+                  (item) => item.id !== landlord.id
+                )
+              : [
+                  sentLandlord,
+                  ...current.activationOutreach.recentlyContacted.filter(
+                    (item) => item.id !== landlord.id
+                  ),
+                ],
           },
         };
       });
@@ -331,7 +357,11 @@ export default function OwnerDashboardPage() {
       setOutreachNotice(
         `Sent setup help email to ${landlord.email} from ${
           raw?.senderLabel || senderLabel
-        }. They are snoozed for ${followUpCooldownDays} days and will return to the follow-up list if they still need setup help.${trackingWarning}`
+        }${
+          followUpExpired
+            ? `. This was follow-up ${followUpCount}/${maxFollowUps}, so they have expired from the follow-up queue.${trackingWarning}`
+            : `. They are snoozed for ${followUpCooldownDays} days and will return to the follow-up list if they still need setup help. Follow-up ${followUpCount}/${maxFollowUps}.${trackingWarning}`
+        }`
       );
     } catch (err: any) {
       setOutreachNotice(
@@ -642,7 +672,7 @@ export default function OwnerDashboardPage() {
                     Landlords missing a property or tenant
                   </p>
                   <p className="mt-1 text-[11px] text-slate-400">
-                    Send a pre-written setup help email from support@rentzentro.com or bradley@rentzentro.com without using your personal Gmail. Sent landlords leave this list for 5 days, then return if they still need a property or tenant.
+                    Send a pre-written setup help email from support@rentzentro.com or bradley@rentzentro.com without using your personal Gmail. Sent landlords leave this list for 5 days, then return if they still need a property or tenant. After 5 total follow-ups, they expire and come off the queue.
                   </p>
                 </div>
                 <div className="rounded-full border border-rose-500/30 bg-rose-950/30 px-3 py-1 text-xs font-semibold text-rose-100">
@@ -658,7 +688,7 @@ export default function OwnerDashboardPage() {
 
               {metrics.activationOutreach.landlords.length === 0 ? (
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 px-3 py-3 text-xs text-emerald-100">
-                  No eligible follow-ups right now. Anyone recently contacted is snoozed for {metrics.activationOutreach.followUpCooldownDays} days and will return here if they still need a property or tenant.
+                  No eligible follow-ups right now. Anyone recently contacted is snoozed for {metrics.activationOutreach.followUpCooldownDays} days and will return here if they still need help; anyone with {metrics.activationOutreach.maxFollowUps} total follow-ups expires from this queue.
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-xl border border-slate-800">
@@ -702,11 +732,16 @@ export default function OwnerDashboardPage() {
                           </div>
                           <p className="text-slate-300">{landlord.propertyCount}</p>
                           <p className="text-slate-300">{landlord.tenantCount}</p>
-                          <p className="text-slate-400">
-                            {landlord.daysSinceSignup == null
-                              ? 'Unknown'
-                              : `${landlord.daysSinceSignup} days ago`}
-                          </p>
+                          <div className="text-slate-400">
+                            <p>
+                              {landlord.daysSinceSignup == null
+                                ? 'Unknown'
+                                : `${landlord.daysSinceSignup} days ago`}
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              {landlord.followUpCount}/{landlord.maxFollowUps} follow-ups
+                            </p>
+                          </div>
                           <div className="flex flex-wrap gap-2">
                             {canEmail ? (
                               <>
@@ -753,7 +788,7 @@ export default function OwnerDashboardPage() {
                         Recently contacted / snoozed
                       </p>
                       <p className="mt-1 text-[11px] text-sky-100/75">
-                        These landlords were sent setup help and are hidden from the active follow-up queue until the {metrics.activationOutreach.followUpCooldownDays}-day follow-up window is over.
+                        These landlords were sent setup help and are hidden from the active follow-up queue until the {metrics.activationOutreach.followUpCooldownDays}-day follow-up window is over. Landlords expire from outreach after {metrics.activationOutreach.maxFollowUps} total follow-ups.
                       </p>
                     </div>
                     <span className="rounded-full border border-sky-500/30 bg-sky-950/40 px-3 py-1 text-[11px] font-semibold text-sky-100">
@@ -762,10 +797,11 @@ export default function OwnerDashboardPage() {
                   </div>
 
                   <div className="mt-3 overflow-hidden rounded-lg border border-sky-500/20">
-                    <div className="hidden grid-cols-[1.3fr_0.9fr_0.9fr_1fr_1fr] gap-3 border-b border-sky-500/20 bg-sky-950/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-sky-100/70 md:grid">
+                    <div className="hidden grid-cols-[1.3fr_0.9fr_0.8fr_0.7fr_1fr_1fr] gap-3 border-b border-sky-500/20 bg-sky-950/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-sky-100/70 md:grid">
                       <span>Landlord</span>
                       <span>Missing</span>
                       <span>Sent by</span>
+                      <span>Count</span>
                       <span>Last follow-up</span>
                       <span>Back on list</span>
                     </div>
@@ -781,7 +817,7 @@ export default function OwnerDashboardPage() {
                         return (
                           <div
                             key={landlord.id}
-                            className="grid gap-2 px-3 py-3 text-xs text-sky-50 md:grid-cols-[1.3fr_0.9fr_0.9fr_1fr_1fr] md:items-center md:gap-3"
+                            className="grid gap-2 px-3 py-3 text-xs text-sky-50 md:grid-cols-[1.3fr_0.9fr_0.8fr_0.7fr_1fr_1fr] md:items-center md:gap-3"
                           >
                             <div>
                               <p className="font-semibold">
@@ -796,6 +832,9 @@ export default function OwnerDashboardPage() {
                             </span>
                             <span className="text-sky-100/80">
                               {landlord.lastOutreachSenderLabel || 'RentZentro'}
+                            </span>
+                            <span className="text-sky-100/80">
+                              {landlord.followUpCount}/{landlord.maxFollowUps}
                             </span>
                             <span className="text-sky-100/80">
                               {landlord.daysSinceLastOutreach == null
