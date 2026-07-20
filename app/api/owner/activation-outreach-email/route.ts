@@ -24,6 +24,7 @@ type OutreachInsertResult = {
 };
 
 const ACTIVATION_OUTREACH_FOLLOW_UP_DAYS = 5;
+const ACTIVATION_OUTREACH_MAX_FOLLOW_UPS = 5;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const OUTREACH_SENDERS: Record<
@@ -145,6 +146,27 @@ const recordActivationOutreachEvent = async ({
   return { trackingWarning: null, sentAt, nextFollowUpAt };
 };
 
+
+const countActivationOutreachEvents = async (landlordId: number): Promise<number | null> => {
+  const result = await supabaseAdmin
+    .from('owner_activation_outreach_events')
+    .select('id', { count: 'exact', head: true })
+    .eq('landlord_id', landlordId);
+
+  if (result.error) {
+    if (isMissingActivationOutreachTableError(result.error)) {
+      console.warn(
+        '[owner activation outreach email] owner_activation_outreach_events table is unavailable; max follow-up enforcement will be skipped.'
+      );
+      return null;
+    }
+
+    throw result.error;
+  }
+
+  return result.count || 0;
+};
+
 const countRowsForOwner = async (table: 'properties' | 'tenants', ownerId: string) => {
   const result = await supabaseAdmin
     .from(table)
@@ -236,6 +258,18 @@ export async function POST(req: Request) {
       );
     }
 
+    const priorFollowUpCount = await countActivationOutreachEvents(landlord.id);
+
+    if (priorFollowUpCount != null && priorFollowUpCount >= ACTIVATION_OUTREACH_MAX_FOLLOW_UPS) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `This landlord has already received ${ACTIVATION_OUTREACH_MAX_FOLLOW_UPS} activation follow-ups.`,
+        },
+        { status: 409 }
+      );
+    }
+
     const sender = OUTREACH_SENDERS[senderKey];
     const message = buildOutreachEmail({ landlord, missingProperty, missingTenant });
 
@@ -268,6 +302,9 @@ export async function POST(req: Request) {
           sentAt: outreach.sentAt,
           nextFollowUpAt: outreach.nextFollowUpAt,
           followUpCooldownDays: ACTIVATION_OUTREACH_FOLLOW_UP_DAYS,
+          maxFollowUps: ACTIVATION_OUTREACH_MAX_FOLLOW_UPS,
+          followUpCount:
+            priorFollowUpCount == null ? null : priorFollowUpCount + 1,
           trackingWarning: outreach.trackingWarning,
         },
       },
