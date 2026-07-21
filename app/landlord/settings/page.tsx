@@ -110,7 +110,6 @@ export default function LandlordSettingsPage() {
     const isPaidPlanActive =
       landlord?.subscription_active === true ||
       status === 'active' ||
-      status === 'trialing' ||
       status === 'active_cancel_at_period_end';
 
     const isForeverFreeEligible = unitCount <= 1;

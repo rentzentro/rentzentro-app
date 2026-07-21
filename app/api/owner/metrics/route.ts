@@ -14,6 +14,7 @@ type LandlordRow = {
   email: string | null;
   created_at: string | null;
   subscription_status: string | null;
+  subscription_active?: boolean | null;
   trial_active?: boolean | null;
   trial_end?: string | null;
   stripe_connect_onboarded?: boolean | null;
@@ -90,7 +91,7 @@ const loadLandlords = async (): Promise<LandlordRow[]> => {
   const withCreatedAt = await supabaseAdmin
     .from('landlords')
     .select(
-      'id, user_id, name, email, created_at, subscription_status, trial_active, trial_end, stripe_connect_onboarded'
+      'id, user_id, name, email, created_at, subscription_status, subscription_active, trial_active, trial_end, stripe_connect_onboarded'
     );
 
   if (!withCreatedAt.error) {
@@ -108,7 +109,7 @@ const loadLandlords = async (): Promise<LandlordRow[]> => {
   const withoutCreatedAt = await supabaseAdmin
     .from('landlords')
     .select(
-      'id, user_id, name, email, subscription_status, trial_active, trial_end, stripe_connect_onboarded'
+      'id, user_id, name, email, subscription_status, subscription_active, trial_active, trial_end, stripe_connect_onboarded'
     );
 
   if (withoutCreatedAt.error) {
@@ -168,22 +169,6 @@ export async function GET(req: Request) {
 
     const now = new Date();
 
-    let paidLandlords = 0;
-    let freeLandlords = 0;
-
-    for (const l of landlords) {
-      const status = (l.subscription_status || '').toLowerCase();
-      const isPaid = ACTIVE_SUBSCRIPTION_STATUSES.has(status);
-
-      if (isPaid) {
-        paidLandlords += 1;
-      } else {
-        freeLandlords += 1;
-      }
-    }
-
-    const MRR = paidLandlords * ASSUMED_AVERAGE_PLAN_PRICE;
-
     const thirtyDaysAgo = new Date(
       now.getFullYear(),
       now.getMonth(),
@@ -237,6 +222,30 @@ export async function GET(req: Request) {
       }
     }
 
+    let paidLandlords = 0;
+    let freeLandlords = 0;
+    let overLimitFreeLandlords = 0;
+
+    for (const landlord of landlords) {
+      const status = (landlord.subscription_status || '').toLowerCase();
+      const isPaid =
+        landlord.subscription_active === true ||
+        ACTIVE_SUBSCRIPTION_STATUSES.has(status);
+      const unitCount = landlord.user_id
+        ? propertyCountByOwner.get(landlord.user_id) || 0
+        : 0;
+
+      if (isPaid) {
+        paidLandlords += 1;
+      } else if (unitCount <= 1) {
+        freeLandlords += 1;
+      } else {
+        overLimitFreeLandlords += 1;
+      }
+    }
+
+    const MRR = paidLandlords * ASSUMED_AVERAGE_PLAN_PRICE;
+
     let funnelSignup = 0;
     let funnelConnectedPayouts = 0;
     let funnelFirstProperty = 0;
@@ -250,7 +259,10 @@ export async function GET(req: Request) {
       funnelSignup += 1;
 
       const status = (landlord.subscription_status || '').toLowerCase();
-      if (ACTIVE_SUBSCRIPTION_STATUSES.has(status)) {
+      if (
+        landlord.subscription_active === true ||
+        ACTIVE_SUBSCRIPTION_STATUSES.has(status)
+      ) {
         funnelPaidSubscription += 1;
       }
 
@@ -360,6 +372,7 @@ export async function GET(req: Request) {
         totalMonthlyRent,
         paidLandlords,
         freeLandlords,
+        overLimitFreeLandlords,
         MRR,
         paymentsLast30Days,
         activationFunnel,

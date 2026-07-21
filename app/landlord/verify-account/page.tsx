@@ -7,29 +7,6 @@ import { supabase } from '../../supabaseClient';
 
 type ViewState = 'loading' | 'no-landlord' | 'redirecting' | 'error';
 
-const parseDateOnlySafe = (value: string | null | undefined): Date | null => {
-  if (!value) return null;
-
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (m) {
-    const y = Number(m[1]);
-    const mo = Number(m[2]);
-    const d = Number(m[3]);
-    if (!y || !mo || !d) return null;
-    return new Date(y, mo - 1, d);
-  }
-
-  const dt = new Date(value);
-  if (isNaN(dt.getTime())) return null;
-
-  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
-};
-
-const todayDateOnly = () => {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-};
-
 export default function LandlordVerifyAccountPage() {
   const router = useRouter();
 
@@ -89,21 +66,24 @@ export default function LandlordVerifyAccountPage() {
 
         const isSubscribed: boolean =
           rawStatus === 'active' ||
-          rawStatus === 'trialing' ||
           rawStatus === 'active_cancel_at_period_end' ||
           l.is_subscribed === true ||
           l.subscription_active === true;
 
-        // 4) Check rolling trial
-        const trialEnd = parseDateOnlySafe(l.trial_end);
-        const isTrialActive =
-          l.trial_active === true &&
-          !!trialEnd &&
-          !Number.isNaN(trialEnd.getTime()) &&
-          trialEnd >= todayDateOnly();
+        // 4) Check forever-free one-unit eligibility.
+        const { count: propertyCount, error: propertyCountError } = await supabase
+          .from('properties')
+          .select('id', { count: 'exact', head: true })
+          .eq('owner_id', l.user_id || user.id);
 
-        // 5) Allow if subscribed OR active trial
-        if (!isSubscribed && !isTrialActive) {
+        if (propertyCountError) {
+          console.error('Property count check error:', propertyCountError);
+        }
+
+        const isForeverFreeEligible = (propertyCount || 0) <= 1;
+
+        // 5) Allow if subscribed OR within the forever-free unit limit.
+        if (!isSubscribed && !isForeverFreeEligible) {
           setState('redirecting');
           router.push('/landlord/subscription');
           return;

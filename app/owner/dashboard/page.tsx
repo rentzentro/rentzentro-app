@@ -26,6 +26,7 @@ type OwnerMetrics = {
   totalMonthlyRent: number;
   paidLandlords: number;
   freeLandlords: number;
+  overLimitFreeLandlords: number;
   MRR: number;
   paymentsLast30Days: number;
   setupOpportunities: {
@@ -167,6 +168,7 @@ export default function OwnerDashboardPage() {
           totalMonthlyRent: Number(src.totalMonthlyRent ?? 0),
           paidLandlords: Number(src.paidLandlords ?? 0),
           freeLandlords: Number(src.freeLandlords ?? 0),
+          overLimitFreeLandlords: Number(src.overLimitFreeLandlords ?? 0),
           MRR: Number(src.MRR ?? 0),
           paymentsLast30Days: Number(src.paymentsLast30Days ?? 0),
           setupOpportunities: {
@@ -367,12 +369,12 @@ export default function OwnerDashboardPage() {
                       Landlords by plan status
                     </p>
                     <p className="mt-1 text-sm font-medium text-slate-50">
-                      Paid vs forever-free
+                      Paid, free, and over-limit
                     </p>
                   </div>
                 </div>
 
-                <div className="grid gap-3 text-[11px] sm:grid-cols-2">
+                <div className="grid gap-3 text-[11px] sm:grid-cols-3">
                   <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-3 py-2">
                     <p className="text-emerald-200 font-semibold">
                       Paid landlords
@@ -393,7 +395,19 @@ export default function OwnerDashboardPage() {
                       {metrics.freeLandlords}
                     </p>
                     <p className="mt-1 text-slate-400">
-                      Accounts using the forever-free unit.
+                      Non-paid accounts with 0–1 property.
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 px-3 py-2">
+                    <p className="text-rose-200 font-semibold">
+                      Over free limit
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-rose-100">
+                      {metrics.overLimitFreeLandlords}
+                    </p>
+                    <p className="mt-1 text-slate-400">
+                      Non-paid accounts with 2+ properties; access should be blocked until they subscribe.
                     </p>
                   </div>
                 </div>

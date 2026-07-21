@@ -54,7 +54,6 @@ const prettyStatus = (status: string | null) => {
   if (!s) return 'Not subscribed';
   if (s === 'active') return 'Active';
   if (s === 'active_cancel_at_period_end') return 'Active (scheduled to cancel)';
-  if (s === 'trialing') return 'Trialing';
   if (s === 'past_due') return 'Past due';
   if (s === 'canceled') return 'Canceled';
   if (s === 'unpaid') return 'Unpaid';
@@ -409,7 +408,6 @@ export default function LandlordSubscriptionPage() {
 
   const isPaidPlanActive =
     statusLower === 'active' ||
-    statusLower === 'trialing' ||
     statusLower === 'active_cancel_at_period_end';
 
   const isScheduledToCancel = statusLower === 'active_cancel_at_period_end';

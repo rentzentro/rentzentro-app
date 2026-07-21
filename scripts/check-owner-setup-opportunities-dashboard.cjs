@@ -29,7 +29,8 @@ const requiredPatterns = [
   /setupOpportunities/,
   /Setup opportunities/,
   /Manual follow-ups are gone/,
-  /Paid vs forever-free/,
+  /Paid, free, and over-limit/,
+  /Over free limit/,
   /free → paid/,
 ];
 

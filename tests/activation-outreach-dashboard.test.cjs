@@ -18,6 +18,8 @@ test('owner dashboard replaces trial follow-up outreach with setup opportunities
   assert.match(dashboardSource, /setupOpportunities/);
   assert.match(dashboardSource, /Setup opportunities/);
   assert.match(dashboardSource, /Manual follow-ups are gone/);
+  assert.match(dashboardSource, /overLimitFreeLandlords/);
+  assert.match(dashboardSource, /Over free limit/);
 });
 
 test('owner metrics returns setup opportunities without outreach snoozing', () => {
@@ -28,4 +30,27 @@ test('owner metrics returns setup opportunities without outreach snoozing', () =
   assert.match(metricsRouteSource, /setupOpportunities/);
   assert.match(metricsRouteSource, /setupOpportunityLandlords/);
   assert.match(metricsRouteSource, /freeLandlords/);
+  assert.match(metricsRouteSource, /overLimitFreeLandlords/);
+  assert.match(metricsRouteSource, /unitCount <= 1/);
+});
+
+
+const landlordAccessGateSource = readFileSync('app/landlord/LandlordAccessGate.tsx', 'utf8');
+const landlordDashboardSource = readFileSync('app/landlord/page.tsx', 'utf8');
+const landlordSettingsSource = readFileSync('app/landlord/settings/page.tsx', 'utf8');
+const tenantLandlordAccessSource = readFileSync('app/api/tenant-landlord-access/route.ts', 'utf8');
+
+test('access gates do not treat trialing status as paid access', () => {
+  for (const source of [
+    landlordAccessGateSource,
+    landlordDashboardSource,
+    landlordSettingsSource,
+    tenantLandlordAccessSource,
+  ]) {
+    assert.doesNotMatch(source, /status === 'trialing'/);
+  }
+  assert.match(landlordAccessGateSource, /unitCount <= 1/);
+  assert.match(landlordDashboardSource, /unitCount <= 1/);
+  assert.match(landlordSettingsSource, /unitCount <= 1/);
+  assert.match(tenantLandlordAccessSource, /unitCount \|\| 0\) <= 1/);
 });
