@@ -8,6 +8,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
     "lint": "next lint",
     "test:flows": "node --test tests/*.test.cjs",
     "check:owner-setup-opportunities": "node scripts/check-owner-setup-opportunities-dashboard.cjs"
@@ -30,5 +31,6 @@
     "stripe": "^19.3.1",
     "tailwindcss": "3.3.3",
     "typescript": "5.2.2"
-  }
+  },
+  "packageManager": "bun@1.2.14"
 }
